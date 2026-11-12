@@ -194,7 +194,10 @@ file's Rules section.
    and report it. A PR belongs to this queue when it closes an issue
    carrying `in-progress`, `has-pr`, `needs-review`, `agent-failed` or
    `stealable`; every other PR is foreign (another agent's, a bot's, a
-   routine's). Unfinished PRs come before new issues: green ones go to
+   routine's). A PR the evidence says must not merge (the third cause
+   below) is never gated, re-run toward green or merged by this queue
+   in any CI state, a revert someone else re-ran to green included; it
+   is reported. Unfinished PRs come before new issues: green ones go to
    the Phase 2 gate, pending ones wait, failed ones of this queue get
    fixed or their issue labelled `agent-failed`. A foreign green PR goes
    to the Phase 2 gate unchanged, because the gate and the Merge policy
@@ -221,17 +224,23 @@ file's Rules section.
    - A failed PR whose failing jobs show no repo cause (a runner or
      network failure, a cancelled or timed-out job) gets its failed jobs
      re-run once per head SHA by the re-run rule of step 2, and is
-     judged again before it counts as failed.
+     judged again. A PR still red after its re-run counts as failed
+     and, when it is this queue's and matches no earlier cause, blocks
+     claiming; the re-run is no exemption.
 
-   A green PR is settled when its head SHA equals the head this session
-   recorded for it in an earlier iteration and its head commit is at
-   least 15 minutes old. Step 3 records every open PR's head SHA in each
-   iteration, so a PR first seen waits exactly one iteration and goes to
-   the gate from the next one when both conditions still hold (a head
-   that changed is recorded anew and restarts the wait; a session that
-   stops first leaves the PR waiting). A head named in this session's
-   own worker result as the head that worker pushed counts as settled at
-   once. The head commit's date is read from the commit itself with
+   A green PR is settled when its head commit is at least 15 minutes
+   old, so a PR first seen with an old head commit goes to the gate at
+   once, which keeps a one-pass session (nothing claimed) gating its
+   green PRs. A head first seen with a commit younger than 15 minutes is
+   settled only once it equals the head recorded in an earlier
+   iteration, so it waits exactly one iteration and then goes to the
+   gate. Step 3 records every open PR's head SHA in each iteration. A
+   head that differs from the head recorded in an earlier iteration is
+   not settled whatever its date, is recorded anew, and restarts the
+   wait. A head named in this session's own worker result as the head
+   that worker pushed counts as settled at once while the PR's head
+   still equals it; a head pushed by anyone else gets no such exception.
+   The head commit's date is read from the commit itself with
    `gh api repos/{owner}/{repo}/commits/<headRefOid> --jq .commit.committer.date`,
    `<headRefOid>` being the head from the list above (no MCP twin is
    verified). A date read from any commit other than the PR's current
@@ -239,7 +248,8 @@ file's Rules section.
    since GitHub does not expose push time: `git rebase` resets it, and
    the real failure is a commit made earlier and pushed later, which
    looks old when it was just pushed; the recorded-head comparison
-   catches that from the second iteration on. A date that cannot be read
+   catches that from the second iteration on, and a one-pass session
+   accepts it. A date that cannot be read
    leaves the PR not settled. An unsettled green PR waits this
    iteration, is not reviewed, and is reported; a failed PR keeps its
    disposition above.

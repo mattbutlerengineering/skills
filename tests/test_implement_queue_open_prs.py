@@ -73,9 +73,30 @@ class TestFailedPrDispositions(unittest.TestCase):
         self.assertIn("does not block claiming", s)
 
     def test_a_pr_that_must_not_merge_is_never_pushed_to_green(self):
-        s = sentence(step3(), "must not merge")
+        s = sentence(step3(), "(an automated revert")
         for w in ("never fixed, re-run or updated", "reported",
                   "does not block claiming"):
+            self.assertIn(w, s)
+
+    def test_the_causes_are_checked_in_order(self):
+        text = step3()
+        order = [text.index(p) for p in (
+            "A failed PR with no linked issue",
+            "A failed PR that carries a `hold_labels`",
+            "(an automated revert",
+            "A failed PR whose failing jobs")]
+        self.assertEqual(order, sorted(order))
+
+    def test_a_pr_still_red_after_its_rerun_is_failed_and_blocks(self):
+        s = sentence(step3(), "still red after its re-run")
+        self.assertIn("counts as failed", s)
+        self.assertIn("blocks claiming", s)
+        self.assertIn("no exemption", s)
+
+    def test_a_must_not_merge_pr_is_never_gated_in_any_ci_state(self):
+        s = sentence(step3(), "in any CI state")
+        for w in ("never gated", "re-run toward green", "merged by this queue",
+                  "re-ran to green"):
             self.assertIn(w, s)
 
     def test_an_infrastructure_failure_is_rerun_once_per_head(self):
@@ -86,21 +107,35 @@ class TestFailedPrDispositions(unittest.TestCase):
 
 
 class TestSettled(unittest.TestCase):
-    def test_settled_needs_the_recorded_head_and_fifteen_minutes(self):
+    def test_an_old_head_is_settled_on_first_sight(self):
         s = sentence(step3(), "is settled when")
-        self.assertIn("equals the head this session recorded", s)
-        self.assertIn("earlier iteration", s)
         self.assertIn("at least 15 minutes old", s)
+        self.assertIn("first seen with an old head commit", s)
+        self.assertIn("goes to the gate at once", s)
+        self.assertIn("one-pass session", s)
 
-    def test_a_first_seen_pr_waits_exactly_one_iteration(self):
-        s = sentence(step3(), "first seen")
-        self.assertIn("records every open PR's head SHA", s)
+    def test_a_recent_first_seen_head_waits_exactly_one_iteration(self):
+        s = sentence(step3(), "younger than 15 minutes")
+        self.assertIn("equals the head recorded in an earlier iteration", s)
         self.assertIn("waits exactly one iteration", s)
-        self.assertIn("goes to the gate", s)
+        self.assertIn("then goes to the gate", s)
 
-    def test_a_worker_named_head_is_settled_at_once(self):
-        s = sentence(step3(), "this session's own worker result")
+    def test_step_three_records_every_head_each_iteration(self):
+        s = sentence(step3(), "records every open PR's head SHA")
+        self.assertIn("in each iteration", s)
+
+    def test_a_changed_head_is_not_settled_whatever_its_date(self):
+        s = sentence(step3(), "differs from the head recorded")
+        self.assertIn("not settled whatever its date", s)
+        self.assertIn("restarts the wait", s)
+
+    def test_the_worker_exception_names_only_this_sessions_worker(self):
+        s = sentence(step3(), "own worker result")
+        self.assertIn("this session's own worker result", s)
         self.assertIn("counts as settled at once", s)
+        self.assertIn("while the PR's head still equals it", s)
+        self.assertNotIn("any worker", s)
+        self.assertIn("anyone else gets no such exception", s)
 
     def test_the_date_is_read_from_the_head_commit_itself(self):
         s = sentence(step3(), "commits/<headRefOid>")
