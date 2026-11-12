@@ -324,7 +324,7 @@ Take at most `max_workers`. Move each claimed issue to `in-progress`
 with the `transition` hook.
 
 For the claim transition only, the removal of `ready` comes first and
-decides the claim, and the add of `in-progress` follows; every other
+the add of `in-progress` follows; every other
 transition keeps the `transition` hook's order. Run the steps below as
 written even when the profile's `transition` hook is one swap command.
 Read `gh api -i repos/{owner}/{repo}/issues/<N>` just before the claim:
@@ -340,15 +340,21 @@ it. Then remove `ready` with
 the claim only on a 200. On any other status, a 404 included (the
 documentation gives it for a label that does not exist, which this
 session takes to mean another session removed `ready` first), skip the
-issue, never touch its labels and report it. Then add `in-progress` with
+issue, never touch its labels and report it. This claim narrows the race
+window and is not a lock: the documentation gives a 404 only for a label
+that does not exist, so if two removals both returned 200 two sessions
+would each hold the claim, and One queue session per repo at a time in
+the Rules stays the guarantee, the label claim being a best-effort mutex
+that makes a collision unlikely and detectable by the secondary check.
+Then add `in-progress` with
 the `transition` hook's add. Dispatch no worker before that 200 and the
-add of `in-progress`. A failed add is a failed transition: dispatch
-nothing for that issue and let Reconcile before Phase 4 repair it, since
-this session won the removal. After the add, read the timeline again
+add of `in-progress`. A failed add means this session won the removal
+but holds no complete claim: dispatch nothing for that issue, skip it and
+report it for the Owner, since it then has neither state label. After the add, read the timeline again
 with the same command and confirm, as a secondary check, exactly one
 `in-progress` labeled event since the last `ready` labeled event, whose
-`created_at` is at or after the time noted, comparing whole seconds, so
-that the event is this session's. There is no MCP twin for the removal,
+`created_at` is at or after the time noted, comparing whole seconds, which
+shows only that the event was created after this session's read. There is no MCP twin for the removal,
 the `Date` read or the timeline read, so a session with no `gh` cannot
 run this check and must claim nothing. On an unreadable timeline after
 the add, skip the issue, dispatch no worker for it, leave the label as
@@ -362,7 +368,12 @@ move the issue back to `ready` after a lost race, because the session
 that holds it may already have dispatched a worker. An issue skipped in
 this phase is not claimed by this session, so Reconcile before Phase 4
 leaves it alone, a looping session's Phase 0 step 4 does not subtract
-it, and the report names it for the Owner to free.
+it, and the report names it for the Owner to free. An open issue with no
+queue state label that was last labelled by a claim attempt, after a
+failed add or a session that died, is stuck and fails closed, and the
+Owner frees it by adding `ready`. An issue left with `in-progress` by
+two sessions that both skipped is freed by removing `in-progress` and
+adding `ready`.
 
 ## Phase 2: Implement, then gate
 

@@ -181,10 +181,34 @@ class TestPhaseOnePostClaimCheck(unittest.TestCase):
         self.assertLess(self.phase.index(cmd),
                         self.phase.index("Dispatch no worker before"))
 
-    def test_a_failed_add_is_repaired_by_reconcile(self):
+    def test_a_failed_add_skips_the_issue_and_reports_it(self):
         s = sentence(self.phase, "A failed add")
+        self.assertIn("holds no complete claim", s)
         self.assertIn("dispatch nothing", s)
-        self.assertIn("Reconcile before Phase 4", s)
+        self.assertIn("skip it and report it for the Owner", s)
+        self.assertIn("neither state label", s)
+        self.assertNotIn("repair", self.phase)
+
+    def test_the_claim_is_best_effort_and_not_a_lock(self):
+        s = sentence(self.phase, "not a lock")
+        self.assertIn("narrows the race window", s)
+        self.assertIn("two removals both returned 200", s)
+        self.assertIn("each hold the claim", s)
+        self.assertIn("One queue session per repo at a time", s)
+        self.assertIn("best-effort mutex", s)
+        self.assertIn("detectable by the secondary check", s)
+        self.assertNotIn("decides the claim", self.phase)
+
+    def test_an_issue_with_no_state_label_is_stuck_and_fails_closed(self):
+        s = sentence(self.phase, "no queue state label")
+        self.assertIn("last labelled by a claim attempt", s)
+        self.assertIn("stuck and fails closed", s)
+        self.assertIn("Owner frees it by adding `ready`", s)
+
+    def test_two_sessions_that_both_skip_leave_a_stuck_label(self):
+        s = sentence(self.phase, "two sessions that both skipped")
+        self.assertIn("`in-progress`", s)
+        self.assertIn("removing `in-progress` and adding `ready`", s)
 
     def test_the_documentation_wording_is_not_overstated(self):
         s = sentence(self.phase, "a 404 included")
@@ -198,7 +222,8 @@ class TestPhaseOnePostClaimCheck(unittest.TestCase):
         self.assertIn("last `ready` labeled event", s)
         self.assertIn("at or after the time noted", s)
         self.assertIn("whole seconds", s)
-        self.assertIn("this session's", s)
+        self.assertIn("created after this session's read", s)
+        self.assertNotIn("is this session's", s)
         self.assertIn("/timeline --paginate", self.phase)
 
     def test_no_mcp_twin_so_the_check_fails_closed(self):
