@@ -149,3 +149,4 @@ the canonical vocabulary.
 | [0126](0126-kb-harvest-reads-memory-frontmatter-through-protocol-and-joins-its-root-only-importers.md) | kb_harvest reads a memory file's frontmatter through protocol.frontmatter_end and joins the root-only importers of protocol.py | provisional |
 | [0127](0127-work-queue-folds-into-implement-queue.md) | work-queue folds into implement-queue | accepted |
 | [0128](0128-reap-worktrees-is-root-only-and-joins-the-cli-py-row.md) | reap_worktrees is a root-only tool and joins the cli.py row of the dual-membership set | provisional |
+| [0129](0129-a-re-review-converges-on-the-first-reviews-findings.md) | A re-review converges on the first review's findings | accepted |

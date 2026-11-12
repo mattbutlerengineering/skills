@@ -20,6 +20,9 @@ author is the independent second opinion. It catches what CI cannot:
 | `changedFiles`       | Paths the diff touches.                                                                 |
 | `commitMessage`      | The worker's commit message.                                                            |
 | `headSha`            | The head SHA the gate recorded; the worktree is at it, and the review covers only it.   |
+| `priorIssues`        | Re-review only: the `issues` of this PR's previous review, numbered, verbatim from its verdict comment. |
+| `priorHeadSha`       | Re-review only: the head that review covered, the `Head:` line of that comment. |
+| `fixDiff`            | Re-review only: `git diff <priorHeadSha> <headSha>`, clipped like `diff`. When a commit between the two heads merges `main`, `git diff <priorHeadSha> <headSha> -- <changedFiles>` instead. |
 
 On a truncation marker the reviewer reads the missing region from its
 worktree at the PR's head instead of guessing.
@@ -30,6 +33,8 @@ worktree at the PR's head instead of guessing.
 | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `score`      | 0 to 10                                                                                                                                                                                                       |
 | `issues`     | Each with `category` (`hallucination`, `regression`, `test_failure`, `lint_violation`, `type_error`, `security`, `incomplete`, `quality`), `description`, and optional `filePath`, `lineNumber`, `suggestion` |
+| `resolutions` | Re-review only: one entry per prior issue, by its number: `fixed` or `open`, with one line of evidence |
+| `deferred`   | Re-review only: findings held out of the score (see Re-review), each shaped like an issue |
 | `assessment` | A short free-text judgement                                                                                                                                                                                   |
 
 The reviewer is handed no pass line and returns no `verdict`: the
@@ -54,6 +59,33 @@ Start at 10 and deduct.
 - One minor defect caps it at 8.
 - Missing criteria cap it by the share met (3 of 5 met caps it at 6).
 - Green gates and no lint or type errors floor it at 5.
+
+## Re-review
+
+A review of a PR that already carries a `flag` from this gate is a
+re-review. The orchestrator hands it `priorIssues`, `priorHeadSha` and
+`fixDiff` beside the first review's input. It finishes the first
+review; it does not start a second one. Three things go in `issues`:
+
+1. A prior issue that is still open. Mark every prior issue `fixed` or
+   `open` in `resolutions`.
+2. A line `fixDiff` adds or changes that is wrong: it fails a test,
+   lint or type check, contradicts an acceptance criterion or another
+   rule in the same file, or removes behaviour the PR had.
+3. A major defect (hallucination, regression, security) anywhere in
+   `diff`.
+
+Every other finding goes in `deferred`, never in `issues`. That covers
+a defect that is not major in a line `fixDiff` left unchanged, which
+the first review had in front of it, and a case, guarantee or
+mechanism that neither an acceptance criterion nor a prior issue asked
+for, wherever it sits. A finding raised only now does not hold the PR.
+
+Score a re-review with the Scoring table over `issues` alone.
+`deferred` findings deduct nothing and cap nothing.
+
+An input that lacks `priorIssues`, `priorHeadSha` or `fixDiff` is a
+first review, and nothing is deferred.
 
 ## Constraints
 
@@ -106,8 +138,19 @@ work that is not the reviewer's.
 
 | Flags so far | Action                                                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| 1            | Send the reviewer's issues to a new worker on the same branch (no new PR); it fixes with TDD, then the gate runs again. |
+| 1            | Send the reviewer's issues to a new worker on the same branch (no new PR); it fixes with TDD and changes nothing those issues do not need, then the gate runs again as a re-review. |
 | 2            | Label the issue `needs-review`, comment the reviewer's output, do not merge.                                            |
 | 3 or more    | Label `stealable` and move on.                                                                                          |
+
+**Deferred findings.** After a re-review the orchestrator files its
+`deferred` findings as one new issue, whatever the verdict: the title
+`Review follow-ups for #<PR>`, the body each finding verbatim with its
+file and line and the line `Found in the re-review of #<PR> at
+<headSha>`, and the labels the repo requires of a plain issue. It
+never gets `ready`: the Owner decides whether a follow-up enters the
+queue, so the queue does not feed itself. The verdict comment links
+the issue. No `deferred` findings, no issue. When the issue cannot be
+filed, the findings stay in the verdict comment and the report says
+so.
 
 A specialist `block` follows the same table.

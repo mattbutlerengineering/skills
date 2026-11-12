@@ -45,7 +45,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | ---------------- | ----------------------------------------------------------------------------------------------------- |
 | `preflight`      | the gate's own green on the head SHA of `origin/main`, read from its check runs (Phase 0, step 2)     |
 | `transition`     | `gh issue edit` swapping the state labels in the Labels table                                         |
-| `compose`        | take candidates in priority order, skipping any that names the same files as one already taken        |
+| `compose`        | take candidates in priority order, skipping any that would change a file an issue already taken, or an open PR in the gate or the train, changes (Phase 1) |
 | `base-freshness` | `git fetch origin` and confirm this checkout shares history with `origin/main`                        |
 | `worker`         | a general worker agent given the Worker brief below                                                   |
 | `model`          | the worker's default model                                                                            |
@@ -317,8 +317,19 @@ issue always gets a slot. Drop any issue that:
 - carries `in-progress`, `stealable`, or a `hold_labels` label;
 - carries a `wo:*` label: a factory work order belongs to
   `source: work-orders`, so the two sources never race for one issue;
-- would touch the same files as an issue already taken (run the
-  `compose` hook when the profile has one).
+- would change a file that an issue already taken in this batch would
+  change, or that an open PR closing an `in-progress` or `has-pr`
+  issue changes (run the `compose` hook when the profile has one).
+  Two workers on one file end in a merge conflict or an
+  `update-branch` commit, and each costs a CI run and can void a
+  review. Without a hook, an issue's files are the repo paths its
+  title and body name; when it names none, the one file that defines
+  the skill, tool, workflow or document it is about. An issue whose
+  files cannot be told collides with nothing and is reported as
+  `files unknown`. An open PR's files come from the `changed-files`
+  hook, and a list that fails closed there counts as changing every
+  file. A dropped issue keeps `ready`, is reported with the path and
+  the issue or PR it waits for, and is claimed in a later iteration.
 
 Take at most `max_workers`. Move each claimed issue to `in-progress`
 with the `transition` hook.
@@ -553,7 +564,15 @@ as that PR's CI settles; it can overlap with workers still running.
    review (ADR-0088), and under `merge: auto` it can still merge. Otherwise dispatch the universal reviewer, plus each specialist
    the `reviewers` hook matches to the changed files, with the input
    [the reviewer contract](references/reviewer-contract.md) defines. A
-   reviewer is never the PR's author.
+   reviewer is never the PR's author. When the PR already carries a
+   verdict comment from this queue whose first line is a
+   `reviewer-verdict: flag` line (read by the comment rule of Phase 3
+   step 1), the universal review is a re-review: also hand the reviewer
+   `priorIssues` (that comment's issues), `priorHeadSha` (its `Head:`
+   line) and `fixDiff`, as the contract's Re-review section defines. A
+   prior comment that cannot be read, or that has no `Head:` line,
+   makes it a first review. Specialists are dispatched as on a first
+   review.
    - Dispatch each reviewer into its own detached worktree at the
      recorded head (`git worktree add --detach <path> <head-sha>`,
      `<head-sha>` being the recorded head), never into
@@ -595,10 +614,15 @@ as that PR's CI settles; it can overlap with workers still running.
    `reviewer timed out` or
    `no usable score`, so the comment still parses like the hook's own
    lines. The comment carries the score and the findings whenever the
-   reviewer returned a score. All pass
+   reviewer returned a score. On a re-review the comment lists the
+   reviewer's `issues`, `resolutions` and `deferred` findings under
+   three separate headings, `Issues`, `Resolutions` and `Deferred`, so
+   a later re-review takes its `priorIssues` from `Issues` alone. All pass
    → the Merge policy. A derived `flag` or a specialist `block` → the
    contract's retry policy (one retry on the same branch, then
-   `needs-review` and no merge).
+   `needs-review` and no merge). After a re-review, file its `deferred`
+   findings as the contract's retry policy says, before the Merge
+   policy or the retry runs. They never change the verdict.
 
 ## Merge policy
 
