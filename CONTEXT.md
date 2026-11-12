@@ -49,11 +49,11 @@ _Avoid_: platform, runtime, agent (bare)
 **Utility skill**:
 A directly-invoked skill that owns no stage artifact, has no template, and
 is never routed to by /next. It acts on the work surrounding the pipeline —
-a run in flight or the repo the pipeline serves. Examples: autorun orchestrates a full run
-without owning an artifact itself; factory-init stamps a product repo with
-the factory scaffold; animated-diagram turns a flow or system into a
-self-contained diagram that moves on its own. The living roster is `protocol.py`'s
-`UTILITY_SKILLS` (ADR-0023).
+a run in flight or the repo the pipeline serves. Examples: autorun
+orchestrates a full run without owning an artifact itself; factory-init
+stamps a product repo with the factory scaffold; animated-diagram turns a
+flow or system into a self-contained diagram that moves on its own. The
+living roster is `protocol.py`'s `UTILITY_SKILLS` (ADR-0023).
 _Avoid_: helper skill, tool skill
 
 **House voice**:

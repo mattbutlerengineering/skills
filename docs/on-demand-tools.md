@@ -95,9 +95,9 @@ pre-pass, deliberately **not** a gate:
   a diagram SVG, and reports its smallest text size at the embed width
   (default 830px). Exit 0 clean, 1 with defects, 2 when the file was not
   checked. Free and offline, outside every gate and outside `make check`,
-  like the four above. The size is a report, never a failure. Both
-  diagram skills' step 7 run it. `python3 factory.py svg-check` is the same
-  tool.
+  like the four above. The size is a report, never a failure.
+  `animated-diagram`'s step 7 runs it. `python3 factory.py svg-check` is the
+  same tool.
 - `python3 reap_worktrees.py [--apply | --no-fetch]` — reaps merged, idle
   worktrees under `.claude/worktrees/` by the four tests in
   `.claude/implement-queue.md` `## reap`. A dry run unless `--apply`: it
