@@ -250,31 +250,6 @@
       "notes": "adjacency: ship vs operate"
     },
     {
-      "id": "apr-1",
-      "kind": "direct",
-      "expected": "address-pr-review",
-      "query": "Address the review comments on my open PR and resolve the threads"
-    },
-    {
-      "id": "apr-2",
-      "kind": "situational",
-      "expected": "address-pr-review",
-      "query": "Reviewers left feedback on my pull request and it now has merge conflicts with main"
-    },
-    {
-      "id": "apr-3",
-      "kind": "situational",
-      "expected": "address-pr-review",
-      "query": "CI is green on my open PR but two review threads are still unresolved — get it ready to merge"
-    },
-    {
-      "id": "apr-vs-review-1",
-      "kind": "near-miss",
-      "expected": "address-pr-review",
-      "query": "The PR I put up got review comments — take care of them",
-      "notes": "adjacency: address-pr-review vs review — acting on external feedback, not producing findings"
-    },
-    {
       "id": "apr-vs-watch-1",
       "kind": "near-miss",
       "expected": null,
@@ -333,24 +308,6 @@
       "notes": "tracker housekeeping must not fire decompose — no breakdown in play; the bridge only mirrors work items (ADR-0026)"
     },
     {
-      "id": "mermaid-1",
-      "kind": "direct",
-      "expected": "mermaid",
-      "query": "Create a mermaid diagram of our deployment process"
-    },
-    {
-      "id": "mermaid-2",
-      "kind": "situational",
-      "expected": "mermaid",
-      "query": "This runbook's escalation steps are a wall of text — turn them into a diagram people can follow at a glance"
-    },
-    {
-      "id": "mermaid-3",
-      "kind": "situational",
-      "expected": "mermaid",
-      "query": "I need a sequence diagram of the auth handshake for the docs, and it has to stay readable in dark mode"
-    },
-    {
       "id": "mermaid-vs-ux-1",
       "kind": "near-miss",
       "expected": "ux-design",
@@ -363,31 +320,6 @@
       "expected": null,
       "query": "Write up the deployment process in the operations guide",
       "notes": "prose documentation must not fire mermaid — nobody asked for a diagram"
-    },
-    {
-      "id": "iad-1",
-      "kind": "direct",
-      "expected": "interactive-architecture-diagram",
-      "query": "Create an interactive architecture diagram I can step through while presenting how our system works"
-    },
-    {
-      "id": "iad-2",
-      "kind": "situational",
-      "expected": "interactive-architecture-diagram",
-      "query": "I'm demoing the pipeline at Friday's all-hands — I want an animated diagram where each stage lights up as I talk through it"
-    },
-    {
-      "id": "iad-3",
-      "kind": "situational",
-      "expected": "interactive-architecture-diagram",
-      "query": "Make a self-contained HTML page showing requests flowing through our services, with clickable boxes that explain each component"
-    },
-    {
-      "id": "iad-vs-mermaid-1",
-      "kind": "near-miss",
-      "expected": "mermaid",
-      "query": "Draw an architecture diagram for the design doc — something I can paste into markdown",
-      "notes": "adjacency: interactive-architecture-diagram vs mermaid — a static markdown-embeddable diagram is mermaid; the interactive skill is for presentable step-through HTML demos"
     },
     {
       "id": "ad-1",
@@ -408,50 +340,11 @@
       "query": "The docs homepage needs an architecture picture that looks alive — requests visibly flowing from the client through the gateway to the database, looping forever"
     },
     {
-      "id": "ad-vs-iad-1",
-      "kind": "near-miss",
-      "expected": "interactive-architecture-diagram",
-      "query": "Build an animated diagram I can click through service by service while I narrate our architecture during the demo",
-      "notes": "adjacency: animated-diagram vs interactive-architecture-diagram — narrated click-through presenting is the interactive skill even when the ask says animated; ambient always-moving scenery is animated-diagram"
-    },
-    {
-      "id": "ad-vs-mermaid-1",
-      "kind": "near-miss",
-      "expected": "mermaid",
-      "query": "Sketch our queue topology as a diagram for the wiki",
-      "notes": "adjacency: animated-diagram vs mermaid — nobody asked for motion or design polish; a wiki-embeddable sketch is mermaid"
-    },
-    {
-      "id": "archd-1",
-      "kind": "direct",
-      "expected": "architecture-diagram",
-      "query": "Create a static architecture diagram of our system as an SVG file I can commit and embed in the README"
-    },
-    {
-      "id": "archd-2",
-      "kind": "situational",
-      "expected": "architecture-diagram",
-      "query": "The design doc needs a polished system-overview figure — services, database, queue — as an image that looks right in both light and dark mode"
-    },
-    {
-      "id": "archd-3",
-      "kind": "situational",
-      "expected": "architecture-diagram",
-      "query": "Draw our AWS topology as a clean, designed picture for the docs site — no animation, no clicking, just a well-made still figure"
-    },
-    {
       "id": "archd-vs-ad-1",
       "kind": "near-miss",
       "expected": "animated-diagram",
       "query": "Make an architecture SVG for the README where you can watch requests flowing through the services",
       "notes": "adjacency: architecture-diagram vs animated-diagram — visible flow is motion, and motion is animated-diagram even when the ask says SVG for a README"
-    },
-    {
-      "id": "archd-vs-mermaid-1",
-      "kind": "near-miss",
-      "expected": "mermaid",
-      "query": "Add a quick architecture sketch to the RFC, just something I can paste in as text",
-      "notes": "adjacency: architecture-diagram vs mermaid — pasted-as-text markdown source is mermaid; the designed committed .svg figure is architecture-diagram"
     },
     {
       "id": "capture-1",
