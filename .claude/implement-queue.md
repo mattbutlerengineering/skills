@@ -59,7 +59,8 @@ dispatch every specialist.
     python3 reviewer_verdict.py <score>
 
 Run on the universal reviewer's `score` (ADR-0123), passed as one
-quoted argument and only once it reads as a bare number: the score is
+quoted argument and only once it reads as a bare finite number from 0
+to 10: the score is
 the reviewer's text, never a shell fragment. The reviewer is
 told no pass line and the threshold lives only in this tool. Exit 0
 prints `reviewer-verdict: pass (score N/10)`, exit 1 prints
@@ -67,9 +68,11 @@ prints `reviewer-verdict: pass (score N/10)`, exit 1 prints
 `reviewer-verdict: error (<reason>)` (no usable score, or a wrong
 argument count). Act on the exit code only; post the printed line
 verbatim as the first line of the PR's verdict comment. A hook-side
-`error` (exit 2, a hook that did not run, or a missing hook) is held
-for a human at once, with no re-dispatch; a reviewer-side `error`
-(a timeout, no usable `score`) is re-dispatched once, then held.
+`error` (a missing hook, a hook that did not run, or exit 2 on a usable
+score: a wrong argument count or a crash) is held for a human at once,
+with no re-dispatch. A reviewer-side `error` (a timeout, or a `score`
+that is not a bare finite number from 0 to 10, which the orchestrator
+checks before running the hook) is re-dispatched once, then held.
 Under `merge: auto` an `error` never merges. A `verdict` the reviewer
 returns itself is ignored.
 

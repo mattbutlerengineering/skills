@@ -221,9 +221,10 @@ Implement-queue's gate, run for this one PR under the profile:
    voids the review. The verdict is derived, not the reviewer's: the
    profile's `verdict` hook runs on its score, as the orchestrator's
    gate step 5 states, and the PR comment's first line is the line the
-   hook printed, score included. A reviewer-side error (a timeout, no usable
-   score) is `error`, re-dispatched once and then held; a hook-side one
-   (exit 2, hook missing or not run) is held at once. A derived `flag` gets one fix on the same branch by a
+   hook printed, score included. A reviewer-side error (a timeout, a score
+   that is not a bare finite number from 0 to 10) is `error`,
+   re-dispatched once and then held; a hook-side one (hook missing or
+   not run, or exit 2 on a usable score) is held at once. A derived `flag` gets one fix on the same branch by a
    new worker and one more gate; a second `flag` labels the issue
    `needs-review`, the profile's hold label, comments the reviewer's
    output on the PR, and ends the run with no merge; the hold parks

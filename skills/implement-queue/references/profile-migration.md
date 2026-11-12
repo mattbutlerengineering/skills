@@ -38,7 +38,7 @@ skill's Rules section.
 | `worker`         | A general worker agent given the Worker brief.                                                            |
 | `model`          | The worker's default model.                                                                               |
 | `ci-status`      | `gh pr checks <N>` plus the presence check. Fails under a cloud session's GraphQL 403.                    |
-| `fast-path`      | Every PR is reviewed. Safe but slower: no docs-only PR skips review.                                      |
+| `fast-path`      | Every PR is reviewed (with no `verdict` hook, held unreviewed instead). Safe but slower: no docs-only PR skips review. |
 | `verdict`        | **Every PR off the fast path is held for a human unreviewed, with a `reviewer-verdict: error (no verdict hook)` comment: no review is dispatched, even under `merge: auto`, so nothing merges and no warning is printed.** Add the hook. It runs on the reviewer's `score` and exits 0 for `pass`, 1 for `flag`, 2 for `error`, printing the line the verdict comment opens with; the pass threshold lives only in it (ADR-0123). |
 | `reviewers`      | One universal reviewer, no specialists.                                                                   |
 | `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`, `<sha>` the gated head. Needs `gh` and a session that may merge. |

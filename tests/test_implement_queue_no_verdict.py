@@ -26,6 +26,10 @@ REASONS = ("no verdict hook", "hook did not run", "hook exit 2",
            "reviewer timed out", "no usable score")
 
 
+def flat_skill():
+    return " ".join(SKILL.read_text(encoding="utf-8").split())
+
+
 def migration_row(name):
     text = MIGRATION.read_text(encoding="utf-8")
     hooks = text.split("## Hooks", 1)[1].split("## What the check reports", 1)[0]
@@ -39,9 +43,19 @@ class TestRemedySplitsByCause(unittest.TestCase):
     def test_a_reviewer_side_error_gets_one_redispatch(self):
         s = sentence(gate_step(5), "A reviewer-side error")
         self.assertIn("timed out", s)
-        self.assertIn("no usable `score`", s)
+        self.assertIn("score is not usable", s)
         self.assertIn("one re-dispatch", s)
         self.assertIn("hold", s)
+
+    def test_a_usable_score_is_defined_and_checked_before_the_hook(self):
+        s = sentence(gate_step(5), "usable score, a bare finite number")
+        self.assertIn("from 0 to 10", s)
+        self.assertIn("never reaches the hook", s)
+
+    def test_exit_two_is_hook_side_only_on_a_usable_score(self):
+        s = sentence(gate_step(5), "A hook-side error")
+        self.assertIn("exit 2 on a usable score", s)
+        self.assertIn("wrong argument count", s)
 
     def test_a_hook_side_error_is_held_at_once(self):
         s = sentence(gate_step(5), "A hook-side error")
@@ -117,11 +131,70 @@ class TestMigrationRowAgrees(unittest.TestCase):
 
 
 class TestRestatements(unittest.TestCase):
+    def _flat(self, *parts):
+        return " ".join(ROOT.joinpath(*parts).read_text(encoding="utf-8").split())
+
+    def _split(self, text):
+        hook = sentence(text, "hook-side")
+        rev = sentence(text, "reviewer-side")
+        self.assertIn("held", hook)
+        self.assertTrue("at once" in hook, hook)
+        self.assertIn("no re-dispatch", hook)
+        self.assertIn("exit 2 on a usable score", hook)
+        self.assertIn("re-dispatched once", rev)
+        self.assertIn("from 0 to 10", rev)
+
     def test_the_repo_profile_splits_the_remedy(self):
-        text = " ".join((ROOT / ".claude" / "implement-queue.md")
-                        .read_text(encoding="utf-8").split())
-        self.assertNotIn("or a missing hook is `error`: re-dispatch", text)
-        self.assertIn("hook-side", text)
+        self._split(self._flat(".claude", "implement-queue.md"))
+
+    def test_the_contract_splits_the_remedy(self):
+        self._split(self._flat("skills", "implement-queue", "references",
+                               "reviewer-contract.md"))
+
+    def test_the_hourly_routine_splits_the_remedy(self):
+        text = self._flat("docs", "factory", "hourly-improvement-routine.md")
+        rev = sentence(text, "A reviewer-side error")
+        self.assertIn("re-dispatched once and then held", rev)
+        self.assertIn("from 0 to 10", rev)
+        hook = sentence(text, "a hook-side one")
+        self.assertIn("is held at once", hook)
+        self.assertIn("exit 2 on a usable score", hook)
+        self.assertNotIn("An error or timeout is `error`", text)
+
+
+class TestFastPathStaysOpenAndTheReportSaysSo(unittest.TestCase):
+    def test_the_fast_path_stays_open_without_a_hook(self):
+        s = sentence(gate_step(4), "A fast-path PR")
+        self.assertIn("fast path stays open", s)
+        self.assertIn("ADR-0088", s)
+        self.assertIn("can still merge", s)
+
+    def test_the_report_says_every_merge_was_unreviewed(self):
+        s = sentence(section(SKILL, "Phase 4: Loop or stop"),
+                     "with no `verdict` hook under `merge: auto`")
+        self.assertIn("every merge in the run took the fast path unreviewed", s)
+
+    def test_the_fast_path_statement_is_made_once(self):
+        self.assertEqual(flat_skill().count("fast path stays open"), 1)
+
+
+class TestNoCopyStillClaimsEveryPrIsReviewed(unittest.TestCase):
+    def test_the_hook_table_row_is_qualified(self):
+        line = next(l for l in SKILL.read_text(encoding="utf-8").splitlines()
+                    if l.startswith("| `fast-path`"))
+        self.assertIn("no `verdict` hook", line)
+        self.assertIn("unreviewed", line)
+
+    def test_the_migration_row_is_qualified(self):
+        row = migration_row("fast-path")
+        self.assertIn("no `verdict` hook", row)
+        self.assertIn("held unreviewed", row)
+
+    def test_the_description_is_qualified(self):
+        desc = next(l for l in SKILL.read_text(encoding="utf-8").splitlines()
+                    if l.startswith("description:"))
+        s = sentence(desc, "a review by a distinct agent")
+        self.assertIn("held unreviewed when the profile has no `verdict` hook", s)
 
 
 if __name__ == "__main__":
