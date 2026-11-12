@@ -233,7 +233,7 @@ resolves. Dispatch is never held by the merge-train lock: capacity
 
 **Harness needs.** The dispatch above is written for Claude Code's Agent
 tool. A harness that lacks one of these features uses its fallback, and
-none of them stops the run.
+under `source: issues` none of them stops the run.
 
 - Per-worker worktree. Absent (no `isolation` argument): the
   orchestrator cuts each worktree after `base-freshness`, under
@@ -256,6 +256,13 @@ none of them stops the run.
 - Messaging a running worker. Absent: dispatch needs none, and the
   45-minute check-in becomes stopping the worker at the bound (the
   Wall-clock bound below).
+
+Under `source: work-orders`, a worker with no usage gets no
+`budget_guard.py record` row, and the run report names each unrecorded
+order, because the ledger then reads low. Under `source: work-orders`,
+a harness without worktree isolation follows the Cloud fallback in
+[references/work-orders.md](references/work-orders.md), not the
+orchestrator-cut worktree.
 
 ### Worker brief
 

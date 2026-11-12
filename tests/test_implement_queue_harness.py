@@ -53,6 +53,31 @@ class TestThePassageSitsInPhaseTwo(unittest.TestCase):
             self.assertTrue(need(label), label)
 
 
+class TestTheLeadAndTheWorkOrdersMode(unittest.TestCase):
+    def test_the_lead_scopes_no_stop_to_issues(self):
+        s = sentence(flat(passage()), "uses its fallback")
+        self.assertIn("under `source: issues` none of them stops the run", s)
+
+    def test_the_cut_path_is_under_the_reaped_directory(self):
+        s = sentence(need("Per-worker worktree."), "cuts each worktree")
+        self.assertIn("under `.claude/worktrees/`", s)
+
+    def test_no_usage_means_no_ledger_row_and_a_named_order(self):
+        s = sentence(flat(passage()), "`budget_guard.py record`")
+        self.assertIn("Under `source: work-orders`", s)
+        self.assertIn("no `budget_guard.py record` row", s)
+        self.assertIn("names each unrecorded order", s)
+        self.assertIn("reads low", s)
+
+    def test_no_isolation_follows_the_cloud_fallback(self):
+        s = sentence(flat(passage()), "Cloud fallback")
+        self.assertIn("Under `source: work-orders`", s)
+        self.assertIn("without worktree isolation", s)
+        self.assertIn("references/work-orders.md", s)
+        self.assertIn("not the orchestrator-cut worktree", s)
+        self.assertNotIn("budget_guard", s)
+
+
 class TestOrchestratorCutWorktree(unittest.TestCase):
     def test_the_command_is_no_track_from_the_remote_tracking_ref(self):
         s = sentence(need("Per-worker worktree."), "worktree add")
