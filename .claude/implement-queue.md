@@ -66,11 +66,12 @@ prints `reviewer-verdict: pass (score N/10)`, exit 1 prints
 `reviewer-verdict: flag (score N/10)`, exit 2 prints
 `reviewer-verdict: error (<reason>)` (no usable score, or a wrong
 argument count). Act on the exit code only; post the printed line
-verbatim as the first line of the PR's verdict comment. Exit 2, a hook
-that did not run, or a missing hook is `error`: re-dispatch the
-reviewer once, then hold the PR for a human. Under `merge: auto` an
-`error` never merges. A `verdict` the reviewer returns itself is
-ignored.
+verbatim as the first line of the PR's verdict comment. A hook-side
+`error` (exit 2, a hook that did not run, or a missing hook) is held
+for a human at once, with no re-dispatch; a reviewer-side `error`
+(a timeout, no usable `score`) is re-dispatched once, then held.
+Under `merge: auto` an `error` never merges. A `verdict` the reviewer
+returns itself is ignored.
 
 ## changed-files
 

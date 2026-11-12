@@ -134,8 +134,9 @@ file's Rules section.
    every `## <name>` section is a row of the hook table, every
    frontmatter key a row of the key table. Report each hook the profile
    lacks together with the consequence the reference gives for it (a
-   profile that predates `verdict` holds every reviewed PR for a human,
-   even under `merge: auto`, and nothing else says so), and each section
+   profile that predates `verdict` holds every PR off the fast path for
+   a human, unreviewed (gate step 4), even under `merge: auto`, and
+   nothing else says so), and each section
    or key the tables do not name as ignored, never run. A gap never
    stops the run and never loosens a rule; the findings lead the final
    report.
@@ -312,7 +313,14 @@ as that PR's CI settles; it can overlap with workers still running.
    classification counts as the review for the Merge policy (ADR-0088). If the hook
    cannot prove its own inputs are current (a stale build, an unreadable
    classifier), fail closed: review the PR and dispatch every specialist.
-4. **Review.** Dispatch the universal reviewer, plus each specialist
+4. **Review.** When Phase 0's profile check found no `verdict` hook, no
+   verdict can be derived and a review could not lead to a merge, so
+   for a PR that is not on the fast path (step 3) this step does not
+   run: dispatch no reviewer, report the PR as unreviewed and held for a
+   human, and go to step 5, whose `no verdict hook` comment is its
+   record. That PR never merges, under any `merge` setting; the human
+   merging can request a review. A fast-path PR is unaffected: the
+   classification is its review. Otherwise dispatch the universal reviewer, plus each specialist
    the `reviewers` hook matches to the changed files, with the input
    [the reviewer contract](references/reviewer-contract.md) defines. A
    reviewer is never the PR's author.
@@ -338,13 +346,23 @@ as that PR's CI settles; it can overlap with workers still running.
    fragment), and act on its exit code only: the reviewer is handed no pass
    line and returns no verdict, and a `verdict` it returns anyway is
    ignored whichever way it points. Exit 0 is `pass`, exit 1 is `flag`.
-   Exit 2, a hook that did not run, a missing hook, or a reviewer that
-   returned no usable `score` is `error`: re-dispatch the reviewer once,
-   then hold the PR for a human, and under `merge: auto` never merge.
+   Anything else is `error`, and the cause sets the remedy. A
+   reviewer-side error (the review timed out, or the reviewer returned
+   no usable `score`) gets one re-dispatch of the reviewer, then holds
+   the PR for a human. A hook-side error (a missing hook, a hook that
+   did not run, or exit 2) gets no re-dispatch, because a second review
+   cannot change it: hold the PR for a human at once. Under
+   `merge: auto` an `error` never merges.
    Post a verdict comment on the PR whose first line is the line the
    hook printed, verbatim, so every comment carries the score, and whose
    second line is `Head: <sha>`, the recorded head, so the comment says
-   which head it covers. All pass
+   which head it covers. When the hook printed no `reviewer-verdict:`
+   line, the first line is `reviewer-verdict: error (<reason>)`, with
+   `<reason>` one of `no verdict hook`, `hook did not run`, `hook exit
+   2` (an exit 2 that printed no such line), `reviewer timed out` or
+   `no usable score`, so the comment still parses like the hook's own
+   lines. The comment carries the score and the findings whenever the
+   reviewer returned a score. All pass
    → the Merge policy. A derived `flag` or a specialist `block` → the
    contract's retry policy (one retry on the same branch, then
    `needs-review` and no merge).
