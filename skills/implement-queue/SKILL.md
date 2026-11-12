@@ -231,6 +231,32 @@ worktree (`isolation: "worktree"`) and the model the `model` hook
 resolves. Dispatch is never held by the merge-train lock: capacity
 (`max_workers`) is the only limit on starting work.
 
+**Harness needs.** The dispatch above is written for Claude Code's Agent
+tool. A harness that lacks one of these features uses its fallback, and
+none of them stops the run.
+
+- Per-worker worktree. Absent (no `isolation` argument): the
+  orchestrator cuts each worktree after `base-freshness`, under
+  `.claude/worktrees/`, with `git -C <repo> worktree add --no-track
+  <path> -b <branch> refs/remotes/origin/main`. Without `--no-track`,
+  a remote-tracking start point makes `origin/main` the new branch's
+  upstream, so a push that names no branch can target `main`. Tell
+  that worker in its brief to push with `git push -u origin <branch>`,
+  never a bare `git push`. The orchestrator removes the worktree: by
+  the Phase 4 empty-worktree rule when the worker ended with no commit,
+  by the `reap` hook once its PR merged.
+- Per-worker model. Absent (the harness refuses a per-call model):
+  dispatch on the harness's default model, treat the `model` hook's
+  answer as advisory, and say so once in the run report; never fail
+  the batch over it. A dispatch refused with an error naming the model
+  argument is re-sent once without it. A re-send that is refused too
+  failed for another reason and is handled as a worker failure.
+- Usage on completion. Absent: leave the usage fields empty and still
+  write the row (the `telemetry` rule below).
+- Messaging a running worker. Absent: dispatch needs none, and the
+  45-minute check-in becomes stopping the worker at the bound (the
+  Wall-clock bound below).
+
 ### Worker brief
 
 Under `source: work-orders`, use the work-order brief in
@@ -289,6 +315,12 @@ When a worker finishes, label its issue with the `transition` hook:
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
+A field the harness reports no usage for (tokens in and out, tool uses,
+model tier, cost) is left empty and never estimated. A row without
+usage is still written, with the fields it has (issue, outcome,
+duration, PR). A duration the harness does not
+report may be read from the issue's label-event timestamps, and is
+reported as derived.
 
 **Wall-clock bound.** At 45 minutes from dispatch the orchestrator sends
 the worker one check-in asking for its status and its plan to stop. The
