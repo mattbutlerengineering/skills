@@ -528,9 +528,10 @@ against the count repaired.
 ### The gate, per PR
 
 This is the last check before a merge. Run it for each worker PR as soon
-as that PR's CI settles; it can overlap with workers still running.
+as its head is recorded (step 1), without waiting for its CI; it can
+overlap with workers still running.
 
-1. **CI.** Record the PR's head SHA once, here: `gh pr view <N> --json
+1. **Head and CI.** Record the PR's head SHA once, here: `gh pr view <N> --json
    headRefOid`, or REST `gh api repos/{owner}/{repo}/pulls/<N> --jq
    .head.sha`, or MCP `pull_request_read`. That SHA is the gated head,
    the recorded head, and every later step uses it: the checks below,
@@ -544,7 +545,14 @@ as that PR's CI settles; it can overlap with workers still running.
    means that check is **present and successful**. A rollup with no
    failures and no pending checks is not green when the required check
    never ran: treat a missing check as its own state, re-trigger CI once
-   if the repo's hook says how, and never enqueue on it.
+   if the repo's hook says how, and never enqueue on it. Pending CI does
+   not stop steps 2 to 4: the review needs the recorded head, not CI's
+   result, so it may be dispatched while the check is pending. Steps 2
+   and 3 are still decided before any reviewer is dispatched, so a held
+   PR and a fast-path PR get no reviewer. Nothing merges and nothing is
+   enqueued until this step's CI rule reads green (read again at the
+   recorded head) and step 5 passes or the fast path applies. Red CI
+   after a `pass` never merges.
 2. **Holds.** A `hold_labels` label on the PR or its issue ends the gate
    here: no review, no merge.
 3. **Fast path.** If the `fast-path` hook says the diff at the recorded
@@ -618,7 +626,7 @@ as that PR's CI settles; it can overlap with workers still running.
    reviewer's `issues`, `resolutions` and `deferred` findings under
    three separate headings, `Issues`, `Resolutions` and `Deferred`, so
    a later re-review takes its `priorIssues` from `Issues` alone. All pass
-   → the Merge policy. A derived `flag` or a specialist `block` → the
+   → the Merge policy, once step 1's CI is green. A derived `flag` or a specialist `block` → the
    contract's retry policy (one retry on the same branch, then
    `needs-review` and no merge). After a re-review, file its `deferred`
    findings as the contract's retry policy says, before the Merge
