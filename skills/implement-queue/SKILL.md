@@ -256,18 +256,49 @@ Every worker prompt carries:
    unchanged. Stall-abort: after two resumes without a new commit, or
    two resumes that each hit a bound, stop: commit what works, open a
    draft PR if anything is usable, and report the blocking command.
+8. Stay inside your worktree. Stop only processes you started, by PID;
+   never `pkill -f` or `killall`, which match machine-wide. Never run
+   `git stash`, `git gc` or `git worktree prune`: they act on state
+   shared by every worktree of the repo. After any investigative
+   checkout (a bisect, `git checkout <sha> -- <paths>`) restore the
+   worktree to a clean state, confirm it with `git status --porcelain`
+   and `git diff`, and say so in the result.
+9. An evidence comment with no PR is a valid result when the cause is
+   outside the repo (for example a scheduled routine that never fired):
+   post the evidence on the issue, open no PR and report the evidence
+   outcome. Never invent a change to have something to push.
+10. Say in the result which checks were not verified locally: list under
+   `not verified locally` every CI check the PR will face that you did
+   not or could not run, each with the reason. `has-pr` then means local
+   gates green, so the orchestrator knows which checks to watch first.
+   A profile may name checks that commonly fail only in CI (a secret
+   scan, bundle size, generated-artifact drift) in its own prose, as a
+   hint; when it does, the orchestrator repeats it in the brief.
+11. Finish or hand off within 45 minutes from dispatch, and answer the
+   orchestrator's check-in at once.
 
 When a worker finishes, label its issue with the `transition` hook:
 
-| Outcome                          | State          |
-| -------------------------------- | -------------- |
-| PR open, gates green             | `has-pr`       |
-| Partial work (draft PR)          | `needs-review` |
-| No usable change                 | `agent-failed` |
-| Second failure on the same issue | `stealable`    |
+| Outcome                                                  | State          |
+| -------------------------------------------------------- | -------------- |
+| PR open, gates green                                     | `has-pr`       |
+| Partial work (draft PR)                                  | `needs-review` |
+| Investigated: no repo change can fix it, evidence posted | `needs-review` |
+| No usable change                                         | `agent-failed` |
+| Second failure on the same issue                         | `stealable`    |
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
+
+**Wall-clock bound.** At 45 minutes from dispatch the orchestrator sends
+the worker one check-in asking for its status and its plan to stop. The
+worker answers, then within 10 minutes commits what works and opens a
+draft PR if anything is usable, or posts its evidence. A worker that
+has not answered or ended 10 minutes after the check-in, or that the
+harness cannot message, is stopped, counts as stalled and has its issue
+reconciled below. Wall-clock is the portable bound: the `telemetry`
+hook sees usage only after a worker finishes, so there is no spend
+bound.
 
 **Reconcile before Phase 4.** A worker's `transition` can fail without
 a trace, so the orchestrator checks it instead of trusting it. Skip
@@ -277,7 +308,10 @@ PRs that close it (`Closes #<N>` on the PR list) and run the
 `transition` hook where the label disagrees with the table: an open PR
 with green or pending gates → `has-pr` (the gate still runs); a draft
 PR → `needs-review`; an open PR with red gates, a PR closed unmerged,
-or no PR at all → `agent-failed`. An issue whose PR merged is
+or no PR at all (unless the evidence outcome below applies) →
+`agent-failed`. A worker that reported the evidence outcome and posted
+its comment on the issue has no PR by design: its issue is
+`needs-review`. An issue whose PR merged is
 delivered: leave it to GitHub's close. Never remove a `hold_labels`
 label or `stealable`, whatever the PR looks like: the gate put them
 there on purpose. A worker resumed twice with no new commit counts as
@@ -461,6 +495,20 @@ Release every lock you took when the train ends, on any exit.
 - Run the `reap` hook. A worker that committed keeps its worktree, so
   nothing else reclaims it; a reaper must refuse any worktree with an
   open PR or a live process, and needs positive evidence of a merge.
+- Remove a worktree this session's dispatch cut when its worker ended
+  with no commit, a clean tree and no remote branch: the `reap` hook's
+  evidence of a merge can miss such a worktree, so the session does not
+  rely on it. It is the
+  orchestrator's own worktree only: never one it did not cut, never one
+  with a PR. All four checks must hold. `git -C <path> rev-list --count
+  refs/remotes/origin/main..HEAD` prints 0, after `git fetch origin`.
+  `git -C <path> status --porcelain --untracked-files=all` prints
+  nothing. `git ls-remote origin refs/heads/<branch>` prints nothing.
+  `lsof -w +D <path>` prints nothing, so no live process holds it. On a
+  pass, `git worktree remove <path>` (never `--force`), then `git
+  branch -D -- <branch>`, safe because no commit is ahead of main. A
+  failed check or a failed `git` call leaves the worktree and its
+  branch in place and is reported with its path.
 - Persist the telemetry the session appended, once per iteration, not
   per worker: an ephemeral checkout loses it, and one PR per row races
   its own auto-merge. Batch every row the iteration appended into one
@@ -470,7 +518,10 @@ Release every lock you took when the train ends, on any exit.
   `origin/main` after `git fetch origin`, never from the local `main`,
   which may be stale.
 - More ready issues and budget left → Phase 0. Three consecutive failures
-  (workers or train) → release locks, stop and report.
+  (workers or train) → release locks, stop and report. The evidence
+  outcome (a worker's issue left `needs-review` with its evidence
+  posted) is not a failure: it leaves the count unchanged. Report it
+  with its evidence.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
   every failure with its cause; with no `verdict` hook under `merge: auto`,
   also that every merge in the run took the fast path unreviewed.
@@ -482,14 +533,14 @@ Recurring use: `/loop 30m` with this skill.
 
 ## Labels
 
-| Label          | Meaning                                           |
-| -------------- | ------------------------------------------------- |
-| `ready`        | Available to claim                                |
-| `in-progress`  | A worker has it                                   |
-| `has-pr`       | PR open, in the gate or the train                 |
-| `needs-review` | Partial work or a repeat flag; a human looks next |
-| `agent-failed` | No usable change this time                        |
-| `stealable`    | Failed twice; needs a different approach          |
+| Label          | Meaning                                                                                     |
+| -------------- | ------------------------------------------------------------------------------------------- |
+| `ready`        | Available to claim                                                                          |
+| `in-progress`  | A worker has it                                                                             |
+| `has-pr`       | PR open, in the gate or the train                                                           |
+| `needs-review` | Partial work, a repeat flag, or evidence that no repo change can fix it; a human looks next |
+| `agent-failed` | No usable change this time                                                                  |
+| `stealable`    | Failed twice; needs a different approach                                                    |
 
 ## Rules
 
