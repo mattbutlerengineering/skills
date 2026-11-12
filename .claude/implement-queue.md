@@ -68,8 +68,9 @@ prints `reviewer-verdict: pass (score N/10)`, exit 1 prints
 `reviewer-verdict: error (<reason>)` (no usable score, or a wrong
 argument count). Act on the exit code only; post the printed line
 verbatim as the first line of the PR's verdict comment. A hook-side
-`error` (a missing hook, a hook that did not run, or exit 2 on a usable
-score: a wrong argument count or a crash) is held for a human at once,
+`error` (a missing hook, a hook that did not run, or any exit code
+other than 0 or 1 on a usable score: a wrong argument count gives 2, a
+killed process 137) is held for a human at once,
 with no re-dispatch. A reviewer-side `error` (a timeout, or a `score`
 that is not a bare finite number from 0 to 10, which the orchestrator
 checks before running the hook) is re-dispatched once, then held.

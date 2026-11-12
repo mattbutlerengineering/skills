@@ -352,8 +352,8 @@ as that PR's CI settles; it can overlap with workers still running.
    reviewer-side error (the review timed out, or the reviewer's score is
    not usable) gets one re-dispatch of the reviewer, then holds
    the PR for a human. A hook-side error (a missing hook, a hook that
-   did not run, or exit 2 on a usable score, such as a wrong argument
-   count or a crash) gets no re-dispatch, because a second review
+   did not run, or any exit code other than 0 or 1 on a usable score: a
+   wrong argument count gives 2, a killed process 137) gets no re-dispatch, because a second review
    cannot change it: hold the PR for a human at once. Under
    `merge: auto` an `error` never merges.
    Post a verdict comment on the PR whose first line is the line the
@@ -362,7 +362,8 @@ as that PR's CI settles; it can overlap with workers still running.
    which head it covers. When the hook printed no `reviewer-verdict:`
    line, the first line is `reviewer-verdict: error (<reason>)`, with
    `<reason>` one of `no verdict hook`, `hook did not run`, `hook exit
-   2` (an exit 2 that printed no such line), `reviewer timed out` or
+   <code>` (an exit code other than 0 or 1 that printed no such line),
+   `reviewer timed out` or
    `no usable score`, so the comment still parses like the hook's own
    lines. The comment carries the score and the findings whenever the
    reviewer returned a score. All pass

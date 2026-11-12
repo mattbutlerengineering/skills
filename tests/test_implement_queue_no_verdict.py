@@ -22,7 +22,7 @@ def sentence(text, needle):
             return s
     return ""
 
-REASONS = ("no verdict hook", "hook did not run", "hook exit 2",
+REASONS = ("no verdict hook", "hook did not run", "hook exit <code>",
            "reviewer timed out", "no usable score")
 
 
@@ -46,6 +46,7 @@ class TestRemedySplitsByCause(unittest.TestCase):
         self.assertIn("score is not usable", s)
         self.assertIn("one re-dispatch", s)
         self.assertIn("hold", s)
+        self.assertNotIn("at once", s)
 
     def test_a_usable_score_is_defined_and_checked_before_the_hook(self):
         s = sentence(gate_step(5), "usable score, a bare finite number")
@@ -54,12 +55,15 @@ class TestRemedySplitsByCause(unittest.TestCase):
 
     def test_exit_two_is_hook_side_only_on_a_usable_score(self):
         s = sentence(gate_step(5), "A hook-side error")
-        self.assertIn("exit 2 on a usable score", s)
-        self.assertIn("wrong argument count", s)
+        self.assertIn("any exit code other than 0 or 1 on a usable score", s)
+        self.assertIn("wrong argument count gives 2", s)
+        self.assertIn("killed process 137", s)
+        self.assertNotIn("crash", s)
+        self.assertNotIn("one re-dispatch", s)
 
     def test_a_hook_side_error_is_held_at_once(self):
         s = sentence(gate_step(5), "A hook-side error")
-        for cause in ("missing hook", "did not run", "exit 2"):
+        for cause in ("missing hook", "did not run", "exit code other than 0"):
             self.assertIn(cause, s)
         self.assertIn("no re-dispatch", s)
         self.assertIn("hold the PR for a human at once", s)
@@ -120,7 +124,10 @@ class TestMigrationRowAgrees(unittest.TestCase):
     def test_the_row_says_no_review_runs_and_nothing_merges(self):
         row = migration_row("verdict")
         self.assertIn("unreviewed", row)
-        self.assertIn("nothing merges", row)
+        self.assertIn("nothing off the fast path merges", row)
+        self.assertIn("Fast-path PRs can still merge, and the final report "
+                      "says so", row)
+        self.assertNotIn("so nothing merges", row)
         self.assertIn("even under `merge: auto`", row)
         self.assertNotIn("An `error` verdict on every reviewed PR", row)
 
@@ -137,12 +144,16 @@ class TestRestatements(unittest.TestCase):
     def _split(self, text):
         hook = sentence(text, "hook-side")
         rev = sentence(text, "reviewer-side")
-        self.assertIn("held", hook)
-        self.assertTrue("at once" in hook, hook)
+        self.assertNotEqual(hook, rev)
+        self.assertIn("at once", hook)
         self.assertIn("no re-dispatch", hook)
-        self.assertIn("exit 2 on a usable score", hook)
+        self.assertNotIn("re-dispatched once", hook)
+        self.assertIn("any exit code other than 0 or 1 on a usable score", hook)
+        self.assertNotIn("crash", hook)
         self.assertIn("re-dispatched once", rev)
         self.assertIn("from 0 to 10", rev)
+        self.assertNotIn("at once", rev)
+        self.assertNotIn("no re-dispatch", rev)
 
     def test_the_repo_profile_splits_the_remedy(self):
         self._split(self._flat(".claude", "implement-queue.md"))
@@ -156,9 +167,12 @@ class TestRestatements(unittest.TestCase):
         rev = sentence(text, "A reviewer-side error")
         self.assertIn("re-dispatched once and then held", rev)
         self.assertIn("from 0 to 10", rev)
-        hook = sentence(text, "a hook-side one")
+        self.assertNotIn("at once", rev)
+        hook = sentence(text, "A hook-side error")
         self.assertIn("is held at once", hook)
-        self.assertIn("exit 2 on a usable score", hook)
+        self.assertIn("any exit code other than 0 or 1 on a usable score", hook)
+        self.assertNotIn("re-dispatched", hook)
+        self.assertNotIn("crash", hook)
         self.assertNotIn("An error or timeout is `error`", text)
 
 
