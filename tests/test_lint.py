@@ -903,8 +903,8 @@ class TestSkillAssets(CheckerTreeTest):
 
 class TestReadmeSkills(CheckerTreeTest):
     """A skill can be added, registered, tested and released without the
-    README hearing about it — which is how interactive-architecture-diagram
-    shipped undocumented."""
+    README hearing about it — which is how a diagram skill once shipped
+    undocumented."""
 
     def test_unnamed_skill_is_reported(self):
         path = self.root / "README.md"
@@ -924,17 +924,16 @@ class TestReadmeSkills(CheckerTreeTest):
                          ["README.md never names skill 'rogue'"])
 
     def test_a_slug_nested_in_a_longer_one_is_still_required(self):
-        """`architect` sits inside `architecture-diagram` and inside
-        `interactive-architecture-diagram`. A substring test calls the
-        README complete once either longer name is there, so the shorter
-        skill is the one the checker cannot report — and the docstring
-        above records that a diagram skill shipping undocumented is
+        """`implement` sits inside `implement-queue`. A substring test
+        calls the README complete once the longer name is there, so the
+        shorter skill is the one the checker cannot report — and the
+        docstring above records that a skill shipping undocumented is
         exactly what this checker exists to stop."""
         path = self.root / "README.md"
         path.write_text(path.read_text(encoding="utf-8")
-                        .replace("- `architect`\n", ""), encoding="utf-8")
+                        .replace("- `implement`\n", ""), encoding="utf-8")
         self.assertEqual(lint.check_readme_skills(self.root),
-                         ["README.md never names skill 'architect'"])
+                         ["README.md never names skill 'implement'"])
 
     def test_every_registered_skill_can_be_reported_missing(self):
         """Closure: no slug is unreportable. One dropped name at a time,
@@ -995,13 +994,13 @@ class TestReadmeNoOrphans(CheckerTreeTest):
 
     def test_a_mention_nested_in_a_longer_registered_slug_is_not_an_orphan(
             self):
-        """`architect` is a substring of `architecture-diagram`, both
+        """`implement` is a substring of `implement-queue`, both
         registered. readme_stage_mentions reads exact backtick tokens
         (SLUG_TOKEN), not substrings, so neither is mistaken for an
         orphan of the other."""
         self.assertEqual(lint.check_readme_no_orphans(self.root), [])
         self.assertIn(
-            "architect",
+            "implement",
             lint.readme_stage_mentions(
                 (self.root / "README.md").read_text(encoding="utf-8")))
 
@@ -1084,16 +1083,14 @@ class TestReadmeFigure(CheckerTreeTest):
             ["docs/assets/skill-map.svg never names skill 'ship'"])
 
     def test_a_slug_nested_in_a_longer_one_is_still_required(self):
-        """`architect` sits inside `architecture-diagram` and inside
-        `interactive-architecture-diagram`, both still drawn; a substring
-        test would call the figure complete without it."""
-        self.drop("architect")
+        """`implement` sits inside `implement-queue`, still drawn; a
+        substring test would call the figure complete without it."""
+        self.drop("implement")
         text = self.figure().read_text(encoding="utf-8")
-        self.assertIn(">architecture-diagram<", text)
-        self.assertIn(">interactive-architecture-diagram<", text)
+        self.assertIn(">implement-queue<", text)
         self.assertEqual(
             lint.check_readme_figure(self.root),
-            ["docs/assets/skill-map.svg never names skill 'architect'"])
+            ["docs/assets/skill-map.svg never names skill 'implement'"])
 
     def test_a_slug_split_across_tspans_is_still_a_name(self):
         """Tspans are how an SVG label wraps or shifts part of a word;
@@ -1200,17 +1197,17 @@ class TestPluginSkills(CheckerTreeTest):
         self.assertEqual(lint.check_plugin_skills(self.root), [])
 
     def test_a_longer_slug_does_not_satisfy_the_shorter_one(self):
-        """`architecture-diagram` is a substring of
-        `interactive-architecture-diagram`. A plain `in` test calls the
-        list complete after the shorter name is dropped — silently
-        blessing exactly the drift this checker exists to catch."""
-        kept = [slug for slug in protocol.UTILITY_SKILLS
-                if slug != "architecture-diagram"]
-        self.rewrite_description("utility skills (" + ", ".join(kept) + ")")
-        self.assertEqual(
-            lint.check_plugin_skills(self.root),
-            ["plugin.json's description never names utility skill"
-             " 'architecture-diagram'"])
+        """`lean` is a substring of `lean-queue`. A plain `in` test calls
+        the list complete after the shorter name is dropped — silently
+        blessing exactly the drift this checker exists to catch. The
+        real taxonomy holds no such pair, so the roster is patched."""
+        self.rewrite_description("utility skills (lean-queue)")
+        with mock.patch.object(lint, "UTILITY_SKILLS",
+                               ["lean", "lean-queue"]):
+            self.assertEqual(
+                lint.check_plugin_skills(self.root),
+                ["plugin.json's description never names utility skill"
+                 " 'lean'"])
 
     def test_a_missing_manifest_is_left_to_check_manifest(self):
         """One broken file, one problem string. check_manifest already
@@ -1785,15 +1782,14 @@ class TestLedger(CheckerTreeTest):
                          ["LEDGER.md has no row for skill 'operate'"])
 
     def test_a_slug_nested_in_a_longer_one_still_needs_its_own_row(self):
-        """`architect` is a substring of two other registered slugs, so a
-        substring test can never find its row missing. `review` (inside
-        `address-pr-review`) and `architecture-diagram` (inside
-        `interactive-architecture-diagram`) are held up the same way."""
+        """`implement` is a substring of another registered slug
+        (`implement-queue`), so a substring test can never find its row
+        missing."""
         (self.root / "LEDGER.md").write_text(
             "".join(f"| {slug} |\n" for slug in ALL_SKILLS
-                    if slug != "architect"), encoding="utf-8")
+                    if slug != "implement"), encoding="utf-8")
         self.assertEqual(lint.check_ledger(self.root),
-                         ["LEDGER.md has no row for skill 'architect'"])
+                         ["LEDGER.md has no row for skill 'implement'"])
 
     def test_prose_under_the_table_is_not_a_row(self):
         """The problem string says row, and the real LEDGER.md carries
@@ -1872,11 +1868,11 @@ class TestLedgerNoOrphans(CheckerTreeTest):
         self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
 
     def test_a_row_nested_in_a_longer_registered_slug_is_not_an_orphan(self):
-        """'review' is a substring of 'address-pr-review', both registered.
+        """'implement' is a substring of 'implement-queue', both registered.
         The orphan check reads exact row slugs (ledger_rows), not
         substrings, so neither's row is mistaken for the other's."""
         self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
-        self.assertIn("review", lint.ledger_rows(
+        self.assertIn("implement", lint.ledger_rows(
             (self.root / "LEDGER.md").read_text(encoding="utf-8")))
 
     def test_prose_mentioning_a_dropped_skill_is_not_a_row(self):

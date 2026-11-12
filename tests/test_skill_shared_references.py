@@ -30,19 +30,10 @@ SHARED = [
      ["the default for anything worth remembering and not worth a run "
       "today",
       "the dedupe happens before the write, not after"]),
-    ("dark diagram palette",
-     "skills/animated-diagram/references/design-system.md",
-     {"skills/interactive-architecture-diagram/references/design-system.md":
-      "../../animated-diagram/references/design-system.md"},
-     ["| storage | cache / object / block store | `#39c5cf` | "
-      "`rgba(57,197,207,0.10)` |",
-      "| node surface (mask) | `#161b22` |",
-      "the fill is a hint"]),
 ]
 
 DARK_DESIGN_SYSTEMS = [
     "skills/animated-diagram/references/design-system.md",
-    "skills/interactive-architecture-diagram/references/design-system.md",
 ]
 
 

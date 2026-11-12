@@ -428,10 +428,9 @@ class TestSmallestText(unittest.TestCase):
 
 
 class TestScaffolds(unittest.TestCase):
-    """Both diagram skills' scaffolds, read in place, must pass their own
+    """The animated-diagram scaffold, read in place, must pass its own
     step-7 check. A scaffold that drifts fails here."""
     SCAFFOLDS = {
-        "skills/architecture-diagram/assets/boilerplate.svg": (880, 448),
         "skills/animated-diagram/assets/boilerplate.svg": (880, 392),
     }
 

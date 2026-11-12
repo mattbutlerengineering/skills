@@ -6,7 +6,7 @@ one-labels-walk at operate, first-live-dispatch and marker-diagnostics
 at implement, pipeline-board at prd; one run needs attention.</desc>
 <style>
   /* Tokens mirror ../references/board-grammar.md, which defers to
-     architecture-diagram/references/design-system.md — the family's
+     ../references/design-system.md — the family's
      one owner of these values. Dark overrides ONLY the custom
      properties; every painted element resolves a token. */
   :root {

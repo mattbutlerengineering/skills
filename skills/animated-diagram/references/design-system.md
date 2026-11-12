@@ -2,12 +2,9 @@
 
 The source for every visual and timing value, and the one owner of the
 dark palette — canvas, text tiers, font stacks, node-type colors — that
-the `interactive-architecture-diagram` skill shares, so the two families
-of diagram read as one system. That skill cites this file for the
-palette rather than keeping a copy. The `:root` and CSS classes of both
-scaffolds here — `assets/boilerplate.html` and `assets/boilerplate.svg`
-— mirror the palette below, as does that skill's
-`assets/boilerplate.html`.
+the pipeline-board skill's dark theme shares. The `:root` and CSS classes
+of both scaffolds here — `assets/boilerplate.html` and
+`assets/boilerplate.svg` — mirror the palette below.
 
 The look is **flat and precise**: restrained accents on a deep slate
 canvas, one soft shadow for lift, no neon glow. Color earns its place by

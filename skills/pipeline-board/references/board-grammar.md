@@ -2,7 +2,7 @@
 
 The board-specific rules only. Every shared visual value — tokens,
 typography, theme mechanics, the no-shadow/no-hue discipline — comes
-from `../../architecture-diagram/references/design-system.md`, the
+from `design-system.md`, the
 family's one owner of the look. This file adds what a swimlane board
 needs on top and mirrors the `board.py` output contract the skill
 renders verbatim (ADR-0062).

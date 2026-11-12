@@ -3,8 +3,8 @@
 The source for every visual value. `assets/boilerplate.svg`'s `<style>`
 mirrors the tokens below — change a color in one place and match it in
 the other. The dark palette is the family's shared canvas (the
-`animated-diagram` and `interactive-architecture-diagram` skills), so a
-figure that flips dark reads as the same system.
+`animated-diagram` skill), so a figure that flips dark reads as the same
+system.
 
 The look is **a designed document figure, not a screen**: warm paper,
 ink strokes, hairlines, no shadows, no glow. Node *types* are told apart
