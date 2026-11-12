@@ -1,6 +1,6 @@
 ---
 name: implement-queue
-description: Use when a repo's backlog of ready GitHub issues, or of factory work orders, should be drained without the Owner answering each step — "work the queue", "drain the backlog", "implement the ready issues", "run the queue on a loop", a scheduled routine, or a direct invocation. Claims a batch of independent ready issues, implements each in its own worktree with a TDD worker agent, gates every PR through CI and a review by a distinct agent, then runs a serial merge train. It stops at reviewed, green PRs unless the repo's queue profile opts in to auto-merge (ADR-0087). Everything repo-specific — label transitions, gate commands, the required check, specialist reviewers, locks — comes from the repo's queue profile, never improvised. Work orders never merge here (ADR-0033 gate 3). Many items, nobody present — not conduct (the Owner present, answering every ask in session) and not autorun (one run through every stage).
+description: Use when a repo's backlog of ready GitHub issues, or of factory work orders, should be drained without the Owner answering each step — "work the queue", "drain the backlog", "implement the ready issues", "run the queue on a loop", a scheduled routine, or a direct invocation. Claims a batch of independent ready issues, implements each in its own worktree with a TDD worker agent, gates every PR through CI and a review by a distinct agent (held unreviewed when the profile has no `verdict` hook), then runs a serial merge train. It stops at reviewed, green PRs unless the repo's queue profile opts in to auto-merge (ADR-0087). Everything repo-specific — label transitions, gate commands, the required check, specialist reviewers, locks — comes from the repo's queue profile, never improvised. Work orders never merge here (ADR-0033 gate 3). Many items, nobody present — not conduct (the Owner present, answering every ask in session) and not autorun (one run through every stage).
 ---
 
 # Implement Queue
@@ -50,7 +50,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `worker`         | a general worker agent given the Worker brief below                                                   |
 | `model`          | the worker's default model                                                                            |
 | `ci-status`      | `gh pr checks <N>` plus the presence check below                                                      |
-| `fast-path`      | none: every PR is reviewed                                                                            |
+| `fast-path`      | none: every PR is reviewed (with no `verdict` hook, every PR off the fast path is held unreviewed, gate step 4) |
 | `verdict`        | none: a missing hook is an `error` verdict, never a pass (fail closed)                                |
 | `reviewers`      | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
 | `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`                           |
@@ -134,8 +134,9 @@ file's Rules section.
    every `## <name>` section is a row of the hook table, every
    frontmatter key a row of the key table. Report each hook the profile
    lacks together with the consequence the reference gives for it (a
-   profile that predates `verdict` holds every reviewed PR for a human,
-   even under `merge: auto`, and nothing else says so), and each section
+   profile that predates `verdict` holds every PR off the fast path for
+   a human, unreviewed (gate step 4), even under `merge: auto`, and
+   nothing else says so), and each section
    or key the tables do not name as ignored, never run. A gap never
    stops the run and never loosens a rule; the findings lead the final
    report.
@@ -312,7 +313,15 @@ as that PR's CI settles; it can overlap with workers still running.
    classification counts as the review for the Merge policy (ADR-0088). If the hook
    cannot prove its own inputs are current (a stale build, an unreadable
    classifier), fail closed: review the PR and dispatch every specialist.
-4. **Review.** Dispatch the universal reviewer, plus each specialist
+4. **Review.** When Phase 0's profile check found no `verdict` hook, no
+   verdict can be derived and a review could not lead to a merge, so
+   for a PR that is not on the fast path (step 3) this step does not
+   run: dispatch no reviewer, report the PR as unreviewed and held for a
+   human, and go to step 5, whose `no verdict hook` comment is its
+   record. That PR never merges, under any `merge` setting; the human
+   merging can request a review. A fast-path PR is unaffected: the
+   fast path stays open, its classification is the Owner's written
+   review (ADR-0088), and under `merge: auto` it can still merge. Otherwise dispatch the universal reviewer, plus each specialist
    the `reviewers` hook matches to the changed files, with the input
    [the reviewer contract](references/reviewer-contract.md) defines. A
    reviewer is never the PR's author.
@@ -334,17 +343,30 @@ as that PR's CI settles; it can overlap with workers still running.
      `pass`.
 5. **Verdict.** Run the `verdict` hook on the universal reviewer's
    `score`, passed as one quoted argument and only after it reads as a
-   bare number (the score is the reviewer's text, never a shell
-   fragment), and act on its exit code only: the reviewer is handed no pass
+   usable score, a bare finite number from 0 to 10 (the score is the
+   reviewer's text, never a shell fragment; a score that fails the check
+   never reaches the hook), and act on its exit code only: the reviewer is handed no pass
    line and returns no verdict, and a `verdict` it returns anyway is
    ignored whichever way it points. Exit 0 is `pass`, exit 1 is `flag`.
-   Exit 2, a hook that did not run, a missing hook, or a reviewer that
-   returned no usable `score` is `error`: re-dispatch the reviewer once,
-   then hold the PR for a human, and under `merge: auto` never merge.
+   Anything else is `error`, and the cause sets the remedy. A
+   reviewer-side error (the review timed out, or the reviewer's score is
+   not usable) gets one re-dispatch of the reviewer, then holds
+   the PR for a human. A hook-side error (a missing hook, a hook that
+   did not run, or any exit code other than 0 or 1 on a usable score: a
+   wrong argument count gives 2, a killed process 137) gets no re-dispatch, because a second review
+   cannot change it: hold the PR for a human at once. Under
+   `merge: auto` an `error` never merges.
    Post a verdict comment on the PR whose first line is the line the
    hook printed, verbatim, so every comment carries the score, and whose
    second line is `Head: <sha>`, the recorded head, so the comment says
-   which head it covers. All pass
+   which head it covers. When the hook printed no `reviewer-verdict:`
+   line, the first line is `reviewer-verdict: error (<reason>)`, with
+   `<reason>` one of `no verdict hook`, `hook did not run`, `hook exit
+   <code>` (an exit code other than 0 or 1 that printed no such line),
+   `reviewer timed out` or
+   `no usable score`, so the comment still parses like the hook's own
+   lines. The comment carries the score and the findings whenever the
+   reviewer returned a score. All pass
    → the Merge policy. A derived `flag` or a specialist `block` → the
    contract's retry policy (one retry on the same branch, then
    `needs-review` and no merge).
@@ -450,7 +472,9 @@ Release every lock you took when the train ends, on any exit.
 - More ready issues and budget left → Phase 0. Three consecutive failures
   (workers or train) → release locks, stop and report.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
-  every failure with its cause. Under `source: work-orders`, also the
+  every failure with its cause; with no `verdict` hook under `merge: auto`,
+  also that every merge in the run took the fast path unreviewed.
+  Under `source: work-orders`, also the
   planner's deferrals, each order's spend record, and every released
   order ([references/work-orders.md](references/work-orders.md)).
 
