@@ -476,14 +476,16 @@ Every worker prompt carries:
    hint; when it does, the orchestrator repeats it in the brief.
 11. Finish or hand off within 45 minutes from dispatch, and answer the
    orchestrator's check-in at once.
-12. Before opening the PR, read
-   [the reviewer contract](references/reviewer-contract.md) (what the
-   review catches) and check your diff against its four catch classes:
-   hallucination, regression, gate bypass and criteria gap. Check it
-   against each acceptance criterion too, and list in the result each
-   criterion with how you verified it. Change nothing the issue does not
-   ask for: a case you find outside its ask is named in the PR body, not
-   implemented.
+12. Before opening the PR, check your diff against the four catch classes
+   of [the reviewer contract](references/reviewer-contract.md) (what the
+   review catches): hallucination, regression, gate bypass and criteria
+   gap. That path is relative to this skill, so the orchestrator writes
+   the contract's catch-class list, or its absolute path, into this item
+   of the brief. Check the diff against each acceptance criterion too,
+   and list in the result each criterion with how you verified it. Apart
+   from an existing vulnerability (item 6), change nothing the issue does
+   not ask for: a case you find outside its ask is named in the PR body,
+   not implemented.
 
 When a worker finishes, label its issue with the `transition` hook:
 
