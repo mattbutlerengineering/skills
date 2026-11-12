@@ -84,7 +84,8 @@ message, one worktree per worker. Each worker's prompt must carry:
 5. The PR body follows the protocol's Pull request body section
    (`../../docs/pipeline-protocol.md`, relative to this skill's base
    directory), with item 2's `Closes #N` line and the work-order id
-   citation detector B reads kept first.
+   citation detector B reads kept first. End the body with the line
+   `Driver: implement-queue`, as SKILL.md's Worker brief item 5 says.
 6. Confirm the branch base is the remote's default-branch tip before
    writing anything, and reset onto that tip if it is not.
 7. Merge or rebase the remote's default-branch tip into the branch before
