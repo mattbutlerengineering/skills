@@ -192,6 +192,37 @@ file's Rules section.
    PR is failed. This is the protocol's "Open pull requests first"
    pre-flight (`../../docs/pipeline-protocol.md`) with this skill's
    mechanics; merges still follow the Merge policy below.
+4. Look for another queue session, and report it before claiming. List
+   the open issues that carry `in-progress` and that this session did
+   not claim, with `gh issue list --label in-progress --state open --json number,title,updatedAt`
+   (cloud: `gh api 'repos/{owner}/{repo}/issues?labels=in-progress&state=open&per_page=100'`,
+   dropping every entry that carries a `pull_request` key; MCP:
+   `list_issues` with `labels: ["in-progress"]`, state open). A fresh
+   session has claimed none, so every one counts, and a looping session
+   subtracts the issues it claimed in earlier iterations. Give each its
+   claim time, the last line of
+   `gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled" and .label.name == "in-progress") | .created_at'`
+   (the timeline lists events oldest first). There is no MCP twin for
+   the timeline in the GitHub MCP server's `issue_read` methods, so an
+   MCP-only session reports each issue without a time. List the open
+   PRs this session did not open whose head commit is under 15 minutes
+   old, with the head from `gh api repos/{owner}/{repo}/pulls/<N> --jq .head.sha`
+   and its time from `gh api repos/{owner}/{repo}/commits/<sha> --jq .commit.committer.date`;
+   the commit's date stands in for the push time. Report both lists
+   before Phase 1 claims anything. The label claim is the mutex, so
+   this session proceeds to Phase 1 and never stops for what this step
+   finds. A hard stop is not used, because one stale `in-progress`
+   label, a crashed worker's, would block the queue for ever. What the
+   report narrows is what this session touches: never touch an issue or
+   PR listed here (no claim, relabel, merge or branch update), and claim
+   only issues that pass the post-claim check in Phase 1. A `lock` hook
+   that keeps its lock in the local git common dir cannot see a cloud
+   session, so it does not replace this step or the Rules' One queue
+   session per repo at a time. Under `source: work-orders` the issue
+   list does not apply, because the claim there is `wo:in-progress`
+   through the lifecycle machine in
+   [references/work-orders.md](references/work-orders.md), and the pull
+   request list still applies.
 
 ## Phase 1: Claim a batch
 
@@ -218,6 +249,28 @@ issue always gets a slot. Drop any issue that:
 
 Take at most `max_workers`. Move each claimed issue to `in-progress`
 with the `transition` hook.
+
+Read the issue's labels again immediately before the transition: if
+`in-progress` is already there or `ready` is gone, another session took
+it, so skip the issue. Read its timeline too, with
+`gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled") | [.label.name, .created_at, .actor.login] | @tsv'`,
+to take the time of its last `ready` labeled event; when the timeline
+cannot be read, or holds no `ready` labeled event, claim nothing for
+it. Note the UTC time just before issuing the transition. After the
+transition, read the timeline again with the same command and confirm
+exactly one `in-progress` labeled event since the last `ready` labeled
+event, counting the events whose `created_at` is not earlier than it.
+There is no MCP twin for the timeline read, so a session with no `gh`
+cannot run this check and must claim nothing. On an unreadable timeline
+after the transition, skip the issue, dispatch no worker for it, leave
+the label as it is and report it. With two or more `in-progress`
+labeled events this session lost the race, so skip the issue, dispatch
+no worker for it and report it. Move the issue back to `ready` with the
+`transition` hook only when this session's event is the last one,
+strictly later by `created_at` than every other, this session's event
+being the one at or after the time noted before its transition. On a
+tie, or any doubt about which event is this session's, leave the label
+and report the issue.
 
 ## Phase 2: Implement, then gate
 
@@ -530,6 +583,14 @@ Release every lock you took when the train ends, on any exit.
   order ([references/work-orders.md](references/work-orders.md)).
 
 Recurring use: `/loop 30m` with this skill.
+The interval is a minimum gap between iterations, not a bound on one
+iteration, and an iteration that waits on CI can outlast it. A
+re-invocation in the same session while an iteration is in flight
+continues that iteration and never starts a second one: a loop tick
+that fires then joins the one in flight and does nothing new, and the
+next iteration starts only after the report. A session with no memory
+of an iteration in flight cannot tell, and Phase 0 step 4 shows it the
+issues that iteration holds.
 
 ## Labels
 
