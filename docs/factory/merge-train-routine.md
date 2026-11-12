@@ -90,11 +90,18 @@ open PR, with its number, title, and exactly one verdict:
   old path as well as its new one; a changed-file list that is partial,
   or a `changed-files` hook that fails, is a human gate too), or carries
   a hold label. Reported with the path or label; never merged here.
-- **wait** — checks pending, or a draft. Reported with what it waits
-  on.
+- **wait** — checks pending, a draft, or a green PR whose head is not
+  settled (implement-queue's Phase 0 step 3: the head commit is under
+  15 minutes old, or the head changed since this run recorded it).
+  Reported with what it waits on.
 - **failed** — the required check failed. Reported with the failing
   job; implement-queue's "fix or label `agent-failed`" step is not run
   here, because this routine claims no work.
+- **report only** — a PR the evidence says must not merge
+  (implement-queue's Phase 0 step 3, such as an automated revert whose
+  red was infrastructure), in any check state. Reported with the
+  evidence; never gated, re-run or merged here. A report only PR
+  keeps that verdict whatever else matches.
 
 Each line names its reason. The whole list is the run's survey and
 goes in the journal whatever the mode.

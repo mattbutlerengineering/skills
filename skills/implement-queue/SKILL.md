@@ -186,12 +186,82 @@ file's Rules section.
      re-run instead. The re-run is never a way to skip CI or to declare
      main green without the check present and successful on the final
      run.
-3. List open PRs. Unfinished PRs come before new issues: green ones go
-   to the Phase 2 gate, pending ones wait, failed ones get fixed or
-   their issue labelled `agent-failed`. Claim nothing new while an open
-   PR is failed. This is the protocol's "Open pull requests first"
-   pre-flight (`../../docs/pipeline-protocol.md`) with this skill's
-   mechanics; merges still follow the Merge policy below.
+3. Read every open PR (`gh pr list --state open --limit 1000 --json number,title,headRefOid,labels,body`;
+   cloud twin in the list above). The REST twin is paged, so read every
+   page of `gh api 'repos/{owner}/{repo}/pulls?state=open&per_page=100'`
+   (`.head.sha` is the head). A list that may be truncated (its count
+   equals the limit, or a page is missing) fails closed: claim nothing
+   and report it. A PR belongs to this queue when it closes an issue
+   carrying `in-progress`, `has-pr`, `needs-review`, `agent-failed` or
+   `stealable`; every other PR is foreign (another agent's, a bot's, a
+   routine's). A PR the evidence says must not merge (the third cause
+   below) is never gated, re-run toward green or merged by this queue
+   in any CI state, a revert someone else re-ran to green included; it
+   is reported. Unfinished PRs come before new issues: green ones go to
+   the Phase 2 gate, pending ones wait, failed ones of this queue get
+   fixed or their issue labelled `agent-failed`. A foreign green PR goes
+   to the Phase 2 gate unchanged, because the gate and the Merge policy
+   run per PR and protect any PR. A foreign failed PR is never fixed by
+   this queue unless a ready issue says so, is reported, and does not
+   block claiming. Never fixed means never edited, pushed to or
+   updated; the infrastructure re-run of the last cause below applies to
+   a foreign PR too, whichever of the no-linked-issue and held causes it
+   matched, unless it matches the must-not-merge cause: it is not a fix,
+   and the PR stays foreign and non-blocking whatever the outcome. Claim
+   nothing new while a failed PR of this queue is
+   open and matches none of the causes below. This is the protocol's
+   "Open pull requests first" pre-flight
+   (`../../docs/pipeline-protocol.md`) with this skill's mechanics;
+   merges still follow the Merge policy below.
+
+   A failed PR is sorted by these causes before it can block, in this
+   order, and the first match wins:
+
+   - A failed PR with no linked issue (a dependency bot's, the release
+     bot's) has nothing to label, is reported, and does not block
+     claiming.
+   - A failed PR that carries a `hold_labels` label, or whose issue
+     does, is handed to a human, is reported, and does not block
+     claiming.
+   - A PR the evidence says must not merge (an automated revert whose
+     red was infrastructure) is never fixed, re-run or updated toward
+     green, is reported, and does not block claiming.
+   - A failed PR whose failing jobs show no repo cause (a runner or
+     network failure, a cancelled or timed-out job) gets its failed jobs
+     re-run once per head SHA by the re-run rule of step 2, and is
+     judged again. A PR still red after its re-run counts as failed
+     and, when it is this queue's and matches no earlier cause, blocks
+     claiming; the re-run is no exemption.
+
+   A green PR is settled when its head commit is at least 15 minutes
+   old and its head SHA has not changed since this session recorded it.
+   Step 3 records every open PR's head SHA in each iteration. A PR with
+   no record is judged on age alone, so a PR first seen with an old head
+   commit goes to the gate at once, which keeps a one-pass session
+   (nothing claimed) gating its green PRs. A young head waits until its
+   commit is 15 minutes old, whatever the iteration. A head that changed
+   since it was recorded is not settled whatever its date, and is
+   recorded anew. A head named in this session's own worker result as
+   the head that worker pushed counts as settled at once while the PR's
+   head still equals it; this wins over the changed-since-recorded rule
+   for that head only, and a head pushed by anyone else gets no such
+   exception. The head commit's date is read first with
+   `gh api repos/{owner}/{repo}/commits/<headRefOid> --jq .commit.committer.date`,
+   `<headRefOid>` being the head from the list above (no MCP twin is
+   verified). Where `gh` cannot read it, run
+   `git fetch --depth=1 origin pull/<N>/head`, confirm
+   `git rev-parse FETCH_HEAD` equals the head SHA, then run
+   `git show -s --format=%cI <sha>`. A date read from any commit other
+   than the PR's current head SHA leaves the PR not settled. The
+   committer date is a proxy, since GitHub does not expose push time:
+   `git rebase` resets it, and the real failure is a commit made earlier
+   and pushed later, which looks old when it was just pushed; the
+   recorded-head comparison catches that from the second iteration on,
+   and a one-pass session accepts it. A date that cannot be read by
+   either source
+   leaves the PR not settled. An unsettled green PR waits this
+   iteration, is not reviewed, and is reported; a failed PR keeps its
+   disposition above.
 4. Look for another queue session, and report it before claiming. List
    the open issues that carry `in-progress` and that this session did
    not claim, with `gh issue list --label in-progress --state open --json number,title,updatedAt`
@@ -287,6 +357,39 @@ worktree (`isolation: "worktree"`) and the model the `model` hook
 resolves. Dispatch is never held by the merge-train lock: capacity
 (`max_workers`) is the only limit on starting work.
 
+**Harness needs.** The dispatch above is written for Claude Code's Agent
+tool. A harness that lacks one of these features uses its fallback, and
+under `source: issues` none of them stops the run.
+
+- Per-worker worktree. Absent (no `isolation` argument): the
+  orchestrator cuts each worktree after `base-freshness`, under
+  `.claude/worktrees/`, with `git -C <repo> worktree add --no-track
+  <path> -b <branch> refs/remotes/origin/main`. Without `--no-track`,
+  a remote-tracking start point makes `origin/main` the new branch's
+  upstream, so a push that names no branch can target `main`. Tell
+  that worker in its brief to push with `git push -u origin <branch>`,
+  never a bare `git push`. The orchestrator removes the worktree: by
+  the Phase 4 empty-worktree rule when the worker ended with no commit,
+  by the `reap` hook once its PR merged.
+- Per-worker model. Absent (the harness refuses a per-call model):
+  dispatch on the harness's default model, treat the `model` hook's
+  answer as advisory, and say so once in the run report; never fail
+  the batch over it. A dispatch refused with an error naming the model
+  argument is re-sent once without it. A re-send that is refused too
+  failed for another reason and is handled as a worker failure.
+- Usage on completion. Absent: leave the usage fields empty and still
+  write the row (the `telemetry` rule below).
+- Messaging a running worker. Absent: dispatch needs none, and the
+  45-minute check-in becomes stopping the worker at the bound (the
+  Wall-clock bound below).
+
+Under `source: work-orders`, a worker with no usage gets no
+`budget_guard.py record` row, and the run report names each unrecorded
+order, because the ledger then reads low. Under `source: work-orders`,
+a harness without worktree isolation follows the Cloud fallback in
+[references/work-orders.md](references/work-orders.md), not the
+orchestrator-cut worktree.
+
 ### Worker brief
 
 Under `source: work-orders`, use the work-order brief in
@@ -345,6 +448,12 @@ When a worker finishes, label its issue with the `transition` hook:
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
+A field the harness reports no usage for (tokens in and out, tool uses,
+model tier, cost) is left empty and never estimated. A row without
+usage is still written, with the fields it has (issue, outcome,
+duration, PR). A duration the harness does not
+report may be read from the issue's label-event timestamps, and is
+reported as derived.
 
 **Wall-clock bound.** At 45 minutes from dispatch the orchestrator sends
 the worker one check-in asking for its status and its plan to stop. The
