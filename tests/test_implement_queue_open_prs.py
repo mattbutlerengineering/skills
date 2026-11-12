@@ -27,9 +27,9 @@ class TestOpenPrScope(unittest.TestCase):
     def test_scope_is_the_state_labelled_issue_or_the_profile(self):
         s = sentence(step3(), "belongs to this queue")
         for w in ("closes an issue", "`in-progress`", "`has-pr`",
-                  "`needs-review`", "`agent-failed`", "`stealable`",
-                  "profile names"):
+                  "`needs-review`", "`agent-failed`", "`stealable`"):
             self.assertIn(w, s)
+        self.assertNotIn("profile", s)
 
     def test_every_open_pr_is_read(self):
         self.assertIn("Read every open PR", step3())
@@ -49,7 +49,11 @@ class TestFailedPrDispositions(unittest.TestCase):
     def test_a_failed_queue_pr_blocks_claiming(self):
         s = sentence(step3(), "Claim nothing new")
         self.assertIn("failed PR of this queue", s)
-        self.assertIn("not held", s)
+        self.assertIn("matches none of the causes below", s)
+
+    def test_the_causes_are_checked_first_and_the_first_match_wins(self):
+        s = sentence(step3(), "first match wins")
+        self.assertIn("before it can block", s)
 
     def test_a_failed_queue_pr_is_fixed_or_marked_agent_failed(self):
         s = sentence(step3(), "failed ones of this queue")
@@ -82,28 +86,61 @@ class TestFailedPrDispositions(unittest.TestCase):
 
 
 class TestSettled(unittest.TestCase):
-    def test_the_window_is_fifteen_minutes_of_the_head_commit(self):
-        s = sentence(step3(), "is settled once")
-        self.assertIn("15 minutes", s)
-        self.assertIn("committedDate", s)
+    def test_settled_needs_the_recorded_head_and_fifteen_minutes(self):
+        s = sentence(step3(), "is settled when")
+        self.assertIn("equals the head this session recorded", s)
+        self.assertIn("earlier iteration", s)
+        self.assertIn("at least 15 minutes old", s)
 
-    def test_this_sessions_own_push_is_settled(self):
-        s = sentence(step3(), "this session's own worker")
-        self.assertIn("settled", s)
+    def test_a_first_seen_pr_waits_exactly_one_iteration(self):
+        s = sentence(step3(), "first seen")
+        self.assertIn("records every open PR's head SHA", s)
+        self.assertIn("waits exactly one iteration", s)
+        self.assertIn("goes to the gate", s)
 
-    def test_the_proxy_failure_mode_is_a_changed_head(self):
-        s = sentence(step3(), "rebased")
-        self.assertIn("differs from the head", s)
+    def test_a_worker_named_head_is_settled_at_once(self):
+        s = sentence(step3(), "this session's own worker result")
+        self.assertIn("counts as settled at once", s)
+
+    def test_the_date_is_read_from_the_head_commit_itself(self):
+        s = sentence(step3(), "commits/<headRefOid>")
+        self.assertIn("--jq .commit.committer.date", s)
+
+    def test_a_date_from_another_commit_is_not_settled(self):
+        s = sentence(step3(), "any commit other than")
+        self.assertIn("current head SHA", s)
         self.assertIn("not settled", s)
 
-    def test_an_unreadable_time_is_unsettled(self):
+    def test_the_proxy_failure_mode_is_a_late_push(self):
+        s = sentence(step3(), "git rebase")
+        self.assertIn("pushed later", s)
+        self.assertIn("recorded-head comparison", s)
+        self.assertIn("from the second iteration on", s)
+
+    def test_an_unreadable_date_is_unsettled(self):
         s = sentence(step3(), "cannot be read")
         self.assertIn("not settled", s)
 
-    def test_an_unsettled_pr_waits_unreviewed_and_reported(self):
+    def test_an_unsettled_green_pr_waits_unreviewed_and_reported(self):
         s = sentence(step3(), "unsettled green PR")
         for w in ("waits", "not reviewed", "reported"):
             self.assertIn(w, s)
+
+
+class TestTheListIsComplete(unittest.TestCase):
+    def test_the_list_command_carries_a_limit(self):
+        self.assertIn("gh pr list --state open --limit 1000", step3())
+
+    def test_the_rest_twin_is_paged(self):
+        s = sentence(step3(), "REST twin")
+        self.assertIn("per_page=100", s)
+        self.assertIn("every page", s)
+        self.assertIn("`.head.sha` is the head", s)
+
+    def test_a_possibly_truncated_list_fails_closed(self):
+        s = sentence(step3(), "may be truncated")
+        self.assertIn("count equals the limit", s)
+        self.assertIn("claim nothing", s)
 
 
 if __name__ == "__main__":
