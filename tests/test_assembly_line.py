@@ -6,10 +6,12 @@ self-contained page that draws them.
 Pinned against tempfile fixture trees, the board.py seam discipline:
 functions take root and read real files under it.
 """
+import ast
 import base64
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -425,6 +427,43 @@ class TestPageWriter(unittest.TestCase):
         for path in (self.core, self.module):
             self.assertIn(base64.b64encode(path.read_bytes()).decode(), text)
         self.assertNotIn("__THREE_", text)
+
+
+def _repo_imports(module, seen=None):
+    """Every root-level module `module` imports, transitively, itself
+    included: the Python files a change to which can change the page."""
+    seen = set() if seen is None else seen
+    if module in seen or not (ROOT / f"{module}.py").is_file():
+        return seen
+    seen.add(module)
+    tree = ast.parse((ROOT / f"{module}.py").read_text(encoding="utf-8"))
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                _repo_imports(alias.name.split(".")[0], seen)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            _repo_imports(node.module.split(".")[0], seen)
+    return seen
+
+
+class TestPagesWorkflowPaths(unittest.TestCase):
+    """pages.yml rebuilds the page only when a listed path changes, so a
+    page input missing from the list leaves a stale page live."""
+
+    def setUp(self):
+        text = (ROOT / ".github" / "workflows" / "pages.yml").read_text(
+            encoding="utf-8")
+        self.paths = set(re.findall(r'^      - "([^"]+)"$', text, re.MULTILINE))
+
+    def test_every_module_the_tool_imports_triggers_a_rebuild(self):
+        modules = {f"{name}.py" for name in _repo_imports("assembly_line")}
+        self.assertEqual(modules - self.paths, set())
+
+    def test_the_template_and_the_vendored_library_trigger_a_rebuild(self):
+        self.assertIn(assembly_line.TEMPLATE.name, self.paths)
+        for path in assembly_line.VENDOR.values():
+            self.assertIn(
+                f"{path.relative_to(ROOT).parts[0]}/**", self.paths)
 
 
 if __name__ == "__main__":
