@@ -73,7 +73,7 @@ ROSTER below is the full roster, and what run_all dispatches from.
 `--selftest` runs the checkers against fixture trees and exits nonzero
 on a failing assertion; the fixtures and the selftest live in
 gates_selftest.py, mirrored beside this module. Both run in CI (validator.yml, via `make check`)
-on every push/PR.
+on every PR and every push to main.
 
 The knowledge plane's shared grammar (typed-ID tokens, run_dirs,
 repo_root) lives in knowledge_plane.py, and the cost ledger's shape in

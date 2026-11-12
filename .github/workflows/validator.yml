@@ -12,6 +12,12 @@ name: validator
 
 on:
   push:
+    # A PR branch is checked by its pull_request run, which also carries
+    # the body detector B reads and the review job. A push run on the
+    # same head re-ran the same tests: 50 of 111 check jobs measured on
+    # 2026-11-11. main keeps its push run: the queue's preflight judges
+    # main's head by it.
+    branches: [main]
   pull_request:
     # `edited` is here because detector B reads the PR body: the body is
     # an INPUT to the check, so correcting it has to re-run the check.
@@ -38,8 +44,8 @@ permissions:
   contents: read
 
 jobs:
-  # Gate 3's status check (ADR-0033): detectors and tests on every push and
-  # every PR. Nothing else in this workflow can fail the build.
+  # Gate 3's status check (ADR-0033): detectors and tests on every PR and
+  # every push to main. Nothing else in this workflow can fail the build.
   # This is the ONE job that runs the pull request's code (ADR-0098), so it
   # holds read grants only and its checkout leaves no token in .git/config.
   # Its captured output crosses to the review job as one job output of plain
