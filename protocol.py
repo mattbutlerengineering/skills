@@ -26,13 +26,11 @@ TEMPLATED_STAGES = [s for s in STAGES + MAINTENANCE_STAGES
 # Utility skills act on work surrounding the pipeline (ADR-0023); they
 # have no stage artifact and the router never routes to them, but they are
 # full skills for install, lint, ledger, and trigger-eval purposes.
-UTILITY_SKILLS = ["address-pr-review", "animated-diagram",
-                  "architecture-diagram", "assembly-line", "audit",
+UTILITY_SKILLS = ["animated-diagram", "assembly-line", "audit",
                   "automate", "autorun",
                   "conduct", "deepen", "doctor", "factory-init",
-                  "house-voice", "implement-queue",
-                  "interactive-architecture-diagram", "knowledge-base",
-                  "launch-demo", "lean", "mermaid", "pipeline-board",
+                  "house-voice", "implement-queue", "knowledge-base",
+                  "launch-demo", "lean", "pipeline-board",
                   "polish", "prisma-migrations", "ux-patterns",
                   "ux-writing"]
 ALL_SKILLS = ["next"] + STAGES + MAINTENANCE_STAGES + UTILITY_SKILLS

@@ -54,8 +54,8 @@ def check_plugin_skills(root):
     exhaustive, so it is the part held to the taxonomy.
 
     Whole slugs, never substrings — the same rule check_readme_skills
-    holds README.md to, and the same function: `architecture-diagram`
-    occurs inside `interactive-architecture-diagram`, so a plain `in`
+    holds README.md to, and the same function: `implement`
+    occurs inside `implement-queue`, so a plain `in`
     test would call the list complete after the shorter name was dropped
     from it — a blind spot for one of the very skills this checker
     exists to catch. names_slug is the one owner of that rule; this
@@ -191,9 +191,9 @@ def names_slug(text, slug):
     """True when TEXT names SLUG, as a whole slug and not as part of one.
 
     Slug characters are lowercase letters, digits and hyphens, so the
-    boundary is "not one of those on either side" — `architecture-diagram`
-    inside `interactive-architecture-diagram` is not a mention of the
-    shorter name. Three of the registered slugs are contained in a longer
+    boundary is "not one of those on either side" — `implement`
+    inside `implement-queue` is not a mention of the
+    shorter name. Registered slugs can be contained in a longer
     one, and a plain `in` test reports none of them missing.
     """
     return re.search(rf"(?<![a-z0-9-]){re.escape(slug)}(?![a-z0-9-])",
@@ -984,13 +984,10 @@ def ledger_rows(text):
     A set of exact slugs, not a search over the file. Both halves of that
     matter, and each closes a way the old `slug not in text` was blind.
 
-    Exact, because three of the registered slugs are contained in a longer
-    one — `architect` in `architecture-diagram` and in
-    `interactive-architecture-diagram`, `review` in `address-pr-review`,
-    `architecture-diagram` in the interactive form. A substring test can
-    never find their rows missing, and one of those is the shorter sibling
-    of the very skill whose undocumented release is why the README's
-    checker exists.
+    Exact, because registered slugs can be contained in a longer
+    one — `implement` in `implement-queue`. A substring test can
+    never find the shorter row missing, and the shorter sibling of a
+    longer name is the case the README's checker exists for.
 
     Rows, because the problem string says row and the file is a table
     followed by paragraphs of reading notes that name skills by slug. A

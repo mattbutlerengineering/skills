@@ -16,7 +16,7 @@ Two resources, loaded when reached:
 - **`references/board-grammar.md`** — lane geometry, the glyph roster,
   the model's keys, empty/attention states, and the aesthetic
   checklist Verify applies. Shared visual values defer to
-  `../architecture-diagram/references/design-system.md`.
+  `references/design-system.md`.
 - **`assets/boilerplate.svg`** — the working scaffold: theme-aware
   tokens and a complete four-run sample demonstrating every pattern
   (capture span, progress ring, skip marks, attention strip, legend).

@@ -45,9 +45,10 @@ exists: lint.py
 exists: protocol.py
 exists: cli.py
 exists: tests/test_lint.py
-exists: skills/architecture-diagram/SKILL.md
-exists: skills/architecture-diagram/assets/boilerplate.svg
-exists: skills/architecture-diagram/references/design-system.md
+# The three architecture-diagram files below were removed in #1749 (detector D reads these claims against the tree).
+absent: skills/architecture-diagram/SKILL.md
+absent: skills/architecture-diagram/assets/boilerplate.svg
+absent: skills/architecture-diagram/references/design-system.md
 exists: docs/features/readme-skill-map/prd.md
 ```
 

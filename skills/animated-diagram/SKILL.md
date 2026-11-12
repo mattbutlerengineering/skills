@@ -1,6 +1,6 @@
 ---
 name: animated-diagram
-description: Generate an ambient animated diagram as one self-contained dark-mode file — .html with a pause control, or a pure .svg whose SMIL/CSS motion plays right inside a GitHub README image embed — an inline-SVG flow or architecture picture whose dashed connectors stream in the direction of execution and whose traveling dots trace the request path, looping forever, with reduced-motion support. Use when the user wants a diagram that moves on its own — animated, flowing, alive — for a README, docs page, or landing page, or wants an existing mermaid flowchart or state diagram turned into an animated version. Narrated step-through presenting is interactive-architecture-diagram; a still, designed architecture figure is architecture-diagram; a quick markdown-source diagram is mermaid.
+description: Generate an ambient animated diagram as one self-contained dark-mode file — .html with a pause control, or a pure .svg whose SMIL/CSS motion plays right inside a GitHub README image embed — an inline-SVG flow or architecture picture whose dashed connectors stream in the direction of execution and whose traveling dots trace the request path, looping forever, with reduced-motion support. Use when the user wants a diagram that moves on its own — animated, flowing, alive — for a README, docs page, or landing page, or wants an existing mermaid flowchart or state diagram turned into an animated version.
 ---
 
 # Animated Diagram
