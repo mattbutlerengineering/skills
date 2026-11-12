@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: gates.py, knowledge_plane.py, validator.py, pr_body_preflight.py, .github/workflows/validator.yml
-verified: cb991fd83f99c1913b371e1a60f6a8c6c9584711
+verified: 1b639fcad97b1e10a54a46774c6e8c0f4a21e706
 related: gates-scan-every-doc
 ---
 
@@ -10,7 +10,10 @@ related: gates-scan-every-doc
 `gates.check_pr_traceability` (detector B) reads the pull request body
 from the CI event payload. Locally there is no payload, so B **skips
 silently** — `python3 gates.py` passes on your machine and the
-`pull_request` run fails. It reads like a flaky check; it is not.
+`pull_request` run fails. It reads like a flaky check; it is not. Only
+the `pull_request` run (and a `workflow_dispatch` with `-f pr=<N>`)
+carries a body: `validator.yml`'s push run is `main` only, so a PR branch
+gets no push run and B never fires on `main`'s own pushes.
 
 One local catch exists: `pr_body_preflight.py`, a PreToolUse hook in
 `.claude/settings.json`, refuses a `gh pr create` whose body fails B
