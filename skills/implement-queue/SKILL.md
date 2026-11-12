@@ -445,7 +445,10 @@ Every worker prompt carries:
 4. The repo's gates on the affected code before declaring done, typecheck
    included where the language has one.
 5. Push the branch and open a PR with `Closes #<N>`; confirm its base is
-   `main`. Never merge.
+   `main`. End the PR body with the line `Driver: implement-queue`, which
+   marks the PR as queue-driven and which nothing in this skill reads.
+   `gh pr list --state merged --search '"Driver: implement-queue" in:body'
+   --json number --jq length` counts the merged ones. Never merge.
 6. Never commit secrets or credentials; validate external input at
    boundaries; an existing vulnerability found on the way is fixed first.
 7. Run every subprocess in the foreground under a time bound
