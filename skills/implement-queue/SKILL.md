@@ -186,12 +186,49 @@ file's Rules section.
      re-run instead. The re-run is never a way to skip CI or to declare
      main green without the check present and successful on the final
      run.
-3. List open PRs. Unfinished PRs come before new issues: green ones go
-   to the Phase 2 gate, pending ones wait, failed ones get fixed or
-   their issue labelled `agent-failed`. Claim nothing new while an open
-   PR is failed. This is the protocol's "Open pull requests first"
+3. Read every open PR (`gh pr list --state open --json number,title,headRefOid,labels,body`;
+   cloud twin in the list above). A PR belongs to this queue when it
+   closes an issue carrying `in-progress`, `has-pr`, `needs-review`,
+   `agent-failed` or `stealable`, or when the profile names it; every
+   other PR is foreign (another agent's, a bot's, a routine's).
+   Unfinished PRs come before new issues: green ones go to the Phase 2
+   gate, pending ones wait, failed ones of this queue get fixed or their
+   issue labelled `agent-failed`. A foreign green PR goes to the Phase 2
+   gate unchanged, because the gate and the Merge policy run per PR and
+   protect any PR. A foreign failed PR is never fixed by this queue
+   unless a ready issue says so, is reported, and does not block
+   claiming. Claim nothing new while a failed PR of this queue is open
+   and not held. This is the protocol's "Open pull requests first"
    pre-flight (`../../docs/pipeline-protocol.md`) with this skill's
    mechanics; merges still follow the Merge policy below.
+
+   A failed PR is also sorted by cause, in this order:
+
+   - A failed PR with no linked issue (a dependency bot's, the release
+     bot's) has nothing to label, is reported, and does not block
+     claiming.
+   - A failed PR that carries a `hold_labels` label, or whose issue
+     does, is handed to a human, is reported, and does not block
+     claiming.
+   - A PR the evidence says must not merge (an automated revert whose
+     red was infrastructure) is never fixed, re-run or updated toward
+     green, is reported, and does not block claiming.
+   - A failed PR whose failing jobs show no repo cause (a runner or
+     network failure, a cancelled or timed-out job) gets its failed jobs
+     re-run once per head SHA by the re-run rule of step 2, and is
+     judged again before it counts as failed.
+
+   A green PR is settled once its head commit is at least 15 minutes old, read
+   as the last commit's `committedDate` in
+   `gh pr view <N> --json commits` (REST: `committer.date` of the last
+   item of `gh api repos/{owner}/{repo}/pulls/<N>/commits`; no MCP twin
+   is verified). A head that this session's own worker pushed counts as
+   settled. The committer date is a proxy, since GitHub does not expose
+   push time, and a rebased or force-pushed old commit looks old, so a
+   head that differs from the head this session last recorded for the PR
+   is not settled whatever its date. A time that cannot be read leaves
+   the PR not settled. An unsettled green PR waits this iteration, is not
+   reviewed, and is reported; a failed PR keeps its disposition above.
 
 ## Phase 1: Claim a batch
 
