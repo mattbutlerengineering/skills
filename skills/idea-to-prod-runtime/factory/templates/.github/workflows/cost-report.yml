@@ -1,0 +1,119 @@
+# The weekly cost report + monthly circuit breaker (PRD-0001; ADR-0034).
+#
+# Mirrored VERBATIM into the template payload by `factory_init.py
+# update-manifest`, so a stamped product repo runs this same file — which is
+# why it names no commands of its own. The one step that needs judgment goes
+# through `make cost-report` (cost_report.py, unit-tested offline); this
+# workflow only MUTATES: it posts the report issue and, on a PAUSE verdict,
+# sets the FACTORY_PAUSED repo variable. Editing this file means re-running
+# update-manifest; detector E fails the build otherwise.
+#
+# FACTORY_PAUSED is a GitHub Actions repository VARIABLE (vars.*), the same
+# convention sweeps.yml's Sentry job (vars.SENTRY_ORG) and validator.yml
+# (vars.FACTORY_REVIEW_LOGIN) already use: free to read from any workflow's
+# `if:` — assembler.yml's dispatch guard checks `vars.FACTORY_PAUSED !=
+# 'true'` — repo-wide by construction (ADR-0034: the circuit breaker
+# "pauses dispatch repo-wide"), and it needs no commit — an instant,
+# repo-scoped flip.
+#
+# Writing a repo variable is NOT something the default GITHUB_TOKEN can do
+# (the Actions variables API needs a PAT with the repo scope, or a GitHub
+# App token) — the same reason validator.yml's review job carries its own
+# FACTORY_REVIEW_TOKEN. With no FACTORY_PAUSE_TOKEN secret configured, a cap
+# breach fails loudly (never a silent no-op — a breach nobody can act on is
+# a safety failure, not a missing feature like the optional Sentry sweep).
+name: cost-report
+
+on:
+  schedule:
+    # Mondays, 07:17 UTC (off the hour — GitHub's cron peaks are lossy; an
+    # hour after sweeps.yml's 06:17 slot so the two scheduled jobs don't
+    # contend for the same runner minute).
+    - cron: "17 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: cost-report
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # Recompute spend from docs/factory/costs.jsonl and decide PAUSE/
+      # CONTINUE against factory.json's monthly_cap_usd. Emits title/body/
+      # pause/reason to $GITHUB_OUTPUT; makes no gh call itself.
+      - name: Recompute spend and decide against the monthly cap
+        id: report
+        run: make cost-report
+      # always(): same reason the pause step below carries it — the report
+      # step exits nonzero on exactly the fail-closed verdicts, and those
+      # are the weeks whose report a human most needs. cost_report.guard
+      # composes one for them on purpose ("Both aggregates are always the
+      # best-effort rollup of what WAS readable, even on a failing path,
+      # so a human reading the report still sees something"); an implicit
+      # success() gate threw that report away and left a red run as the
+      # only trace. The title guard is what always() costs: outputs are
+      # written before the failing exit, so a present title IS the
+      # evidence a report was composed, and a crash before write_outputs
+      # skips this step instead of asking gh to create an empty issue.
+      - name: Post the weekly cost report issue
+        if: >-
+          always()
+          && steps.report.outputs.title != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_TITLE: ${{ steps.report.outputs.title }}
+          REPORT_BODY: ${{ steps.report.outputs.body }}
+        run: gh issue create --title "$REPORT_TITLE" --body "$REPORT_BODY"
+      # A cap breach that cannot be enforced is a safety failure, not a
+      # missing optional feature — so this names the cause and fails loudly
+      # rather than skipping gracefully (unlike the Sentry sweep's vars.*
+      # skip, there is no "unconfigured, working as intended" reading here).
+      # always(): the report step exits nonzero on exactly the fail-closed
+      # verdicts (malformed ledger line, unresolvable cap — WO-0033), and
+      # those verdicts carry pause=true; an implicit success() gate would
+      # skip the pause at the moment it matters most. The report step's
+      # own failure still fails the job, so nothing is hidden.
+      - name: Pause dispatch on a cap breach
+        if: >-
+          always()
+          && steps.report.outputs.pause == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PAUSE_TOKEN }}
+        run: |
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "cost-report: the monthly cap was breached but" \
+                 "FACTORY_PAUSE_TOKEN is not set — FACTORY_PAUSED could NOT" \
+                 "be set; add the secret (a PAT with the repo scope, able to" \
+                 "write repo variables) or pause dispatch by hand" >&2
+            exit 1
+          fi
+          gh variable set FACTORY_PAUSED --body true
+      # An under-cap verdict clears the breaker, so a new month opening
+      # under the cap resumes dispatch without a human remembering the
+      # variable exists. The variable tracks the verdict in BOTH
+      # directions — this workflow owns FACTORY_PAUSED, and a hand-set
+      # pause does not survive an under-cap run; pause deliberately by
+      # lowering monthly_cap_usd or disabling this workflow instead.
+      # Skipped (not failed) without the token — an unclearable pause is
+      # safe, an unenforceable one is not (mirror of the breach step
+      # above).
+      - name: Resume dispatch when under the cap
+        if: steps.report.outputs.pause == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PAUSE_TOKEN }}
+        run: |
+          if [ -n "${GH_TOKEN}" ]; then
+            gh variable set FACTORY_PAUSED --body false
+          else
+            echo "cost-report: no FACTORY_PAUSE_TOKEN — FACTORY_PAUSED left as-is"
+          fi
