@@ -269,7 +269,8 @@ file's Rules section.
    dropping every entry that carries a `pull_request` key; MCP:
    `list_issues` with `labels: ["in-progress"]`, state open). A fresh
    session has claimed none, so every one counts, and a looping session
-   subtracts the issues it claimed in earlier iterations. Give each its
+   subtracts the issues it claimed in earlier iterations, never one Phase 1
+   skipped. Give each its
    claim time, the last line of
    `gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled" and .label.name == "in-progress") | .created_at'`
    (the timeline lists events oldest first). There is no MCP twin for
@@ -322,28 +323,46 @@ issue always gets a slot. Drop any issue that:
 Take at most `max_workers`. Move each claimed issue to `in-progress`
 with the `transition` hook.
 
-Read the issue's labels again immediately before the transition: if
-`in-progress` is already there or `ready` is gone, another session took
-it, so skip the issue. Read its timeline too, with
-`gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled") | [.label.name, .created_at, .actor.login] | @tsv'`,
+For the claim transition only, the removal of `ready` comes first and
+decides the claim, and the add of `in-progress` follows; every other
+transition keeps the `transition` hook's order. Run the steps below as
+written even when the profile's `transition` hook is one swap command.
+Read `gh api -i repos/{owner}/{repo}/issues/<N>` just before the claim:
+if `ready` is gone or `in-progress` is already there, another session
+took it, so skip the issue and never touch its labels. Note the
+whole-second time in that response's `Date` header, which is GitHub's
+clock. Read the issue's timeline with
+`gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled") | [.label.name, .created_at, .actor.login] | @tsv'`
 to take the time of its last `ready` labeled event; when the timeline
 cannot be read, or holds no `ready` labeled event, claim nothing for
-it. Note the UTC time just before issuing the transition. After the
-transition, read the timeline again with the same command and confirm
-exactly one `in-progress` labeled event since the last `ready` labeled
-event, whose `created_at` is at or after the time noted, so that the
-event is this session's. There is no MCP twin for the timeline read, so
-a session with no `gh` cannot run this check and must claim nothing. On
-an unreadable timeline after the transition, skip the issue, dispatch no
-worker for it, leave the label as it is and report it. With no
-`in-progress` labeled event after the transition (the timeline lags, or
-the transition failed), skip the issue, dispatch no worker for it, leave
-the label as it is and report it. With two or more `in-progress` labeled
-events, or one whose `created_at` is earlier than the time noted, this
-session lost the race, so skip the issue, dispatch no worker for it,
-leave the label as it is and report it. Never move the issue back to
-`ready` after a lost race, because the session that holds it may
-already have dispatched a worker.
+it. Then remove `ready` with
+`gh api -X DELETE repos/{owner}/{repo}/issues/<N>/labels/ready`. Hold
+the claim only on a 200. On any other status, a 404 included (the
+documentation gives it for a label that does not exist, which this
+session takes to mean another session removed `ready` first), skip the
+issue, never touch its labels and report it. Then add `in-progress` with
+the `transition` hook's add. Dispatch no worker before that 200 and the
+add of `in-progress`. A failed add is a failed transition: dispatch
+nothing for that issue and let Reconcile before Phase 4 repair it, since
+this session won the removal. After the add, read the timeline again
+with the same command and confirm, as a secondary check, exactly one
+`in-progress` labeled event since the last `ready` labeled event, whose
+`created_at` is at or after the time noted, comparing whole seconds, so
+that the event is this session's. There is no MCP twin for the removal,
+the `Date` read or the timeline read, so a session with no `gh` cannot
+run this check and must claim nothing. On an unreadable timeline after
+the add, skip the issue, dispatch no worker for it, leave the label as
+it is and report it. With no `in-progress` labeled event after the add
+(the timeline lags, or the transition failed), skip the issue, dispatch
+no worker for it, leave the label as it is and report it. With two or
+more `in-progress` labeled events, or one whose `created_at` is earlier
+than the time noted, this session lost the race, so skip the issue,
+dispatch no worker for it, leave the label as it is and report it. Never
+move the issue back to `ready` after a lost race, because the session
+that holds it may already have dispatched a worker. An issue skipped in
+this phase is not claimed by this session, so Reconcile before Phase 4
+leaves it alone, a looping session's Phase 0 step 4 does not subtract
+it, and the report names it for the Owner to free.
 
 ## Phase 2: Implement, then gate
 
@@ -702,7 +721,8 @@ continues that iteration and never starts a second one: a loop tick
 that fires then joins the one in flight and does nothing new, and the
 next iteration starts only after the report. A session with no memory
 of an iteration in flight cannot tell, and Phase 0 step 4 shows it the
-issues that iteration holds.
+`in-progress` issues and recently pushed PRs that iteration holds, which
+it leaves alone like any other listed there.
 
 ## Labels
 
