@@ -48,13 +48,14 @@ def phase0_step(number):
 
 class TestPhaseZeroDetectsAnotherSession(unittest.TestCase):
     def test_the_step_comes_after_the_existing_three(self):
-        phase = section("Phase 0: Pre-flight")
-        self.assertTrue(phase0_step(3).startswith("List open PRs."))
+        text = SKILL.read_text(encoding="utf-8")
+        m = re.search(r"^## Phase 0: Pre-flight\n(.*?)(?=^## )", text,
+                      re.S | re.M)
+        numbers = [int(n) for n in re.findall(r"^(\d+)\. ", m.group(1),
+                                              re.M)]
+        self.assertEqual(numbers, [1, 2, 3, 4])
         self.assertTrue(phase0_step(4).startswith(
             "Look for another queue session"))
-        self.assertEqual(phase0_step(5), "")
-        self.assertLess(phase.index(" 3. List open PRs."),
-                        phase.index(" 4. Look for another queue session"))
 
     def test_it_lists_issues_this_session_did_not_claim(self):
         s = sentence(phase0_step(4), "gh issue list --label in-progress")
@@ -108,6 +109,9 @@ class TestTheLabelClaimIsTheMutex(unittest.TestCase):
     def test_what_was_found_narrows_what_is_touched(self):
         s = sentence(phase0_step(4), "never touch")
         self.assertIn("issue or PR listed here", s)
+        self.assertIn("Phase 3 step 1's head comparison", s)
+        self.assertIn("`--disable-auto` still run", s)
+        self.assertIn("they only tighten", s)
         self.assertIn("post-claim check", s)
 
     def test_the_lock_hook_is_not_the_detection(self):
@@ -129,10 +133,16 @@ class TestPhaseOnePostClaimCheck(unittest.TestCase):
         s = sentence(self.phase, "cannot be read")
         self.assertIn("claim nothing for it", s)
 
-    def test_exactly_one_in_progress_event_since_ready(self):
+    def test_no_ready_event_means_no_claim(self):
+        s = sentence(self.phase, "holds no `ready` labeled event")
+        self.assertIn("claim nothing for it", s)
+
+    def test_exactly_one_event_and_it_is_this_sessions(self):
         s = sentence(self.phase, "exactly one")
         self.assertIn("`in-progress` labeled event", s)
         self.assertIn("last `ready` labeled event", s)
+        self.assertIn("at or after the time noted", s)
+        self.assertIn("this session's", s)
         self.assertIn("/timeline --paginate", self.phase)
 
     def test_no_mcp_twin_so_the_check_fails_closed(self):
@@ -143,22 +153,32 @@ class TestPhaseOnePostClaimCheck(unittest.TestCase):
     def test_an_unreadable_timeline_after_the_claim_fails_closed(self):
         s = sentence(self.phase, "unreadable timeline after the transition")
         self.assertIn("skip the issue", s)
+        self.assertIn("dispatch no worker", s)
         self.assertIn("leave the label", s)
-
-    def test_two_events_mean_the_race_was_lost_and_the_issue_skipped(self):
-        s = sentence(self.phase, "two or more")
-        self.assertIn("lost the race", s)
-        self.assertIn("skip the issue", s)
         self.assertIn("report it", s)
 
-    def test_release_only_when_this_sessions_transition_was_later(self):
-        s = sentence(self.phase, "back to `ready`")
-        self.assertIn("only when", s)
-        self.assertIn("strictly later", s)
-
-    def test_a_tie_or_doubt_leaves_the_label(self):
-        s = sentence(self.phase, "On a tie")
+    def test_zero_events_after_the_claim_skip_and_leave_the_label(self):
+        s = sentence(self.phase, "no `in-progress` labeled event after")
+        self.assertIn("skip the issue", s)
+        self.assertIn("dispatch no worker", s)
         self.assertIn("leave the label", s)
+        self.assertIn("report it", s)
+
+    def test_two_events_or_an_earlier_one_lose_the_race(self):
+        s = sentence(self.phase, "two or more")
+        self.assertIn("lost the race", s)
+        self.assertIn("earlier than the time noted", s)
+        self.assertIn("skip the issue", s)
+        self.assertIn("dispatch no worker", s)
+        self.assertIn("leave the label", s)
+        self.assertIn("report it", s)
+
+    def test_a_lost_race_never_releases_the_issue(self):
+        s = sentence(self.phase, "Never move the issue back to `ready`")
+        self.assertIn("lost race", s)
+        self.assertIn("already have dispatched a worker", s)
+        self.assertNotIn("strictly later", self.phase)
+        self.assertNotIn("On a tie", self.phase)
 
 
 class TestReinvocationContinuesTheIteration(unittest.TestCase):

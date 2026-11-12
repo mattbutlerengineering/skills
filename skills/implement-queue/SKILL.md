@@ -214,7 +214,9 @@ file's Rules section.
    finds. A hard stop is not used, because one stale `in-progress`
    label, a crashed worker's, would block the queue for ever. What the
    report narrows is what this session touches: never touch an issue or
-   PR listed here (no claim, relabel, merge or branch update), and claim
+   PR listed here (no claim, relabel, merge or branch update, except that Phase 3
+   step 1's head comparison and `--disable-auto` still run, since they
+   only tighten), and claim
    only issues that pass the post-claim check in Phase 1. A `lock` hook
    that keeps its lock in the local git common dir cannot see a cloud
    session, so it does not replace this step or the Rules' One queue
@@ -259,18 +261,19 @@ cannot be read, or holds no `ready` labeled event, claim nothing for
 it. Note the UTC time just before issuing the transition. After the
 transition, read the timeline again with the same command and confirm
 exactly one `in-progress` labeled event since the last `ready` labeled
-event, counting the events whose `created_at` is not earlier than it.
-There is no MCP twin for the timeline read, so a session with no `gh`
-cannot run this check and must claim nothing. On an unreadable timeline
-after the transition, skip the issue, dispatch no worker for it, leave
-the label as it is and report it. With two or more `in-progress`
-labeled events this session lost the race, so skip the issue, dispatch
-no worker for it and report it. Move the issue back to `ready` with the
-`transition` hook only when this session's event is the last one,
-strictly later by `created_at` than every other, this session's event
-being the one at or after the time noted before its transition. On a
-tie, or any doubt about which event is this session's, leave the label
-and report the issue.
+event, whose `created_at` is at or after the time noted, so that the
+event is this session's. There is no MCP twin for the timeline read, so
+a session with no `gh` cannot run this check and must claim nothing. On
+an unreadable timeline after the transition, skip the issue, dispatch no
+worker for it, leave the label as it is and report it. With no
+`in-progress` labeled event after the transition (the timeline lags, or
+the transition failed), skip the issue, dispatch no worker for it, leave
+the label as it is and report it. With two or more `in-progress` labeled
+events, or one whose `created_at` is earlier than the time noted, this
+session lost the race, so skip the issue, dispatch no worker for it,
+leave the label as it is and report it. Never move the issue back to
+`ready` after a lost race, because the session that holds it may
+already have dispatched a worker.
 
 ## Phase 2: Implement, then gate
 
