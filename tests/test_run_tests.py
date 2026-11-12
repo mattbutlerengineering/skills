@@ -96,12 +96,11 @@ class TestSchedule(unittest.TestCase):
         self.assertEqual(run_tests.schedule(list(reversed(self.MODULES)), {}),
                          self.MODULES)
 
-    def test_an_untimed_module_sorts_after_the_timed_ones_alphabetically(
-            self):
+    def test_untimed_modules_run_before_the_timed_ones_alphabetically(self):
         self.assertEqual(
             run_tests.schedule(["tests.test_new", "tests.test_a",
                                 "tests.test_b"], {"tests.test_a": 2.0}),
-            ["tests.test_a", "tests.test_b", "tests.test_new"])
+            ["tests.test_b", "tests.test_new", "tests.test_a"])
 
 
 class TestLoadTimings(unittest.TestCase):
@@ -165,14 +164,34 @@ class TestMain(cli_contract.CliContract, TreeCase):
                       out)
         self.assertIn("tests: 6 tests across 3 modules", out)
 
-    def test_the_longest_module_is_spawned_first(self):
+    def test_an_unrecorded_module_is_spawned_before_the_longest_recorded_one(
+            self):
         (self.root / "tests" / "timings.json").write_text(
             json.dumps({"tests.test_c_long": 20.0, "tests.test_a": 1.0}),
             encoding="utf-8")
         self.run_cli(["-j", "1"])
         self.assertEqual([cmd[-1] for cmd, _ in self.spawn.calls],
-                         ["tests.test_c_long", "tests.test_a",
-                          "tests.test_b"])
+                         ["tests.test_b", "tests.test_c_long",
+                          "tests.test_a"])
+
+    def test_unrecorded_modules_are_reported_before_the_summary(self):
+        (self.root / "tests" / "timings.json").write_text(
+            json.dumps({"tests.test_a": 1.0}), encoding="utf-8")
+        code, out = self.run_cli([])
+        self.assertEqual(code, 0)
+        lines = out.splitlines()
+        self.assertEqual(
+            lines[-2],
+            "tests: 2 module(s) have no recorded timing and ran first"
+            " (python3 run_tests.py --record refreshes tests/timings.json)")
+        self.assertRegex(
+            lines[-1],
+            r"^tests: 9 tests across 3 modules in \d+\.\ds on 4 workers,"
+            r" 0 problem\(s\)$")
+
+    def test_no_timings_file_reports_no_staleness(self):
+        _, out = self.run_cli([])
+        self.assertNotIn("no recorded timing", out)
 
     def test_dash_j_overrides_the_cpu_count(self):
         code, out = self.run_cli(["-j", "2"])

@@ -105,7 +105,8 @@
 - `make_parse.py` — Makefile text extraction for the lockstep tests
 - `workflow_parse.py` — workflow text extraction for the run-step tests
 - `timings.json` — each suite's last recorded wall time, which
-  `run_tests.py` schedules longest-first from; rewritten by
+  `run_tests.py` schedules longest-first from, after every module with
+  no entry here (an unrecorded module runs first); rewritten by
   `python3 run_tests.py --record` after a clean run
 - `fixtures/` — committed fixture trees and recorded transcripts (each
   transcript family has its own README)
