@@ -169,6 +169,10 @@ or not, merged or stopped at a PR
 | **Merges** | Never; a green PR waits for the Owner | Under an Owner answer or standing consent | Only when the queue profile opts in; never for work orders |
 | **Started by** | The Owner | The Owner | A routine or loop, or the Owner |
 
+`implement-queue` is the default way a ready issue gets picked up.
+`autorun` and `conduct` are for the cases the table gives: `autorun` for one
+run end to end, `conduct` for a batch with the Owner present.
+
 This repo's own assembly line is live at
 [mattbutlerengineering.github.io/skills](https://mattbutlerengineering.github.io/skills/),
 rebuilt from main on every push by
