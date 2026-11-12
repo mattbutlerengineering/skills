@@ -1,13 +1,33 @@
 # Publishes this repo's assembly line (the assembly-line skill's page) to
 # GitHub Pages at https://mattbutlerengineering.github.io/skills/. The page
-# is generated from the checkout's run artifacts on every push to main, so
-# it always shows main's runs; nothing generated is committed. Root-only:
-# it is not in factory_init.MIRRORS, so a stamped repo never gets it.
+# is generated from the checkout's run artifacts on every push to main
+# that changes one of its inputs, so it always shows main's runs; nothing
+# generated is committed. Root-only: it is not in factory_init.MIRRORS, so
+# a stamped repo never gets it.
 name: pages
 
 on:
   push:
     branches: [main]
+    # The page's inputs, and nothing else: the run directories
+    # knowledge_plane.run_dirs walks (docs/, docs/features/*, docs/fixes/*),
+    # assembly_line.py with every repo module it imports, its template and
+    # the vendored library. 124 of 469 pushes to main measured on
+    # 2026-11-11 changed none of them and rebuilt an identical page.
+    # tests/test_assembly_line.py holds the module list to the tool's
+    # import closure.
+    paths:
+      - "docs/*.md"
+      - "docs/features/**"
+      - "docs/fixes/**"
+      - "assembly_line.py"
+      - "assembly_line.html"
+      - "board.py"
+      - "cli.py"
+      - "knowledge_plane.py"
+      - "protocol.py"
+      - "vendor/**"
+      - ".github/workflows/pages.yml"
   workflow_dispatch:
 
 permissions:
