@@ -5,7 +5,7 @@ state: each stage skill reads/writes run artifacts (product runs at the
 target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
 and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
-## Verify (CI runs all four on every push/PR)
+## Verify (CI runs all four on every PR and every push to main)
 
 - `python3 run_tests.py` — the full suite, one `python3 -m unittest
   tests.<module>` child per module across `os.cpu_count()` workers
