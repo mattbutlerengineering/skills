@@ -94,6 +94,16 @@ message, one worktree per worker. Each worker's prompt must carry:
 9. **Say what it doubts.** Finished work it is unsure of goes in a
    `## Concerns` section of the PR body, one line per doubt, rather than
    shipping as if it were certain. Unfinished work escalates instead.
+10. Stay inside your worktree. Stop only processes you started, by PID;
+    never `pkill -f` or `killall`, which match machine-wide. Never run
+    `git stash`, `git gc` or `git worktree prune`: they act on state
+    shared by every worktree of the repo. After any investigative
+    checkout (a bisect, `git checkout <sha> -- <paths>`) restore the
+    worktree to a clean state, confirm it with `git status --porcelain`
+    and `git diff`, and say so in the result.
+11. Say in the result which checks were not verified locally: list under
+    `not verified locally` every CI check the PR will face that you did
+    not or could not run, each with the reason.
 
 Model per work order follows `factory.json`'s routing bands. Mechanical
 work does not need the implementation model.
