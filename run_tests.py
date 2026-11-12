@@ -4,9 +4,11 @@ test module, across a pool of workers (faster-sdlc #903).
 `python3 -m unittest discover tests` ran the suite serially: 82.5s on
 origin/main 8528b1d at 73% of one core. The modules are independent —
 each builds its own fixture tree or temp git repo, and tests/README.md
-pins the flat layout — so each runs in its own process. Modules are
-scheduled longest-first from tests/timings.json (written by `--record`),
-so the slowest module starts first and the wall time approaches the
+pins the flat layout — so each runs in its own process. Modules with no
+entry in tests/timings.json (written by `--record`) start first: a new
+module's duration is unknown, and starting an unknown late is what let
+two 20–40s modules run last. The recorded ones follow longest-first, so
+the slowest module starts early and the wall time approaches the
 longest module rather than the sum; without a readable timings file the
 order is alphabetical.
 
@@ -19,6 +21,7 @@ factory_init.product_form respells the root Makefile's line back to the
 serial discover command, so stamped repos are unchanged. Stdlib only.
 """
 import json
+import math
 import os
 import re
 import sys
@@ -62,9 +65,11 @@ def load_timings(path):
 
 
 def schedule(modules, timings):
-    """Longest-first by recorded seconds; an unrecorded module counts as
-    0s, so ties and the no-timings case fall back to alphabetical."""
-    return sorted(modules, key=lambda m: (-timings.get(m, 0.0), m))
+    """Unrecorded modules first, alphabetical among themselves, then the
+    recorded ones longest-first by seconds. A new module's duration is
+    unknown, and starting an unknown late is what let two 20–40s modules
+    run last. Ties and the no-timings case fall back to alphabetical."""
+    return sorted(modules, key=lambda m: (-timings.get(m, math.inf), m))
 
 
 @dataclass(frozen=True)
@@ -140,7 +145,8 @@ def main(argv, spawn=spawn_child, root=None, cpu_count=os.cpu_count):
     workers, record = parsed
     root = Path(root or Path(__file__).resolve().parent)
     started = time.monotonic()
-    modules = schedule(discover(root), load_timings(root / TIMINGS))
+    timings = load_timings(root / TIMINGS)
+    modules = schedule(discover(root), timings)
     results = run_all(modules, spawn, workers, root)
     wall = time.monotonic() - started
     failed = [result for result in results if result.failed]
@@ -148,6 +154,11 @@ def main(argv, spawn=spawn_child, root=None, cpu_count=os.cpu_count):
         print(f"tests: {result.module} failed")
         print(result.output, end="" if result.output.endswith("\n") else "\n")
     total = sum(result.count or 0 for result in results)
+    unrecorded = sum(module not in timings for module in modules)
+    if unrecorded and timings:
+        print(f"tests: {unrecorded} module(s) have no recorded timing and"
+              " ran first (python3 run_tests.py --record refreshes"
+              " tests/timings.json)")
     print(f"tests: {total} tests across {len(results)} modules in {wall:.1f}s"
           f" on {workers} workers, {len(failed)} problem(s)")
     if record and not failed:
