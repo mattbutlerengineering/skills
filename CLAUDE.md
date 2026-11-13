@@ -105,9 +105,12 @@ command, the exit codes and what the output is never evidence for.
 - `docs/factory/retro-reflect-routine.md`,
   `docs/factory/queue-groomer-routine.md`,
   `docs/factory/doc-gardener-routine.md` — the weekly roster routines'
-  protocols (ADR-0044's pattern); only the queue groomer's trigger
-  exists (created 2026-09-29 as the pilot), and the retro/reflect and
-  doc-gardener triggers are deferred by owner decision
+  protocols (ADR-0044's pattern); queue groomer's trigger was the
+  2026-09-29 pilot, and both siblings have since gone live too —
+  `factory-weekly-retro-reflect` firing every Monday since 2026-10-05
+  (journal #587) and `factory-weekly-doc-gardener` firing repeatedly
+  since 2026-10-02 (journal #586) — each routine's own `## Trigger`
+  section still awaits a human PR recording what this one confirms
 - `docs/factory/merge-train-routine.md` — the scheduled
   implement-queue pass over open PRs only (Phase 0 verdicts, Phase 3
   train) under `.claude/implement-queue.md` and ADR-0096; its trigger
