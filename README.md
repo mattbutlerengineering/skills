@@ -168,6 +168,12 @@ or not, merged or stopped at a PR
 `implement-queue` is the default way a ready issue gets picked up.
 `autorun` and `conduct` are for the cases the table gives: `autorun` for one
 run end to end, `conduct` for a batch with the Owner present.
+Any driver that takes a ready issue in a repo the queue runs in, a
+repo's own routine included, claims it through
+[the queue's claim step](skills/implement-queue/references/claim.md) and
+ends its PR body with a `Driver: <name>` line, so the queue sees the
+work as taken and leaves that PR alone
+([ADR-0130](docs/adr/0130-every-driver-claims-a-ready-issue-through-the-queues-claim-step.md)).
 
 This repo's own assembly line is live at
 [mattbutlerengineering.github.io/skills](https://mattbutlerengineering.github.io/skills/),

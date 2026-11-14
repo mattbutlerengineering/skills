@@ -193,9 +193,13 @@ file's Rules section.
    equals the limit, or a page is missing) fails closed: claim nothing
    and report it. A PR belongs to this queue when it closes an issue
    carrying `in-progress`, `has-pr`, `needs-review`, `agent-failed` or
-   `stealable`; every other PR is foreign (another agent's, a bot's, a
-   routine's). A PR the evidence says must not merge (the third cause
-   below) is never gated, re-run toward green or merged by this queue
+   `stealable` and its body has no `Driver:` line naming a driver other
+   than `implement-queue`; every other PR is foreign (another agent's, a
+   bot's, a routine's). A PR whose `Driver:` line names another driver
+   is that driver's, which claimed its issue through
+   [the claim step](references/claim.md). A PR the evidence says must
+   not merge (the third cause below) is never gated, re-run toward green
+   or merged by this queue
    in any CI state, a revert someone else re-ran to green included; it
    is reported. Unfinished PRs come before new issues: green ones go to
    the Phase 2 gate, pending ones wait, failed ones of this queue get
@@ -331,60 +335,11 @@ issue always gets a slot. Drop any issue that:
   file. A dropped issue keeps `ready`, is reported with the path and
   the issue or PR it waits for, and is claimed in a later iteration.
 
-Take at most `max_workers`. Move each claimed issue to `in-progress`
-with the `transition` hook.
-
-For the claim transition only, the removal of `ready` comes first and
-the add of `in-progress` follows; every other
-transition keeps the `transition` hook's order. Run the steps below as
-written even when the profile's `transition` hook is one swap command.
-Read `gh api -i repos/{owner}/{repo}/issues/<N>` just before the claim:
-if `ready` is gone or `in-progress` is already there, another session
-took it, so skip the issue and never touch its labels. Note the
-whole-second time in that response's `Date` header, which is GitHub's
-clock. Read the issue's timeline with
-`gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled") | [.label.name, .created_at, .actor.login] | @tsv'`
-to take the time of its last `ready` labeled event; when the timeline
-cannot be read, or holds no `ready` labeled event, claim nothing for
-it. Then remove `ready` with
-`gh api -X DELETE repos/{owner}/{repo}/issues/<N>/labels/ready`. Hold
-the claim only on a 200. On any other status, a 404 included (the
-documentation gives it for a label that does not exist, which this
-session takes to mean another session removed `ready` first), skip the
-issue, never touch its labels and report it. This claim narrows the race
-window and is not a lock: the documentation gives a 404 only for a label
-that does not exist, so if two removals both returned 200 two sessions
-would each hold the claim, and One queue session per repo at a time in
-the Rules stays the guarantee, the label claim being a best-effort mutex
-that makes a collision unlikely and detectable by the secondary check.
-Then add `in-progress` with
-the `transition` hook's add. Dispatch no worker before that 200 and the
-add of `in-progress`. A failed add means this session won the removal
-but holds no complete claim: dispatch nothing for that issue, skip it and
-report it for the Owner, since it then has neither state label. After the add, read the timeline again
-with the same command and confirm, as a secondary check, exactly one
-`in-progress` labeled event since the last `ready` labeled event, whose
-`created_at` is at or after the time noted, comparing whole seconds, which
-shows only that the event was created after this session's read. There is no MCP twin for the removal,
-the `Date` read or the timeline read, so a session with no `gh` cannot
-run this check and must claim nothing. On an unreadable timeline after
-the add, skip the issue, dispatch no worker for it, leave the label as
-it is and report it. With no `in-progress` labeled event after the add
-(the timeline lags, or the transition failed), skip the issue, dispatch
-no worker for it, leave the label as it is and report it. With two or
-more `in-progress` labeled events, or one whose `created_at` is earlier
-than the time noted, this session lost the race, so skip the issue,
-dispatch no worker for it, leave the label as it is and report it. Never
-move the issue back to `ready` after a lost race, because the session
-that holds it may already have dispatched a worker. An issue skipped in
-this phase is not claimed by this session, so Reconcile before Phase 4
-leaves it alone, a looping session's Phase 0 step 4 does not subtract
-it, and the report names it for the Owner to free. An open issue with no
-queue state label that was last labelled by a claim attempt, after a
-failed add or a session that died, is stuck and fails closed, and the
-Owner frees it by adding `ready`. An issue left with `in-progress` by
-two sessions that both skipped is freed by removing `in-progress` and
-adding `ready`.
+Take at most `max_workers`, and claim each with
+[the claim step](references/claim.md), the one claim every driver of
+`ready` issues in the repo runs (ADR-0130). Dispatch no worker for an
+issue until that file says the claim holds; an issue it skips is not
+claimed by this session and is reported.
 
 ## Phase 2: Implement, then gate
 
@@ -446,7 +401,8 @@ Every worker prompt carries:
    included where the language has one.
 5. Push the branch and open a PR with `Closes #<N>`; confirm its base is
    `main`. End the PR body with the line `Driver: implement-queue`, which
-   marks the PR as queue-driven and which nothing in this skill reads.
+   marks the PR as queue-driven; Phase 0 step 3 reads the `Driver:` line
+   to tell this queue's PRs from another driver's.
    The search only pre-filters (it matches the phrase loosely), so this
    command selects on the exact line and counts the merged PRs that carry
    it, up to the `--limit` bound of 1000:
