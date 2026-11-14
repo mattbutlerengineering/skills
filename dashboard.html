@@ -158,8 +158,9 @@ const renderBacklog = (states, orders, dirty, saveErrors) => {
           `</span></li>`
         : `<li draggable="true" data-repo="${i}" ` +
           `data-line="${line}">` +
-          `<button data-move="up"${at ? "" : " disabled"}>▲</button>` +
-          `<button data-move="down"` +
+          `<button data-move="up" aria-label="Move up"` +
+          `${at ? "" : " disabled"}>▲</button>` +
+          `<button data-move="down" aria-label="Move down"` +
           `${at === order.length - 1 ? " disabled" : ""}>▼</button>` +
           ` ⣿ ${esc(seed.text)}</li>`;
     }).join("");
@@ -348,6 +349,13 @@ const wireBacklog = (section) => {
                                  move.dataset.move === "up" ? -1 : 1);
       state.dirty[repo] = true;
       paint();
+      const sel = `li[data-repo="${repo}"][data-line="${item.dataset.line}"]`;
+      const moved = section.querySelector(sel);
+      if (moved) {
+        const again = moved.querySelector(
+          `button[data-move="${move.dataset.move}"]:not([disabled])`);
+        (again || moved.querySelector("button:not([disabled])"))?.focus();
+      }
       return;
     }
     const save = event.target.dataset && event.target.dataset.save;
