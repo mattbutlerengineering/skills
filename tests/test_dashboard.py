@@ -1101,11 +1101,11 @@ console.log(JSON.stringify({
         at the very top/bottom has that direction's button disabled."""
         section = self.rendered()["backlogClean"]
         self.assertIn('data-line="3">'
-                      '<button data-move="up" disabled>▲</button>'
-                      '<button data-move="down">▼</button>', section)
+                      '<button data-move="up" aria-label="Move up" disabled>▲</button>'
+                      '<button data-move="down" aria-label="Move down">▼</button>', section)
         self.assertIn('data-line="5">'
-                      '<button data-move="up">▲</button>'
-                      '<button data-move="down" disabled>▼</button>',
+                      '<button data-move="up" aria-label="Move up">▲</button>'
+                      '<button data-move="down" aria-label="Move down" disabled>▼</button>',
                       section)
         self.assertEqual(section.count("data-move="), 4)
 
@@ -1115,11 +1115,11 @@ console.log(JSON.stringify({
         clicking still moves it, matching what a drop there does."""
         section = self.rendered()["backlogDirty"]
         self.assertIn('data-line="5">'
-                      '<button data-move="up" disabled>▲</button>'
-                      '<button data-move="down">▼</button>', section)
+                      '<button data-move="up" aria-label="Move up" disabled>▲</button>'
+                      '<button data-move="down" aria-label="Move down">▼</button>', section)
         self.assertIn('data-line="3">'
-                      '<button data-move="up">▲</button>'
-                      '<button data-move="down">▼</button>', section)
+                      '<button data-move="up" aria-label="Move up">▲</button>'
+                      '<button data-move="down" aria-label="Move down">▼</button>', section)
 
     def test_nudge_click_moves_match_drag_moves(self):
         """nudge is the click path's applyMove: swap with the adjacent
