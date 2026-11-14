@@ -74,6 +74,12 @@ class TestCheckBacklog(unittest.TestCase):
             "backlog: line 1: invalid run-ref 'sprint:12'",
             "backlog: line 2: invalid run-ref 'FEATURE:Big'"])
 
+    def test_a_claim_marker_before_from_is_rejected_not_absorbed(self):
+        text = "- seed (claimed: feature:x) (from: product)\n"
+        self.assertEqual(protocol.check_backlog(text), [
+            "backlog: line 1: '(claimed: ...)' must follow"
+            " '(from: <run-ref>)'"])
+
     def test_non_bullet_lines_are_not_held_to_the_grammar(self):
         text = "# header\n\nplain prose, no (from:) marker\n"
         self.assertEqual(protocol.check_backlog(text), [])
