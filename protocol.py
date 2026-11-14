@@ -486,6 +486,10 @@ def check_backlog(text):
             problems.append(f"backlog: line {number}: entry does not "
                             "match '- <seed text> (from: <run-ref>)'")
             continue
+        if re.search(r"\(claimed: [^()]+\)", match["text"]):
+            problems.append(f"backlog: line {number}: '(claimed: ...)' "
+                            "must follow '(from: <run-ref>)'")
+            continue
         problems.extend(
             f"backlog: line {number}: invalid run-ref {ref!r}"
             for _, ref in _backlog_refs(match)
