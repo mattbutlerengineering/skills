@@ -1859,7 +1859,11 @@ function factory(THREE, model) {
   function nameTex(text) {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
-    canvas.width = 288; canvas.height = 64;
+    // Drawn at 2× (layout stays in 288×64 units): zoomed to 14× on a
+    // retina screen a plate spans ~78 device px, which a 64 px texture
+    // only reaches by magnifying — soft text, the one thing to read.
+    canvas.width = 576; canvas.height = 128;
+    ctx.scale(2, 2);
     ctx.fillStyle = "#ffffff"; ctx.strokeStyle = "#2f3238"; ctx.lineWidth = 4;
     ctx.beginPath(); ctx.roundRect(2, 2, 284, 60, 10); ctx.fill(); ctx.stroke();
     ctx.fillStyle = "#2f3238"; ctx.textBaseline = "middle";
