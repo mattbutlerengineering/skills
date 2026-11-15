@@ -34,6 +34,12 @@ merges onto PR branches, merges into `main`, and the journal comment.
 
 ## 1 Preconditions and degrade ladder
 
+Before any other step, record this run's start time once with
+`date -u +%Y-%m-%dT%H:%M:%SZ` and keep that output as the run's start.
+It is the only source of the journal's `last-run=` value (§6); never
+re-derive it later from the posting time, the date, the schedule slot or
+a previous entry.
+
 Check in order; the first hit sets the run mode.
 
 1. GitHub is unreachable — `gh auth status` fails and no GitHub MCP
@@ -166,6 +172,13 @@ Exactly one journal comment per run:
 - Proposals: <amendments to this file or the profile, as diffs>
 - Spend: <estimate for this run>
 ```
+
+The `last-run=` value is the start time recorded in §1, verbatim, to
+the second. A date-only value, a midnight placeholder (`T00:00:00Z`)
+that is not the recorded start, a rounded or copied time, or a time
+earlier than the previous entry's is not a valid marker: if the start
+was not recorded, run `date -u +%Y-%m-%dT%H:%M:%SZ` before posting, use
+that, and say so under Health.
 
 Spend is reported here and never appended to `docs/factory/costs.jsonl`,
 exactly as ADR-0044 decided for the daily routine.
