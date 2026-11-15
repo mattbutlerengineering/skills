@@ -127,5 +127,48 @@ class WorkOrderBriefListIsNumberedInOrder(unittest.TestCase):
                 self.assertIn(needle, brief)
 
 
+class WorkOrderReconcileAndOwnershipRules(unittest.TestCase):
+    """#1831: the work-orders Reconcile section and the which-PRs rule."""
+
+    def _section(self, heading):
+        text = (ROOT / "skills/implement-queue/references/work-orders.md"
+                ).read_text(encoding="utf-8")
+        return " ".join(text.split(heading, 1)[1]
+                        .split("\n## ", 1)[0].split("\n### ", 1)[0]
+                        .split())
+
+    def test_reconcile_states_outcomes_leave_breaker_count_unchanged(self):
+        section = self._section("## Reconcile in this mode")
+        self.assertIn("leaves the three-failure circuit-breaker count "
+                      "unchanged", section)
+
+    def test_reconcile_says_skill_outcomes_apply_in_this_mode(self):
+        section = self._section("## Reconcile in this mode")
+        self.assertIn("SKILL.md's evidence and already-resolved outcomes "
+                      "apply in this mode", section)
+
+    def test_reconcile_drift_case_names_the_dispatch_shim(self):
+        section = self._section("## Reconcile in this mode")
+        self.assertIn("gh workflow run validator.yml -f pr=N", section)
+
+    def test_reconcile_points_to_the_phase_0_rule(self):
+        section = self._section("## Reconcile in this mode")
+        self.assertIn("(#which-open-prs-are-this-queues)", section)
+
+    def test_ownership_rule_points_to_reconcile(self):
+        section = self._section("### Which open PRs are this queue's")
+        self.assertIn("(#reconcile-in-this-mode)", section)
+
+    def test_ownership_rule_reads_carries_not_ends_with(self):
+        section = self._section("### Which open PRs are this queue's")
+        self.assertIn("carries the line `Driver: implement-queue`", section)
+        self.assertNotIn("ends with the line", section)
+
+    def test_ownership_rule_says_a_red_pr_is_released_not_fixed(self):
+        section = self._section("### Which open PRs are this queue's")
+        self.assertIn("is not fixed by a new worker", section)
+        self.assertIn("reviewer gate's one same-branch fix", section)
+
+
 if __name__ == "__main__":
     unittest.main()
