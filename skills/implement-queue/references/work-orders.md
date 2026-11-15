@@ -20,6 +20,12 @@ factory has. The same rule covers approving the PR, applying `wo:merged`
 by hand, and re-running a failed check until it passes. Phase 3 still
 updates branches that fell behind or conflict. It never merges one.
 
+Phase 0's single re-run of a red check, once per head SHA and only when
+the log shows an infrastructure cause ([preflight.md](preflight.md) steps
+2 and 3), still applies in this mode. It is not re-running until it
+passes: a second red on the same head stands as a failure, and nothing
+re-runs it again.
+
 ## Pre-flight
 
 SKILL.md's Phase 0 applies. In addition, `git status` must be clean on an
@@ -146,6 +152,12 @@ a human's call, because the first failure is evidence about the order (an
 under-specified row, a stale blocker, a missing `Accept:`) at least as
 often as it is evidence about the agent. SKILL.md's three-failure circuit
 breaker still ends the round; release each claimed order first.
+
+The reviewer gate's one same-branch fix after a first flag
+([reviewer-contract.md](reviewer-contract.md), Retry policy) still
+applies, because it finishes the same attempt on the same PR rather than
+starting a second one. A second flag ends that attempt: the order is not
+retried, and its PR is reported with the reviewer's output.
 
 Never create a `WO-####` issue, and never write a breakdown row, to make
 something eligible. The mirror is one-way (ADR-0032). An empty queue is an
