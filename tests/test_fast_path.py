@@ -154,10 +154,46 @@ class TestProfilePin(unittest.TestCase):
             for token in ("pulls/<N>/files --paginate", "`filename`",
                           "`previous_filename`", "changed_files"):
                 self.assertIn(token, text)
-        self.assertIn("\n## changed-files\n\n"
-                      "    python3 fast_path.py gate origin/main HEAD\n",
+        self.assertIn("\n## changed-files\n\n", profile)
+        self.assertIn("    python3 fast_path.py gate origin/main <sha>\n",
                       profile)
         self.assertIn("the profile's `changed-files`", routine)
+
+
+class TestHooksClassifyTheRecordedHead(unittest.TestCase):
+    """#1804: gate step 1 says the fast-path classification and the
+    `changed-files` list use the recorded head, so both hooks classify
+    `<sha>`, fetched by PR ref and confirmed equal, never the checkout's
+    `HEAD`, which can lag the pushed head."""
+
+    @staticmethod
+    def hook(name):
+        root = Path(__file__).resolve().parent.parent
+        profile = (root / ".claude" / "implement-queue.md"
+                   ).read_text(encoding="utf-8")
+        body = profile.split(f"\n## {name}\n", 1)[1]
+        return body.split("\n## ", 1)[0]
+
+    def test_each_hook_runs_the_classifier_on_the_recorded_head(self):
+        for name, argv in (("fast-path", "origin/main <sha>"),
+                           ("changed-files", "gate origin/main <sha>")):
+            with self.subTest(hook=name):
+                text = self.hook(name)
+                commands = [line.strip() for line in text.splitlines()
+                            if line.startswith("    python3 fast_path.py")]
+                self.assertEqual(commands, [f"python3 fast_path.py {argv}"])
+                self.assertNotIn("HEAD\n", text)
+                self.assertNotIn("...HEAD", text)
+
+    def test_each_hook_fetches_the_head_and_fails_closed_on_a_mismatch(self):
+        for name in ("fast-path", "changed-files"):
+            with self.subTest(hook=name):
+                text = " ".join(self.hook(name).split())  # prose wraps
+                for token in ("git fetch origin pull/<N>/head",
+                              "git rev-parse FETCH_HEAD",
+                              "the recorded head", "mismatch",
+                              "fail closed"):
+                    self.assertIn(token, text)
 
 
 class TestFailClosed(unittest.TestCase):
