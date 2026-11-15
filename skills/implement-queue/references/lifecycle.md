@@ -44,13 +44,34 @@ the issue, so every reading below errs toward leaving the label alone:
 - No open PR, and at least one merged: report it as stale with the
   merged PR. The merged work may be partial or may have meant to close
   it; that is the Owner's call, so change nothing.
-- Every PR closed unmerged: run the `transition` hook from `has-pr` to
-  `ready`, and report it as returned.
+- Every PR closed unmerged: apply
+  [the closed-unmerged rule](#a-pr-closed-unmerged) below, from
+  `has-pr`.
 - No PR at all, or a timeline that cannot be read: report it, change
   nothing.
 
 Never remove a `hold_labels` label or `stealable` here; a returned
 issue that carries one is still dropped by Phase 1.
+
+### A PR closed unmerged
+
+One rule decides an issue whose referring PRs all closed unmerged,
+wherever the queue meets it: step 5 here, and the
+[reconcile before Phase 4](worker-finish.md#reconcile-before-phase-4),
+which defers to it. Count the PRs the timeline read above lists as
+closed with no merge time (`-`), every session's, not only this one's:
+
+- Exactly one: run the `transition` hook to `ready`, and report it as
+  returned. One closed attempt earns one more.
+- Two or more: run the `transition` hook to `needs-review`, and report
+  it with its closed PRs. A second closed PR reads as the Owner's
+  decision, not a failure: returning it to `ready` would spend a worker
+  and a CI run on every pass, and the Owner would close each PR again
+  (#1801).
+- A timeline that cannot be read: the count is unknown. Step 5 changes
+  nothing and reports it; the reconcile, which must not leave
+  `in-progress` behind, runs the `transition` hook to `needs-review`
+  and reports it.
 
 **No state label.** Count the open issues that carry none of the
 Labels table's labels, no `hold_labels` label and no `wo:*` label:
@@ -61,8 +82,8 @@ the one way one of them becomes `ready` here.
 
 Phase 4's report carries both counts, as
 "N open issues with no state label, M stale `has-pr` (K returned to
-`ready`)", even when the batch is empty: "nothing to claim" is never
-to be read as "backlog empty".
+`ready`, J held at `needs-review`)", even when the batch is empty:
+"nothing to claim" is never to be read as "backlog empty".
 
 ## The `promote` hook
 

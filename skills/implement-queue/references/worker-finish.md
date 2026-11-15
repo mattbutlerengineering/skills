@@ -34,11 +34,14 @@ session that still carries `in-progress` or no state label, read the
 PRs that close it (`Closes #<N>` on the PR list) and run the
 `transition` hook where the label disagrees with the table: an open PR
 with green or pending gates → `has-pr` (the gate still runs); a draft
-PR → `needs-review`; an open PR with red gates, a PR closed unmerged,
-or no PR at all (unless the evidence outcome below applies) →
-`agent-failed`. A worker that reported the evidence outcome and posted
-its comment on the issue has no PR by design: its issue is
-`needs-review`. One that reported the already-resolved outcome and
+PR → `needs-review`; an open PR with red gates, or no PR at all
+(unless the evidence outcome below applies) → `agent-failed`; no open
+or merged PR and at least one closed unmerged →
+[the closed-unmerged rule](lifecycle.md#a-pr-closed-unmerged), which
+counts every closed PR on the issue's timeline: `ready` after the
+first, `needs-review` from the second. A worker that reported the
+evidence outcome and posted its comment on the issue has no PR by
+design: its issue is `needs-review`. One that reported the already-resolved outcome and
 posted its evidence has none either: close its issue as
 [lifecycle.md](lifecycle.md#already-resolved) says. An issue whose PR merged is
 delivered: leave it to GitHub's close. Never remove a `hold_labels`
