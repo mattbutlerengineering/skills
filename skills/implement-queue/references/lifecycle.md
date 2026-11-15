@@ -71,9 +71,10 @@ so the error falls on the cheap side:
   returned. One closed attempt earns one more.
 - Two or more: run the `transition` hook to `needs-review`, and report
   it with its closed PRs. A second closed PR reads as the Owner's
-  decision, not a failure: returning it to `ready` would spend a worker
-  and a CI run on every pass, and the Owner would close each PR again
-  (#1801).
+  decision, not a failure to retry, though it still counts toward
+  Phase 4's three-consecutive-failures stop: returning it to `ready`
+  would spend a worker and a CI run on every pass, and the Owner would
+  close each PR again (#1801).
 - A timeline that cannot be read: the count is unknown. Step 5 changes
   nothing and reports it; the reconcile, which must not leave
   `in-progress` behind, runs the `transition` hook to `agent-failed`
