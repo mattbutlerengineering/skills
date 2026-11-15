@@ -204,7 +204,10 @@ Under `source: work-orders`, use the work-order brief in
 
 Every worker prompt carries the items in [worker-brief.md](references/worker-brief.md).
 
-When a worker finishes, label its issue with the `transition` hook:
+When a worker finishes, or the
+[reconcile](references/worker-finish.md#reconcile-before-phase-4)
+finds its PR closed unmerged, label its issue with the `transition`
+hook:
 
 | Outcome | State |
 | --- | --- |
