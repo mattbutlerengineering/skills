@@ -185,15 +185,52 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
                 self.assertNotIn("HEAD\n", text)
                 self.assertNotIn("...HEAD", text)
 
-    def test_each_hook_fetches_the_head_and_fails_closed_on_a_mismatch(self):
+    def test_each_hook_fetches_the_head_and_fails_closed_on_a_failed_fetch(self):
         for name in ("fast-path", "changed-files"):
             with self.subTest(hook=name):
                 text = " ".join(self.hook(name).split())  # prose wraps
                 for token in ("git fetch origin pull/<N>/head",
                               "git rev-parse FETCH_HEAD",
-                              "the recorded head", "mismatch",
+                              "git cat-file -e <sha>^{commit}",
+                              "the recorded head",
+                              "A fetch that fails, or a recorded head"
+                              " that does not resolve",
                               "fail closed"):
                     self.assertIn(token, text)
+
+    def test_a_moved_head_restarts_the_gate_as_gate_step_1_says(self):
+        """#1819: a FETCH_HEAD that differs from the recorded head means
+        the PR head moved, and gate step 1 restarts the whole gate on the
+        new head; the hooks give that one action, not a fail-closed human
+        merge, and gate step 3 does not read a moved head as an unproven
+        input."""
+        root = Path(__file__).resolve().parent.parent
+        clause = ("the head moved: return to gate step 1 on the new head,"
+                  " and nothing recorded for the old one counts")
+        for name in ("fast-path", "changed-files"):
+            with self.subTest(hook=name):
+                text = " ".join(self.hook(name).split())
+                self.assertIn(clause, text)
+                self.assertNotIn("A mismatch, or a fetch", text)
+        gate = " ".join((root / "skills" / "implement-queue" / "references"
+                         / "gate.md").read_text(encoding="utf-8").split())
+        self.assertIn("the gate restarts from step 1 on the new head and"
+                      " nothing recorded for the old one counts", gate)
+        self.assertIn("A head that moved since step 1 is not an unproven"
+                      " input: the gate restarts from step 1", gate)
+
+    def test_the_hourly_routine_classifies_the_recorded_head(self):
+        """#1819: the routine's gate step 3 defers to the profile's hook on
+        the recorded head, not the checkout after a bare fetch."""
+        root = Path(__file__).resolve().parent.parent
+        routine = " ".join((root / "docs" / "factory"
+                            / "hourly-improvement-routine.md"
+                            ).read_text(encoding="utf-8").split())
+        step = routine.split("3. **Fast path.**", 1)[1].split("4. **", 1)[0]
+        self.assertIn("Run the profile's `fast-path` hook on the recorded"
+                      " head", step)
+        self.assertNotIn("branch checkout", step)
+        self.assertNotIn("after `git fetch origin`", step)
 
 
 class TestFailClosed(unittest.TestCase):

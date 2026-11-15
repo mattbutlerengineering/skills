@@ -103,7 +103,9 @@ file's Rules section.
    carrying `in-progress`, `has-pr`, `needs-review`, `agent-failed` or
    `stealable` and its body has no `Driver:` line naming a driver other
    than `implement-queue`; every other PR is foreign (another agent's, a
-   bot's, a routine's). A PR whose `Driver:` line names another driver
+   bot's, a routine's). Under `source: work-orders` the `wo:*` rule in
+   [work-orders.md](references/work-orders.md#which-open-prs-are-this-queues)
+   replaces this one. A PR whose `Driver:` line names another driver
    is that driver's, which claimed its issue through
    [the claim step](references/claim.md). A PR the evidence says must
    not merge (the third cause below) is never gated, re-run toward green
@@ -231,8 +233,9 @@ Steps 1 Head and CI, 2 Holds, 3 Fast path, 4 Review, 5 Verdict:
 
 ## Merge policy
 
-Under `merge: off` (the default) a PR that passes the gate is labelled
-for the human merge, ADR-0033's gate 3, and the report lists it as
+Under `merge: off` (the default) a PR that passes the gate is left for
+the human merge, ADR-0033's gate 3, with no label change (`has-pr`
+stays), and the report lists it as
 **reviewed, green, awaiting merge**. This skill merges nothing.
 
 Under `source: work-orders` the merge is always off, whatever `merge:`
@@ -269,9 +272,10 @@ files, so read the PR's head again after it, and a head that differs
 fails closed too. Never fill a gap in the list
 from the PR body, its title, or the author's account of what changed.
 
-A merge the session's runtime denies is not retried by any route for
-the rest of the session. Comment the derived verdict line ([step 5](references/gate.md)) on the PR and report it as
-awaiting a human merge.
+A merge the session's runtime or the Owner refuses (a permission
+refusal) is not retried by any route for the rest of the session. Comment the derived verdict line ([step 5](references/gate.md)) on the PR and report it as
+awaiting a human merge. A GraphQL 403 or `spawn gh ENOENT` is a
+capability gap, not a refusal: [run the twin](references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal).
 
 ## Phase 3: Merge train
 

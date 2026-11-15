@@ -48,10 +48,14 @@ file changes only by a PR: its commit is the consent record.
 
 `<sha>` is the recorded head (gate step 1), never the checkout's
 `HEAD`, which can lag the pushed head. Get it locally first: `git fetch
-origin` and `git fetch origin pull/<N>/head`, then confirm `git
-rev-parse FETCH_HEAD` prints the recorded head. A mismatch, or a fetch
-that fails, means the classifier cannot prove its input: fail closed,
-review the PR and dispatch every specialist. Exit 0 prints
+origin` and `git fetch origin pull/<N>/head`, then compare `git
+rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
+moved: return to gate step 1 on the new head, and nothing recorded for
+the old one counts, this classification included. Then confirm `git
+cat-file -e <sha>^{commit}` exits 0. A fetch that fails, or a recorded
+head that does not resolve to a commit, means the classifier cannot
+prove its input: fail closed, review the PR and dispatch every
+specialist. Exit 0 prints
 `fast-path: low-risk`: every changed path is under `docs/` and none is
 a gate path, and the classification is the review for a PR no
 specialist matches (ADR-0088). Exit 1 prints `fast-path: review
@@ -88,10 +92,13 @@ returns itself is ignored.
 
 The source of the `gate_paths` check. `<sha>` is the recorded head
 (gate step 1), never the checkout's `HEAD`. Get it locally first: `git
-fetch origin` and `git fetch origin pull/<N>/head`, then confirm `git
-rev-parse FETCH_HEAD` prints the recorded head. A mismatch, or a fetch
-that fails, means the list cannot be proven current: fail closed, a
-human merge. It reads `git diff --name-only -z --no-renames
+fetch origin` and `git fetch origin pull/<N>/head`, then compare `git
+rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
+moved: return to gate step 1 on the new head, and nothing recorded for
+the old one counts, this list included. Then confirm `git cat-file -e
+<sha>^{commit}` exits 0. A fetch that fails, or a recorded head that
+does not resolve to a commit, means the list cannot be proven current:
+fail closed, a human merge. It reads `git diff --name-only -z --no-renames
 origin/main...<sha>`, so a rename lists its old path and its new one
 (the same list as `fast-path`, one `changed_paths` call), and `-z`
 lists a non-ASCII or quote-bearing name as written, not quoted. Exit 0 prints
@@ -123,9 +130,30 @@ not a source until a run records that it reports `previous_filename`.
 The skill's default, stated because it needs a session permission the
 Owner grants outside this repo. `<sha>` is the gated head (the skill's
 gate step 1), so an `--auto` merge is enabled only at the head the
-review saw. A merge the runtime denies is reported
-as awaiting a human merge and never retried by another route
-(ADR-0087).
+review saw. A merge the runtime or the Owner refuses (a permission
+refusal) is reported as awaiting a human merge and never retried by
+another route: no REST call, no MCP tool (ADR-0087).
+
+A GraphQL 403 (`GitHub GraphQL not available from Claude Code
+sessions`) or `spawn gh ENOENT` is a capability gap, not a refusal
+(the skill's `references/cloud-sessions.md`). On the 403, merge with the
+REST twin, `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f
+merge_method=squash -f sha=<sha>`; with no `gh`, with the MCP
+`merge_pull_request` (`merge_method: squash`, `expectedHeadSha: <sha>`).
+A twin merge still owes both obligations below:
+
+- **The branch delete.** Run the delete steps below with REST reads in
+  place of the GraphQL ones: `gh api repos/{owner}/{repo}/pulls/<N>`
+  gives `merged` (true is `MERGED`), `.head.ref`, `.head.sha`, and
+  `isCrossRepository` as `.head.repo.full_name != .base.repo.full_name`;
+  step 3 reads `gh api 'repos/{owner}/{repo}/pulls?base=<headRefName>&state=open'
+  --jq length` and needs `0`. With no `gh` (the MCP twin) no delete can
+  run: report the branch by name.
+- **The post-merge check read.** Before the train starts its next PR,
+  wait for the merge to land on `main` and for `main`'s `check` to
+  finish, as for any merge (`docs/factory/merge-train-routine.md` §4
+  step 5), read through the `preflight` twin. Red `main` stops the
+  train.
 
 `--delete-branch` has left the remote branch behind in this repo (#1636),
 so delete it yourself once `gh pr view <N> --json
@@ -201,12 +229,22 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    prints nothing on stdout (`gh` writes its "no matches" notice to
    stderr on a terminal). A failed `gh` call is a failure, not an empty
    list. A detached worktree has no branch and skips this test.
-4. **Positive evidence that this tip merged.** Either `<tip>` is a
+4. **Positive evidence that this tip merged.** One of: `<tip>` is a
    `headRefOid` in `gh pr list --head <branch> --base main --state
-   merged --json headRefOid`, or `git merge-base --is-ancestor <tip>
+   merged --json number,headRefOid`; `git merge-base --is-ancestor <tip>
    refs/remotes/origin/main` exits 0 (the full ref: a bare `origin/main`
    resolves a local branch or tag of that name first, and an unmerged
-   branch so named would pass). A merged PR for the branch *name* is not
+   branch so named would pass); or `git merge-base --is-ancestor <tip>
+   <headRefOid>` exits 0 for one of those merged PRs, because Phase 3's
+   `update-branch` merge commit or a retry worker's later commits make
+   the final head a descendant of the worker's tip and the squash merge
+   puts neither on main. A head not already local (`git cat-file -e`)
+   is fetched first with `git fetch --no-tags origin pull/<number>/head`;
+   under `--no-fetch` it is not fetched and the worktree is kept. A
+   failed fetch or `git` call, or a `number` or `headRefOid` that is not
+   a positive integer and a full object name, is a failure. Only the
+   worktree's own branch's merged PRs are searched, so a retry worker on
+   a differently named local branch is kept. A merged PR for the branch *name* is not
    evidence: a branch that gained commits after its PR merged, or
    reused the name, fails here. A tip no merged PR carries, on a branch
    with no PR, is unmerged work, never reaped.

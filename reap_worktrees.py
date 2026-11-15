@@ -9,6 +9,7 @@ a failure, never a pass. Root-only: no payload tool imports it.
 """
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -23,6 +24,8 @@ USAGE = "usage: python3 reap_worktrees.py [--apply | --no-fetch]"
 # branch or tag of that name would stand in for the remote.
 REMOTE_MAIN = "refs/remotes/origin/main"
 TIMEOUT = 120
+# A full SHA-1 or SHA-256 object name, checked before it reaches a git argv.
+OID = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?")
 
 
 def run(args, cwd=None):
@@ -161,42 +164,93 @@ def test_no_open_pr(runner, repo, branch):
     return True, "", False
 
 
-def test_tip_merged(runner, repo, branch, tip):
-    if not tip:
-        return False, "no HEAD commit", True
-    if branch is not None:
-        args = ["gh", "pr", "list", "--head", branch, "--base", "main",
-                "--state", "merged", "--json", "headRefOid"]
+def _merged_prs(runner, repo, branch):
+    """([(number, headRefOid)], None) for the branch's merged PRs into
+    main, or (None, (reason, is_problem)) on a failure."""
+    args = ["gh", "pr", "list", "--head", branch, "--base", "main",
+            "--state", "merged", "--json", "number,headRefOid"]
+    proc, why = _try(runner, args, cwd=repo)
+    if why:
+        return None, (why, True)
+    if proc.returncode != 0:
+        return None, (_failed(args, proc), True)
+    try:
+        prs = [(p["number"], p["headRefOid"]) for p in json.loads(proc.stdout)]
+    except (ValueError, TypeError, KeyError):
+        prs = None
+    # Both fields reach a git argv, so validate them at the boundary.
+    if prs is None or not all(
+            type(n) is int and n > 0 and isinstance(o, str)
+            and OID.fullmatch(o) for n, o in prs):
+        return None, ("gh merged-PR list was not the expected JSON", True)
+    return prs, None
+
+
+def _in_merged_head(runner, repo, tip, number, oid, fetch):
+    """(True|False, None) for whether `tip` is an ancestor of merged PR
+    `number`'s final head `oid`, or (None, (reason, is_problem)). The head
+    is fetched by its pull ref only when it is not already local."""
+    proc, why = _try(runner, ["git", "cat-file", "-e", oid + "^{commit}"],
+                     cwd=repo)
+    if why:
+        return None, (why, True)
+    if proc.returncode != 0:
+        if not fetch:
+            return None, (f"merged head of PR #{number} is not local and "
+                          "--no-fetch forbids fetching it", False)
+        args = ["git", "fetch", "--no-tags", "origin", f"pull/{number}/head"]
         proc, why = _try(runner, args, cwd=repo)
         if why:
-            return False, why, True
+            return None, (why, True)
         if proc.returncode != 0:
-            return False, _failed(args, proc), True
-        try:
-            oids = {p["headRefOid"] for p in json.loads(proc.stdout)}
-        except (ValueError, TypeError, KeyError):
-            return False, "gh merged-PR list was not the expected JSON", True
-        if tip in oids:
+            return None, (_failed(args, proc), True)
+    args = ["git", "merge-base", "--is-ancestor", tip, oid]
+    proc, why = _try(runner, args, cwd=repo)
+    if why:
+        return None, (why, True)
+    if proc.returncode in (0, 1):
+        return proc.returncode == 0, None
+    return None, (_failed(args, proc), True)
+
+
+def test_tip_merged(runner, repo, branch, tip, fetch=True):
+    if not tip:
+        return False, "no HEAD commit", True
+    prs = []
+    if branch is not None:
+        prs, err = _merged_prs(runner, repo, branch)
+        if err:
+            return (False,) + err
+        if tip in {oid for _, oid in prs}:
             return True, "", False
     args = ["git", "merge-base", "--is-ancestor", tip, REMOTE_MAIN]
     proc, why = _try(runner, args, cwd=repo)
     if why:
         return False, why, True
+    if proc.returncode not in (0, 1):
+        return False, _failed(args, proc), True
     if proc.returncode == 0:
         return True, "", False
-    if proc.returncode == 1:
-        return False, f"tip not merged: no merged PR carries it and it is not on {REMOTE_MAIN}", False
-    return False, _failed(args, proc), True
+    # The merge train's update-branch merge commit, or a retry worker's
+    # later commits, make the merged head a descendant of this tip, and
+    # the squash merge puts neither on main (#1818).
+    for number, oid in prs:
+        contained, err = _in_merged_head(runner, repo, tip, number, oid, fetch)
+        if err:
+            return (False,) + err
+        if contained:
+            return True, "", False
+    return False, f"tip not merged: no merged PR carries it and it is not on {REMOTE_MAIN}", False
 
 
-def judge(runner, repo, wt, which=shutil.which):
+def judge(runner, repo, wt, which=shutil.which, fetch=True):
     """Apply the four tests in order; (passed, reason, is_problem) of
     the first failure."""
     for result in (
         test_clean(runner, wt["path"]),
         test_idle(runner, wt["path"], which),
         test_no_open_pr(runner, repo, wt["branch"]),
-        test_tip_merged(runner, repo, wt["branch"], wt["head"]),
+        test_tip_merged(runner, repo, wt["branch"], wt["head"], fetch),
     ):
         if not result[0]:
             return result
@@ -280,7 +334,7 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
             kept += 1
             out(f"{LABEL}: keep {shown(path)} (locked)")
             continue
-        ok, reason, is_problem = judge(runner, repo, wt, which)
+        ok, reason, is_problem = judge(runner, repo, wt, which, fetch)
         if not ok:
             kept += 1
             out(f"{LABEL}: keep {shown(path)} ({reason})")

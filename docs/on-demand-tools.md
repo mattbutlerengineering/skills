@@ -102,7 +102,9 @@ pre-pass, deliberately **not** a gate:
   worktrees under `.claude/worktrees/` by the four tests in
   `.claude/implement-queue.md` `## reap`. A dry run unless `--apply`: it
   removes no worktree or branch, but it fetches and prunes remote-tracking
-  refs unless `--no-fetch` (refused with `--apply`). Never `--force`, never
+  refs unless `--no-fetch` (refused with `--apply`), and fetches a merged
+  PR's head by its pull ref when test 4 needs it and it is not local
+  (never under `--no-fetch`). Never `--force`, never
   the main checkout or a worktree elsewhere (listed with its size), and a
   failed command or fetch is a failure, never a pass. Root-only and outside
   every gate (ADR-0128); it needs `git`, `gh` and `lsof`.
