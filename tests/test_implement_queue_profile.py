@@ -109,5 +109,39 @@ class TestSkillAnchorsResolve(unittest.TestCase):
         self.assertGreater(checked, 10)
 
 
+class TestPhase4SectionsAreLinked(unittest.TestCase):
+    """#1833: references/loop-and-cleanup.md is Phase 4's overflow, and
+    a section SKILL.md never links is one no session reads. Every `##`
+    section in it has a `loop-and-cleanup.md#anchor` link in SKILL.md."""
+
+    def test_every_section_is_linked_from_the_skill(self):
+        cleanup = SKILL_DIR / "references" / "loop-and-cleanup.md"
+        sections = {slug(h) for h in re.findall(
+            r"^## (.+)$", cleanup.read_text(encoding="utf-8"), re.M)}
+        self.assertGreater(len(sections), 3)
+        linked = {anchor for target, anchor in LINK.findall(
+            SKILL.read_text(encoding="utf-8"))
+            if target == "references/loop-and-cleanup.md"}
+        self.assertEqual(sections - linked, set())
+
+
+class TestBlockMarkerAgrees(unittest.TestCase):
+    """#1833: the reviewer contract's Retry policy counts a specialist
+    block by a marker line that gate step 5 writes. A marker the gate
+    never names is one no session writes, so the count misses every
+    block. The two files name the same `specialist-verdict:` markers."""
+
+    MARKER = re.compile(r"`(specialist-verdict: [^`]+)`")
+
+    def markers(self, name):
+        text = (SKILL_DIR / "references" / name).read_text(encoding="utf-8")
+        return set(self.MARKER.findall(" ".join(text.split())))
+
+    def test_gate_writes_every_marker_the_contract_counts(self):
+        counted = self.markers("reviewer-contract.md")
+        self.assertTrue(counted)
+        self.assertEqual(self.markers("gate.md"), counted)
+
+
 if __name__ == "__main__":
     unittest.main()

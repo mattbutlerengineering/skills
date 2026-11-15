@@ -71,9 +71,10 @@ so the error falls on the cheap side:
   returned. One closed attempt earns one more.
 - Two or more: run the `transition` hook to `needs-review`, and report
   it with its closed PRs. A second closed PR reads as the Owner's
-  decision, not a failure: returning it to `ready` would spend a worker
-  and a CI run on every pass, and the Owner would close each PR again
-  (#1801).
+  decision, not a failure to retry: returning it to `ready` would
+  spend a worker and a CI run on every pass, and the Owner would close
+  each PR again (#1801). It still counts toward Phase 4's
+  three-consecutive-failures stop.
 - A timeline that cannot be read: the count is unknown. Step 5 changes
   nothing and reports it; the reconcile, which must not leave
   `in-progress` behind, runs the `transition` hook to `agent-failed`
@@ -131,9 +132,8 @@ Every other setter of `agent-failed` always sets it, earlier event or
 not: [the reconcile](worker-finish.md#reconcile-before-phase-4), the
 closed-unmerged rule's unreadable-timeline case above,
 [Phase 0 step 3's `agent-failed` cause](preflight.md#step-3-failed-pr-causes-and-settled-green-prs)
-and [the merge train's CI-fix issue](merge-train.md).
-A second closed PR is not this row: it follows
-[the closed-unmerged rule](#a-pr-closed-unmerged).
+and the merge train, on the original issue when it files a CI-fix
+issue ([step 4](merge-train.md)).
 
 ## The `promote` hook
 

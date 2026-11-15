@@ -38,13 +38,24 @@ Phase 0 step 3 reads SKILL.md's issue labels to decide which open PRs
 belong to this queue. A work order's issue never carries them, so in
 this mode the rule reads the `wo:*` labels instead: a PR belongs to this
 queue when it closes an issue carrying `wo:in-progress`,
-`wo:needs-review` or `wo:failed` *and* its body ends with the line
-`Driver: implement-queue` (Worker brief item 5 below). The `Driver:`
-line is required here, not merely uncontradicted, because the cloud
-fallback's assembler claims through the same labels and its PRs are not
-this queue's. Every other PR is foreign, and step 3 treats it as
+`wo:needs-review` or `wo:failed` *and* its body carries the line
+`Driver: implement-queue` (Worker brief item 5 below), wherever it
+sits, so a `## Concerns` section after it does not make the PR foreign.
+The `Driver:` line is required here, not merely uncontradicted, because
+the cloud fallback's assembler claims through the same labels and its
+PRs are not this queue's. Every other PR is foreign, and step 3 treats it as
 foreign. Everything else step 3 does with a PR of this queue still
-applies: green ones go to the gate, failed ones block claiming.
+applies: green ones go to the gate, failed ones block claiming until
+released.
+
+A failed PR of this queue, from this round or an earlier one, is not
+given a second worker to make it green. After Phase 0's single
+infrastructure re-run, a PR still red goes straight to `make wo-failed`.
+This mode sets that rule because a second attempt at a work order is a
+human's call. The only worker a PR of this queue gets after its first
+is the reviewer gate's one same-branch fix after a first flag (Report
+and release), which finishes the same attempt. Phase 3's branch updates
+are not a worker and still apply.
 
 Where step 3 would label a failed PR's issue `agent-failed`, this mode
 runs `make wo-failed ISSUE=<n>` instead and never applies
@@ -54,6 +65,13 @@ reads `wo:failed` in its place. A failed PR of this queue whose issue
 carries `wo:failed` is not fixed or re-run again. It is reported, with
 its failing job linked, for a human to close or take over, and it does
 not block claiming.
+
+So Phase 0 can put `wo:failed` on an order whose PR is still open,
+while [Reconcile in this mode](#reconcile-in-this-mode) treats an open
+PR as the terminal state. The two do not conflict: Reconcile runs at a
+round's end on orders still on `wo:in-progress` or with no `wo:*`
+label, and `make wo-failed` goes through the lifecycle machine either
+way.
 
 ## Plan the batch, never by hand
 
@@ -227,7 +245,13 @@ read the PRs that close its mirrored issue and give it the terminal state
   single infrastructure re-run is the only re-run it gets. The PR-open
   leg (`make wo-needs-review`, from the PR event) writes
   `wo:needs-review`. An order still on `wo:in-progress` beside an open PR
-  is drift to report, never a label to apply by hand.
+  is drift to report, never a label to apply by hand. Report it with
+  its repair route for a human to run, the dispatch shim
+  `gh workflow run validator.yml -f pr=N`. The shim re-runs the whole
+  validator for that PR (its check, review and label legs), not just
+  the label flip. A red PR of this queue is
+  still released in Phase 0 by
+  [its own rule](#which-open-prs-are-this-queues).
 - **A merged PR** → leave it. The PR-merge leg writes `wo:merged`, and
   this mode never applies it.
 - **No PR at all**, including a worker that reported the evidence or
@@ -235,7 +259,11 @@ read the PRs that close its mirrored issue and give it the terminal state
   ISSUE=<n>`. In this mode only a PR or `wo:failed` ends a claim, so the
   evidence comment is input to the human's retry decision, not a state.
   Never close the issue or check the breakdown row: both planes are a
-  human's to move.
+  human's to move. SKILL.md's evidence and already-resolved outcomes
+  apply in this mode as Worker brief item 13 defines them, and as in
+  SKILL.md Phase 4 neither is a failure: a `wo:failed` from either
+  leaves the three-failure circuit-breaker count unchanged. Only a
+  worker that produced nothing usable counts.
 - **No open or merged PR and at least one closed unmerged** →
   `make wo-failed ISSUE=<n>`. This replaces the
   [closed-unmerged rule](lifecycle.md#a-pr-closed-unmerged): under "Do
