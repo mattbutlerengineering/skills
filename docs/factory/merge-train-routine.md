@@ -135,7 +135,10 @@ first, one at a time:
    review can change while the train waits.
 4. Run the `merge-command` hook, where `<sha>` is the gated head. A merge the runtime denies is
    reported as **awaiting a human merge** with the denial, and is
-   never retried by any other route in this run (ADR-0087).
+   never retried by any other route in this run (ADR-0087). A
+   capability gap is not a denial: run its twin as the skill's
+   [capability-gap section](../../skills/implement-queue/references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal)
+   says.
 5. Wait for the merge to land on `main` and for `main`'s `check` to
    finish before the next PR starts. Red `main` → stop the train,
    report it as §1's mode 4 would, and leave the remaining PRs for the
@@ -197,7 +200,9 @@ Re-read before the first `update-branch` or merge.
 - Never claim, create, close, label or comment on an issue; never open
   a PR; never push to a PR branch except through the `update-branch`
   hook.
-- Never retry a denied merge, by any route (ADR-0087).
+- Never retry a denied merge, by any route (ADR-0087). A capability
+  gap is not a denial (the skill's
+  [capability-gap section](../../skills/implement-queue/references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal)).
 - Never merge two PRs at once, and never merge the next before
   `main`'s `check` has finished on the previous.
 - Never edit this file, `docs/factory/routine-markers.md`, the queue
