@@ -24,6 +24,19 @@ An issue the queue's Phase 1 drop list drops is not claimable by any
 driver. For a driver other than the queue, "an issue already taken in
 this batch" in that list reads as an issue this driver holds.
 
+## The pre-claim read
+
+Labels show only drivers that claimed. A driver that skipped this step
+still opens a PR, and its issue keeps `ready`. So, just before the
+claim transition, read the open PRs that close the issue:
+`gh pr list --state open --limit 1000 --json number,closingIssuesReferences --jq '{listed: length, closing: [.[] | select(any(.closingIssuesReferences[]; .number == <N>)) | .number]}'`.
+The queue's Phase 0 step 3 list cannot stand in for this read, because
+a PR opened after it is missed (#1795). If `closing` names a PR, another
+driver already has work on the issue: skip the issue, never touch its
+labels, and report it with the PR. If the read fails, or `listed`
+equals the limit (the list may be truncated), it fails closed: claim
+nothing for that issue and report it.
+
 ## The claim transition
 
 For the claim transition only, the removal of `ready` comes first and
