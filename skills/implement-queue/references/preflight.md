@@ -63,6 +63,11 @@ that needs it. A phrase such as "this file", "above", "below" or
    - A PR the evidence says must not merge (an automated revert whose
      red was infrastructure) is never fixed, re-run or updated toward
      green, is reported, and does not block claiming.
+   - A failed PR of this queue whose issue carries `agent-failed` was
+     given up on by the queue: it is not fixed or re-run again, is
+     reported (its failing job linked) for a human to close or take
+     over, and does not block claiming. This is what labelling the
+     issue `agent-failed` in Phase 0 step 3 releases.
    - A failed PR whose failing jobs show no repo cause (a runner or
      network failure, a cancelled or timed-out job) gets its failed jobs
      re-run once per head SHA by the re-run rule of step 2, and is
