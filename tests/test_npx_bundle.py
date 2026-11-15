@@ -96,7 +96,8 @@ class FixtureTest(unittest.TestCase):
         self.root = Path(temp.name) / "repo"
         self.out = Path(temp.name) / "out"
         write(self.root / ".claude-plugin" / "plugin.json",
-              json.dumps({"name": "idea-to-prod", "version": "9.9.9"}))
+              json.dumps({"name": "idea-to-prod", "version": "9.9.9",
+                          "author": {"name": "Ada Author"}}))
         write(self.root / "CONTEXT.md", "terms\n")
         write(self.root / "LICENSE", "license\n")
         write(self.root / "docs" / "pipeline-protocol.md", "spec\n")
@@ -151,6 +152,26 @@ class TestBuild(FixtureTest):
         self.build()
         self.assertEqual(
             protocol.skill_frontmatter_problems(self.out, RUNTIME), [])
+
+    def test_the_runtime_skill_carries_the_plugin_author(self):
+        self.build()
+        text = (self.out / "skills" / RUNTIME / "SKILL.md").read_text(
+            encoding="utf-8")
+        self.assertEqual(protocol.parse_frontmatter(text).get("metadata"),
+                         {"author": "Ada Author"})
+
+    def test_a_plugin_json_without_an_author_name_is_a_problem(self):
+        for data in ({"name": "idea-to-prod"},
+                     {"name": "idea-to-prod", "author": "Ada Author"},
+                     {"name": "idea-to-prod", "author": {"name": ""}},
+                     ["not", "an", "object"]):
+            with self.subTest(data=data):
+                write(self.root / ".claude-plugin" / "plugin.json",
+                      json.dumps(data))
+                self.assertEqual(self.build(), [
+                    "npx-bundle: .claude-plugin/plugin.json has no"
+                    " author.name for the runtime skill's metadata.author"])
+                self.assertFalse(self.out.exists())
 
     def test_the_runtime_names_the_plugin_version(self):
         self.build()
@@ -231,6 +252,14 @@ class TestRealRepo(unittest.TestCase):
             with self.subTest(slug=slug):
                 self.assertEqual(
                     protocol.skill_frontmatter_problems(self.out, slug), [])
+
+    def test_the_runtime_skill_author_matches_plugin_json(self):
+        plugin = json.loads((ROOT / ".claude-plugin" / "plugin.json")
+                            .read_text(encoding="utf-8"))
+        text = (self.out / "skills" / RUNTIME / "SKILL.md").read_text(
+            encoding="utf-8")
+        self.assertEqual(protocol.parse_frontmatter(text).get("metadata"),
+                         {"author": plugin["author"]["name"]})
 
     def test_the_bundled_factory_init_stamps_a_repo(self):
         runtime = self.out / "skills" / RUNTIME

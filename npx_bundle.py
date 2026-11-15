@@ -11,8 +11,9 @@ paths, and rewrites every skill's plugin-root path to name that sibling
 folder, which installs beside it. main never holds the copy; the
 npx-branch workflow builds and force-pushes it on each release.
 
-Build refuses a non-empty output directory, then checks its own
-output: every rewritten path must resolve inside the runtime, no path
+Build refuses a non-empty output directory or a plugin.json without
+an author.name (the runtime skill's metadata.author), then checks its
+own output: every rewritten path must resolve inside the runtime, no path
 may still climb past the installed skill folders, and no file may be
 one the CLI never copies. Problems are `npx-bundle:` strings; the exit
 code is 1 with any, 0 clean, 2 on bad usage. Stdlib only, root-only:
@@ -66,6 +67,8 @@ plugin features are absent: the `/idea-to-prod:<skill>` names (use
 RUNTIME_SKILL = """---
 name: {name}
 description: Support files for the idea-to-prod skills, holding the pipeline protocol, factory templates and root tools that the other skills read by path from this folder. Never invoke it, and never remove it while those skills are installed.
+metadata:
+  author: {author}
 ---
 
 # idea-to-prod runtime
@@ -124,15 +127,22 @@ def _copy(source, dest):
     shutil.copymode(source, dest)
 
 
-def _version(root):
+def _plugin(root):
+    """ROOT's plugin.json as a dict, or {} when absent or malformed."""
     try:
         data = json.loads((root / ".claude-plugin" / "plugin.json")
                           .read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return "unversioned"
-    if not isinstance(data, dict):
-        return "unversioned"
-    return data.get("version") or "unversioned"
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _author(plugin):
+    """plugin.json's author.name, the runtime skill's metadata.author
+    (#1785, matching lint's check_skill_authors), or None."""
+    author = plugin.get("author")
+    name = author.get("name") if isinstance(author, dict) else None
+    return name if isinstance(name, str) and name else None
 
 
 def _write_skills(root, out, tracked, slugs):
@@ -150,12 +160,12 @@ def _write_skills(root, out, tracked, slugs):
         dest.write_text(text, encoding="utf-8")
 
 
-def _write_runtime(root, out, tracked, version):
+def _write_runtime(root, out, tracked, version, author):
     runtime = out / "skills" / RUNTIME
     for rel in bundled(tracked):
         _copy(root / rel, runtime / rel)
     (runtime / "SKILL.md").write_text(
-        RUNTIME_SKILL.format(name=RUNTIME, version=version),
+        RUNTIME_SKILL.format(name=RUNTIME, version=version, author=author),
         encoding="utf-8")
     (out / "README.md").write_text(
         BRANCH_README.format(name=RUNTIME, version=version),
@@ -175,8 +185,14 @@ def build(root, out, tracked):
     if RUNTIME in slugs:
         return [f"{LABEL}: skills/{RUNTIME} already exists; the runtime"
                 " skill needs that name"]
+    plugin = _plugin(root)
+    author = _author(plugin)
+    if author is None:
+        return [f"{LABEL}: .claude-plugin/plugin.json has no author.name"
+                " for the runtime skill's metadata.author"]
     _write_skills(root, out, tracked, slugs)
-    _write_runtime(root, out, tracked, _version(root))
+    _write_runtime(root, out, tracked,
+                   plugin.get("version") or "unversioned", author)
     return check(out)
 
 
