@@ -42,12 +42,13 @@ counts every closed PR on the issue's timeline: `ready` after the
 first, `needs-review` from the second. A closed PR counts as a
 failure toward Phase 4's three-consecutive-failures stop; for the
 second one the rule's `needs-review` replaces the Outcome table's
-`stealable` row, since a second closed PR is the Owner's call. A worker that reported the
-evidence outcome and posted its comment on the issue has no PR by
-design: its issue is `needs-review`. One that reported the already-resolved outcome and
-posted its evidence has none either: close its issue as
-[lifecycle.md](lifecycle.md#already-resolved) says. An issue whose PR merged is
-delivered: leave it to GitHub's close. Never remove a `hold_labels`
+`stealable` row, since a second closed PR is the Owner's call. A
+worker that reported the evidence outcome and posted its comment on
+the issue has no PR by design: its issue is `needs-review`. One that
+reported the already-resolved outcome and posted its evidence has
+none either: close its issue as
+[lifecycle.md](lifecycle.md#already-resolved) says. An issue whose PR
+merged is delivered: leave it to GitHub's close. Never remove a `hold_labels`
 label or `stealable`, whatever the PR looks like: the gate put them
 there on purpose. A worker resumed twice with no new commit counts as
 stalled: stop it, do not resume it again, and reconcile its issue the

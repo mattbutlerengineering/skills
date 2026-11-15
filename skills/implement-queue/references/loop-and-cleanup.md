@@ -46,7 +46,8 @@ it leaves alone like any other listed there.
 
 ## Counting queue-driven PRs
 
-Moved from [worker-brief.md](worker-brief.md): no worker needs it. A report that counts the merged PRs this queue drove keys on the
+Moved from [worker-brief.md](worker-brief.md): no worker needs it. A
+report that counts the merged PRs this queue drove keys on the
 `Driver: implement-queue` line the worker brief puts last in every PR
 body. The search only pre-filters (it matches the phrase loosely), so
 this command selects on the exact line and counts the merged PRs that
