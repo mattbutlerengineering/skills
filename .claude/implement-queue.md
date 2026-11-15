@@ -48,10 +48,14 @@ file changes only by a PR: its commit is the consent record.
 
 `<sha>` is the recorded head (gate step 1), never the checkout's
 `HEAD`, which can lag the pushed head. Get it locally first: `git fetch
-origin` and `git fetch origin pull/<N>/head`, then confirm `git
-rev-parse FETCH_HEAD` prints the recorded head. A mismatch, or a fetch
-that fails, means the classifier cannot prove its input: fail closed,
-review the PR and dispatch every specialist. Exit 0 prints
+origin` and `git fetch origin pull/<N>/head`, then compare `git
+rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
+moved: return to gate step 1 on the new head, and nothing recorded for
+the old one counts, this classification included. Then confirm `git
+cat-file -e <sha>^{commit}` exits 0. A fetch that fails, or a recorded
+head that does not resolve to a commit, means the classifier cannot
+prove its input: fail closed, review the PR and dispatch every
+specialist. Exit 0 prints
 `fast-path: low-risk`: every changed path is under `docs/` and none is
 a gate path, and the classification is the review for a PR no
 specialist matches (ADR-0088). Exit 1 prints `fast-path: review
@@ -88,10 +92,13 @@ returns itself is ignored.
 
 The source of the `gate_paths` check. `<sha>` is the recorded head
 (gate step 1), never the checkout's `HEAD`. Get it locally first: `git
-fetch origin` and `git fetch origin pull/<N>/head`, then confirm `git
-rev-parse FETCH_HEAD` prints the recorded head. A mismatch, or a fetch
-that fails, means the list cannot be proven current: fail closed, a
-human merge. It reads `git diff --name-only -z --no-renames
+fetch origin` and `git fetch origin pull/<N>/head`, then compare `git
+rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
+moved: return to gate step 1 on the new head, and nothing recorded for
+the old one counts, this list included. Then confirm `git cat-file -e
+<sha>^{commit}` exits 0. A fetch that fails, or a recorded head that
+does not resolve to a commit, means the list cannot be proven current:
+fail closed, a human merge. It reads `git diff --name-only -z --no-renames
 origin/main...<sha>`, so a rename lists its old path and its new one
 (the same list as `fast-path`, one `changed_paths` call), and `-z`
 lists a non-ASCII or quote-bearing name as written, not quoted. Exit 0 prints
