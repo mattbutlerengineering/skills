@@ -125,5 +125,23 @@ class TestPhase4SectionsAreLinked(unittest.TestCase):
         self.assertEqual(sections - linked, set())
 
 
+class TestBlockMarkerAgrees(unittest.TestCase):
+    """#1833: the reviewer contract's Retry policy counts a specialist
+    block by a marker line that gate step 5 writes. A marker the gate
+    never names is one no session writes, so the count misses every
+    block. The two files name the same `specialist-verdict:` markers."""
+
+    MARKER = re.compile(r"`(specialist-verdict: [^`]+)`")
+
+    def markers(self, name):
+        text = (SKILL_DIR / "references" / name).read_text(encoding="utf-8")
+        return set(self.MARKER.findall(" ".join(text.split())))
+
+    def test_gate_writes_every_marker_the_contract_counts(self):
+        counted = self.markers("reviewer-contract.md")
+        self.assertTrue(counted)
+        self.assertEqual(self.markers("gate.md"), counted)
+
+
 if __name__ == "__main__":
     unittest.main()
