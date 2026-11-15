@@ -134,6 +134,35 @@ message, one worktree per worker. Each worker's prompt must carry:
 11. Say in the result which checks were not verified locally: list under
     `not verified locally` every CI check the PR will face that you did
     not or could not run, each with the reason.
+12. Run every subprocess in the foreground under a time bound
+    (`timeout 600 <cmd>` or the tool's own timeout; state a longer bound
+    for a slow step). Never start a background or watch process and wait
+    on it. A command that hits its bound is killed and its output
+    recorded, never retried unchanged. Stall-abort: after two resumes
+    without a new commit, or two resumes that each hit a bound, stop:
+    commit what works, open a draft PR if anything is usable, and report
+    the blocking command.
+13. Evidence outcome: when no repo change can fix the order (for example
+    a scheduled routine that never fired), post the evidence on the
+    issue, open no PR and report the evidence outcome. Already-resolved
+    outcome: when the order is already fixed on the default branch, post
+    the merged PR or a repeatable measurement on the issue, open no PR
+    and report the already-resolved outcome. Never invent a change to
+    have something to push. Neither outcome closes the issue or checks
+    the breakdown row; the orchestrator releases the order with
+    `make wo-failed ISSUE=<n>` (Reconcile in this mode).
+14. Finish or hand off within 45 minutes from dispatch, and answer the
+    orchestrator's check-in at once.
+15. Before opening the PR, check your diff against the four catch classes
+    of the reviewer contract: hallucination (code that runs but does not
+    do what the order asked), regression (tests removed or behaviour
+    changed without a reason), gate bypass (lint, typecheck or test
+    output misread as passing) and criteria gap (acceptance criteria
+    skipped or met poorly). Check the diff against each acceptance
+    criterion of the row's `Accept:` too, and list in the result each
+    criterion with how you verified it. Change nothing the order does not
+    ask for: a case found outside its row is named in the PR body, not
+    implemented.
 
 Model per work order follows `factory.json`'s routing bands. Mechanical
 work does not need the implementation model.
