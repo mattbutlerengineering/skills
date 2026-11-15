@@ -1,6 +1,8 @@
 ---
 name: conduct
 description: Use when the Owner wants several of their own GitHub issues taken from plan to merged as one batch — "run these issues as a batch", "conduct these five issues", "fan these out and merge them in order", "pick the batch back up", or a direct invocation. The Owner's session becomes the Conductor. It prices the batch before any spend, launches one metered headless Worker per step in that item's own worktree on the model and effort the Owner's policy names, presents the decision queue one question at a time with a recommendation, records only answers the Owner gives in this session, drives the merge turns those answers cover, and closes the batch with a scorecard. The conductor.py tool holds every rule; this skill never writes or reviews an item's code. Many items, the Owner present — not implement-queue (a ready queue drained with nobody present) and not autorun (one run through every stage, never merging).
+metadata:
+  author: Matt Butler
 ---
 
 # Conduct (the Conductor)

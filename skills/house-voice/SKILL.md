@@ -1,6 +1,8 @@
 ---
 name: house-voice
 description: Use when the agent's own replies run long, hedged or padded, or when the user wants to set a voice for them, such as "answer first", "stop restating my question", "no summary at the end", "shorter replies, no filler", or "make it stick for every session". It applies a short rules block to the agent's conversational replies for the rest of the session, states which rule wins where its sources conflict, and names the one-time opt-in that carries the voice into every session. It does not cover interface strings or product copy (ux-writing), and it does not shorten code (lean). It never rewrites persisted artifacts. Owns no run artifact and is never routed to.
+metadata:
+  author: Matt Butler
 ---
 
 # House voice

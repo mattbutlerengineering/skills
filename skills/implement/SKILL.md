@@ -1,6 +1,8 @@
 ---
 name: implement
 description: Use when a breakdown exists and it's time to write code — working through work items test-first, checking them off as acceptance criteria are met — or when the user says to start building, start coding, or start working through the breakdown. The artifact is the code itself; progress lives in breakdown.md's checkboxes.
+metadata:
+  author: Matt Butler
 ---
 
 # Implement

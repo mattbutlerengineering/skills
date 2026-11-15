@@ -1,6 +1,8 @@
 ---
 name: ux-design
 description: Use when a PRD declares a user-facing surface (ux required) and flows/screens need designing before technical work, or when the user asks for UX design directly. Interviews the user and produces ux.md.
+metadata:
+  author: Matt Butler
 ---
 
 # UX Design

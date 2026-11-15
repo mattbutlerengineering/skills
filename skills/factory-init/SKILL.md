@@ -1,6 +1,8 @@
 ---
 name: factory-init
 description: Use when a repo needs the factory tooling stamped in or the template checksum manifest regenerated — setting up a product repo to take factory work orders (Makefile check target, gate detectors, factory config), or refreshing the manifest after any edit under the factory templates so detector E passes. Not for starting a pipeline run (that's idea or capture) and not general project scaffolding.
+metadata:
+  author: Matt Butler
 ---
 
 # Factory Init

@@ -1,6 +1,8 @@
 ---
 name: launch-demo
 description: Use when a feature has shipped, or is about to, and the ask is a launch brief for it — "make the launch video", "write the launch copy for what we just shipped", "record a demo of this feature", "explain this release in plain words, with a clip". Produces two halves in one directory; plain copy (what it is, what it does, how it helps) written from the run's artifacts or from the pull request, and a short narrated mp4 whose every spoken line is a sentence of that copy, recorded by the terminal recorder (vhs) or the browser recorder (Playwright) as the repo's per-repo docs/launch-demo.json configures, with a free local voice by default. Fires two ways — Ship runs it when that config says so, and it is invoked directly for any run or pull request — and degrades to copy only, saying why, when a recorder, the voice or the page is missing. Not `ship` (ship releases; this records what a release shipped), and it never fakes a video.
+metadata:
+  author: Matt Butler
 ---
 
 # Launch demo

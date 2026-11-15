@@ -1,6 +1,8 @@
 ---
 name: prd
 description: Use when an idea needs requirements — turning an idea brief into a PRD with scope and success criteria, or when the user asks for a PRD directly. Interviews the user and produces prd.md.
+metadata:
+  author: Matt Butler
 ---
 
 # PRD

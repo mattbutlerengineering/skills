@@ -1,6 +1,8 @@
 ---
 name: knowledge-base
 description: Use when the ask is to set up, feed, or check a project knowledge base — "set up a knowledge base for this repo", "write down the gotchas an agent keeps tripping over", "capture what this PR taught us so the next session knows", "is our project knowledge stale". Keeps only non-inferable facts in docs/kb/ — invariants, gotchas, cross-module flows, the why with its ADR — never overviews or restated code. The shipped kb.py tool writes a compressed index of page summaries inline into CLAUDE.md or AGENTS.md, so every session sees it. Ingest proposes itemised page edits, from a source or from session transcripts, and a human promotes them. Trace prints what was asked, decided and heard back about a run or issue over time. Lint flags stale pages, orphans, broken links, an over-budget index, and instruction-file drift in CLAUDE.md, AGENTS.md and .claude/rules. Not audit (find defects), deepen (module shape), doctor (pipeline install) or automate (which hooks to add). Owns no run artifact and is never routed to.
+metadata:
+  author: Matt Butler
 ---
 
 # Knowledge Base

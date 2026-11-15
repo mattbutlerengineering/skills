@@ -1,6 +1,8 @@
 ---
 name: capture
 description: Use when the user reports a bug, defect, or regression to fix, or wants to start a refactor or dependency upgrade as a tracked maintenance run — not a new feature, and no fix artifacts exist yet. Interviews the user and produces the defect brief (defect.md) that seeds the run and records its re-entry depth.
+metadata:
+  author: Matt Butler
 ---
 
 # Capture
