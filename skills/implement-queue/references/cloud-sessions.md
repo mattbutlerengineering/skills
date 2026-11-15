@@ -103,6 +103,7 @@ all, and nobody refused anything. Each has one next step:
 A twin merge owes what the default owed. It deletes the branch (the
 delete the profile's `merge-command` hook states, else the REST twin's
 `DELETE`); where no delete can run, as with the MCP twin, it reports
-the branch by name. And the train makes the same post-merge
-read before its next PR as after a default merge. A twin call that is
-itself refused is a permission refusal.
+the branch by name. And before the train starts its next PR, it
+waits for the merge to land on `main` and for `main`'s `required_check`
+to finish, read through the `preflight` twin; a red `main` stops the
+train. A twin call that is itself refused is a permission refusal.

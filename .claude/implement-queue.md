@@ -130,15 +130,23 @@ not a source until a run records that it reports `previous_filename`.
 The skill's default, stated because it needs a session permission the
 Owner grants outside this repo. `<sha>` is the gated head (the skill's
 gate step 1), so an `--auto` merge is enabled only at the head the
-review saw. A merge the runtime or the Owner refuses (a permission
+review saw. `--auto` does not wait here: `main` has no branch
+protection, so no check is required and GitHub merges at once
+(`docs/kb/main-unprotected.md`; #1840 and #1841 merged before `check`
+finished on their updated heads). So after an `update-branch`, or
+whenever the head changed, wait until the `check` run is `completed`
+with conclusion `success` on that exact head before running this
+command. A merge the runtime or the Owner refuses (a permission
 refusal) is reported as awaiting a human merge and never retried by
 another route: no REST call, no MCP tool (ADR-0087).
 
 A GraphQL 403 (`GitHub GraphQL not available from Claude Code
 sessions`) or `spawn gh ENOENT` is a capability gap, not a refusal
-(the skill's `references/cloud-sessions.md`). On the 403, merge with the
-REST twin, `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f
-merge_method=squash -f sha=<sha>`; with no `gh`, with the MCP
+(the skill's `references/cloud-sessions.md`). On the 403, and only
+once `ci-status` is green at the gated head, merge with the REST twin,
+`gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f
+merge_method=squash -f sha=<sha>`, which merges a red head as readily
+as a green one (`docs/kb/main-unprotected.md`); with no `gh`, with the MCP
 `merge_pull_request` (`merge_method: squash`, `expectedHeadSha: <sha>`).
 A twin merge still owes both obligations below:
 
@@ -191,6 +199,10 @@ protection).
 The skill's default, stated because the merge train depends on it: one
 PR at a time, `update-branch`, then a green `check` against the main of
 that moment before the next PR starts (`docs/kb/cross-pr-merge-hazards.md`).
+The update moves the head, and `--auto` does not wait for checks here
+(`docs/kb/main-unprotected.md`), so run the `merge-command` only once
+the `check` run on the new head is `completed` with conclusion
+`success`.
 
 ## reap
 
