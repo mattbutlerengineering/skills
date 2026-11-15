@@ -43,14 +43,16 @@ class Fake:
         self.listing = listing
         self.over = over or {}
         self.merged = merged if merged is not None else [
-            {"number": 7, "headRefOid": TIP}]
+            {"number": 7, "headRefOid": TIP, "isCrossRepository": False}]
         self.calls = []
 
     def key(self, a):
         if a[0] == "lsof":
             return "lsof"
         if a[0] == "gh":
-            return "gh-open" if "open" in a else "gh-merged"
+            if "open" in a:
+                return "gh-open"
+            return "gh-search" if "--search" in a else "gh-merged"
         if "status" in a:
             return "status"
         if "ls-files" in a:
@@ -82,6 +84,7 @@ class Fake:
         # a merged head contains the tip only when a test says so
         return {"list": proc(self.listing),
                 "gh-merged": proc(json.dumps(self.merged)),
+                "gh-search": proc("[]"),
                 "merge-base-head": proc(rc=1)}.get(k, proc())
 
     def ran(self, key):
@@ -423,14 +426,15 @@ class FailsClosed(Case):
                   "refs/remotes/origin/main")
 
     def test_merged_pr_with_different_head_oid(self):
-        fake = Fake(self.listing(), merged=[{"number": 7, "headRefOid": OTHER}],
+        fake = Fake(self.listing(), merged=[{"number": 7, "headRefOid": OTHER,
+                             "isCrossRepository": False}],
                     over={"merge-base": proc(rc=1)})
         self.keep(fake, "tip not merged: no merged PR carries it and it is "
                         "not on refs/remotes/origin/main")
 
     def test_failed_gh_merged_call(self):
         r = ("`gh pr list --head work --base main --state merged --json "
-             "number,headRefOid` exited 1: nope")
+             "number,headRefOid,isCrossRepository` exited 1: nope")
         self.keep(Fake(self.listing(),
                        over={"gh-merged": proc(rc=1, err="nope")}), r, r)
 
@@ -484,7 +488,8 @@ class UpdatedBranch(Case):
                 "cat-file": proc(rc=1)}
         base.update(over)
         return Fake(self.listing(),
-                    merged=[{"number": 7, "headRefOid": OTHER}], over=base)
+                    merged=[{"number": 7, "headRefOid": OTHER,
+                             "isCrossRepository": False}], over=base)
 
     def dry(self, fake):
         buf = io.StringIO()
@@ -547,7 +552,10 @@ class UpdatedBranch(Case):
     def test_malformed_merged_pr_fields_keep_the_worktree(self):
         for bad in ({"number": "7; rm", "headRefOid": OTHER},
                     {"number": True, "headRefOid": OTHER},
-                    {"number": 7, "headRefOid": "--all"}):
+                    {"number": 7, "headRefOid": "--all"},
+                    {"number": 7, "headRefOid": OTHER},
+                    {"number": 7, "headRefOid": OTHER,
+                     "isCrossRepository": "false"}):
             fake = Fake(self.listing(), merged=[bad],
                         over={"merge-base": proc(rc=1),
                               "merge-base-head": proc()})
@@ -630,6 +638,96 @@ class FetchAndUsage(Case):
         self.assertIn("usage:", buf.getvalue())
 
 
+class SameRepoAndRetry(Case):
+    """Only a same-repo merged PR is evidence (#1835), and a retry worker's
+    differently named branch finds its PR by a search for its tip."""
+
+    def pr(self, oid=OTHER, cross=False, number=7):
+        return {"number": number, "headRefOid": oid,
+                "isCrossRepository": cross}
+
+    def test_gh_merged_list_asks_for_is_cross_repository(self):
+        fake = Fake(self.listing())
+        self.go(fake)
+        self.assertEqual(fake.ran("gh-merged")[0][-2:],
+                         ["--json", "number,headRefOid,isCrossRepository"])
+
+    def test_cross_repo_pr_with_the_tip_as_head_is_not_evidence(self):
+        fake = Fake(self.listing(), merged=[self.pr(TIP, cross=True)],
+                    over={"merge-base": proc(rc=1), "cat-file": proc()})
+        code, out = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.removed(fake))
+        self.assertIn("tip not merged", out)
+
+    def test_cross_repo_pr_whose_head_contains_the_tip_is_not_evidence(self):
+        fake = Fake(self.listing(), merged=[self.pr(cross=True)],
+                    over={"merge-base": proc(rc=1), "cat-file": proc(),
+                          "merge-base-head": proc()})
+        code, out = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.removed(fake))
+        self.assertFalse(fake.ran("merge-base-head"))
+        self.assertFalse(fake.ran("fetch-pr"))
+
+    def retry(self, hits, contains=True):
+        return Fake(self.listing(branch="refs/heads/retry-1801"), merged=[],
+                    over={"merge-base": proc(rc=1), "cat-file": proc(),
+                          "gh-search": proc(json.dumps(hits)),
+                          "merge-base-head": proc(rc=0 if contains else 1)})
+
+    def test_retry_worktree_in_a_merged_pr_head_is_reaped(self):
+        fake = self.retry([self.pr(number=1816)])
+        code, out = self.go(fake)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.removed(fake))
+        self.assertEqual(fake.ran("gh-search"),
+                         [["gh", "pr", "list", "--search", TIP, "--base",
+                           "main", "--state", "merged", "--json",
+                           "number,headRefOid,isCrossRepository"]])
+        self.assertEqual(fake.ran("merge-base-head"),
+                         [["git", "merge-base", "--is-ancestor", TIP, OTHER]])
+        self.assertEqual(fake.ran("branch-D"),
+                         [["git", "branch", "-D", "--", "retry-1801"]])
+
+    def test_retry_worktree_with_no_merged_pr_is_kept(self):
+        fake = self.retry([])
+        code, out = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.removed(fake))
+        self.assertIn("tip not merged", out)
+
+    def test_retry_search_hit_whose_head_lacks_the_tip_is_kept(self):
+        fake = self.retry([self.pr(number=1816)], contains=False)
+        code, _ = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.removed(fake))
+
+    def test_retry_search_hit_from_a_fork_is_kept(self):
+        fake = self.retry([self.pr(number=1816, cross=True)])
+        code, _ = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.removed(fake))
+        self.assertFalse(fake.ran("merge-base-head"))
+
+    def test_failed_search_keeps_the_worktree_as_a_problem(self):
+        fake = Fake(self.listing(branch="refs/heads/retry-1801"), merged=[],
+                    over={"merge-base": proc(rc=1),
+                          "gh-search": proc(rc=1, err="rate limited")})
+        code, out = self.go(fake)
+        self.assertEqual(code, 1)
+        self.assertFalse(self.removed(fake))
+        self.assertIn("exited 1: rate limited", out)
+
+    def test_branch_pr_already_checked_is_not_rechecked_from_search(self):
+        fake = Fake(self.listing(), merged=[self.pr()],
+                    over={"merge-base": proc(rc=1), "cat-file": proc(),
+                          "merge-base-head": proc(rc=1),
+                          "gh-search": proc(json.dumps([self.pr()]))})
+        self.go(fake)
+        self.assertEqual(len(fake.ran("merge-base-head")), 1)
+
+
 class RealGit(unittest.TestCase):
     """A real temp repo: git is real, gh and lsof report nothing."""
 
@@ -683,7 +781,8 @@ class RealGit(unittest.TestCase):
     def reap_with_merged(self, repo, head):
         def runner(args, cwd=None):
             if args[0] == "gh" and "merged" in args:
-                return proc(json.dumps([{"number": 7, "headRefOid": head}]))
+                return proc(json.dumps([{"number": 7, "headRefOid": head,
+                                             "isCrossRepository": False}]))
             return self.runner(args, cwd)
         buf = io.StringIO()
         with redirect_stdout(buf):
