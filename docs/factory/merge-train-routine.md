@@ -38,7 +38,8 @@ Before any other step, record this run's start time once with
 `date -u +%Y-%m-%dT%H:%M:%SZ` and keep that output as the run's start.
 It is the only source of the journal's `last-run=` value (§6); never
 re-derive it later from the posting time, the date, the schedule slot or
-a previous entry.
+a previous entry. The one disclosed exception: if the start was not
+recorded, §6 uses the posting time and says so under Health.
 
 Check in order; the first hit sets the run mode.
 
@@ -175,10 +176,13 @@ Exactly one journal comment per run:
 
 The `last-run=` value is the start time recorded in §1, verbatim, to
 the second. A date-only value, a midnight placeholder (`T00:00:00Z`)
-that is not the recorded start, a rounded or copied time, or a time
-earlier than the previous entry's is not a valid marker: if the start
+that is not the recorded start, or a rounded or copied time is not a
+valid marker. The clock is authoritative: if the recorded start is
+earlier than the previous entry's marker, post the recorded start anyway
+and note under Health that the previous marker looks wrong. If the start
 was not recorded, run `date -u +%Y-%m-%dT%H:%M:%SZ` before posting, use
-that, and say so under Health.
+that, and say under Health "start not recorded; last-run is the posting
+time".
 
 Spend is reported here and never appended to `docs/factory/costs.jsonl`,
 exactly as ADR-0044 decided for the daily routine.
