@@ -1,6 +1,8 @@
 ---
 name: ux-writing
 description: Use when the words in a product's interface need auditing, rewriting or writing — "audit our copy", "our error messages are useless", "make the microcopy consistent", "write the empty states", "what should this button say", "do we call it a workspace or a project", "set up a voice and tone guide", "check the strings before we translate". It finds the user-facing strings in the code, grades them against a UX-writing rubric and the project's own voice and terms, proposes rewrites as a reviewable table, and applies only the ones approved. It changes wording, never facts, and never invents product claims. A visual pass on one screen is polish, whose copy move is the light version of this; designing flows and screens is ux-design; behaviour patterns such as how the product confirms, loads or validates are ux-patterns; reviewing code for defects is review. Owns no run artifact and is never routed to.
+metadata:
+  author: Matt Butler
 ---
 
 # UX Writing

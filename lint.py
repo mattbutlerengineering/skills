@@ -216,6 +216,40 @@ def check_skills(root):
     ]
 
 
+def check_skill_authors(root):
+    """Every SKILL.md carries the Agent Skills spec's metadata.author,
+    equal to plugin.json's author.name (#1778). Only a nested
+    `metadata: author:` counts — a top-level `author:` is the wrong
+    place — and a metadata value that is not a map, or an author that is
+    not a non-empty string, reads as missing rather than raising.
+
+    A missing skill file or frontmatter block is check_skills' finding,
+    and an unreadable manifest check_manifest's, so neither is repeated
+    here. The frontmatter is read through protocol (the one parser)."""
+    data, _ = read_file(root / ".claude-plugin" / "plugin.json",
+                        "plugin.json", dict)
+    if data is None:
+        return []
+    author = data.get("author")
+    expected = author.get("name") if isinstance(author, dict) else None
+    if not isinstance(expected, str) or not expected:
+        return ["plugin.json has no author.name"]
+    problems = []
+    for slug in list(ALL_SKILLS) + extra_skills(root):
+        path = protocol.skill_path(root, slug)
+        fields = protocol.read_frontmatter(path) if path.is_file() else None
+        if fields is None:
+            continue
+        metadata = fields.get("metadata")
+        found = metadata.get("author") if isinstance(metadata, dict) else None
+        label = f"skills/{slug}/SKILL.md metadata.author"
+        if not isinstance(found, str) or not found:
+            problems.append(f"{label} is missing")
+        elif found != expected:
+            problems.append(f"{label} is {found!r}, expected {expected!r}")
+    return problems
+
+
 # The recital vocabulary check_skill_recitals is strict about (ADR-0052):
 # a numbered process step, a backticked artifact filename inside one, and
 # a "next stage is <stage>" claim (stage names read hyphens as spaces,
@@ -1081,7 +1115,7 @@ def check_ledger_links(root):
 
 CHECKERS = (check_manifest, check_plugin_skills,
             check_pi_package, check_grok_marketplace, check_skills,
-            check_skill_recitals, check_skill_assets, check_templates,
+            check_skill_authors, check_skill_recitals, check_skill_assets, check_templates,
             check_router, check_router_conditionals,
             check_readme_skills, check_readme_no_orphans,
             check_readme_figure, check_protocol,

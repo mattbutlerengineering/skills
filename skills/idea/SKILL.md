@@ -1,6 +1,8 @@
 ---
 name: idea
 description: Use when the user has a raw idea, a "what if", or a problem hunch with no artifacts yet — the start of a product or feature run. Interviews the user and produces an idea brief (idea.md).
+metadata:
+  author: Matt Butler
 ---
 
 # Idea

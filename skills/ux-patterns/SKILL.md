@@ -1,6 +1,8 @@
 ---
 name: ux-patterns
 description: Use when a product's interface behaves differently from screen to screen and the ask is to define how it should behave, once, for the whole project — "make our UX consistent", "write down our UX patterns", "one screen confirms delete and another offers undo", "how should we handle loading, errors and empty states everywhere", "every form validates differently", "set up interaction guidelines for this app", "check these screens follow our patterns". It derives the patterns the code already uses into a project file, docs/ux-patterns.md, asking the owner only the judgement calls, then audits screens against it and reports each deviation as a fix or a candidate rule. Behaviour, not looks or words — visual polish of one screen is polish, the wording and voice of strings is ux-writing, designing a run's flows and screens is ux-design, and a code-defect sweep is audit. Owns no run artifact and is never routed to.
+metadata:
+  author: Matt Butler
 ---
 
 # UX Patterns

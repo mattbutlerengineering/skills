@@ -1,6 +1,8 @@
 ---
 name: assembly-line
 description: Generate the assembly line — one self-contained animated HTML page that draws every run in the current repo as a crate on an isometric factory floor, one machine per pipeline stage, finished runs raising a named building each in the city at the end of the line, hover and click detail on every station and crate, a play-and-scrub replay of the repo's history, and a GIF export for a README. Use when the user wants to see all the work moving through the pipeline as a factory or assembly line, watch the repo's history replay, show the factory to someone, or put an animated clip of it on a README. Facts come from the shipped assembly_line.py tool, never re-derived. Not the pipeline-board (a static swimlane SVG of active runs only) and not a stage skill — directly invoked, owns no run artifact, changes nothing in the repo unless asked to publish.
+metadata:
+  author: Matt Butler
 ---
 
 # Assembly Line

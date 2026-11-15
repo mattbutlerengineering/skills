@@ -1,6 +1,8 @@
 ---
 name: architect
 description: Use when requirements exist and the technical design is needed — architecture, data model, stack, interfaces — or when the user asks for technical design directly. Drafts from artifacts and codebase, then asks only about trade-offs. Produces architecture.md.
+metadata:
+  author: Matt Butler
 ---
 
 # Architect

@@ -1,6 +1,8 @@
 ---
 name: prisma-migrations
 description: Use when a repo's Prisma schema change has to reach a database safely — "create a migration", "run prisma migrate", "deploy the database changes", "baseline the existing production database", "set up Prisma migrations in CI/CD", "a migration failed halfway in prod", "prisma says drift detected", "P3009". A reference skill for Prisma Migrate — migrate dev versus migrate deploy versus db push, migration naming, deploy ordering, baselining a database created without migrations, CI/CD wiring, and recovering from failed or drifted migrations — with copyable workflow and script assets. It never runs migrate dev, migrate reset or db push against a shared or production database. Designing the data model is architect; reviewing a migration diff for defects is review; releasing a run is ship. Owns no run artifact and is never routed to.
+metadata:
+  author: Matt Butler
 ---
 
 # Prisma Migrations

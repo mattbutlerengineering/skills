@@ -1,6 +1,8 @@
 ---
 name: verify
 description: Use when implementation is complete and it's time to demonstrate the work meets the PRD's success criteria — running tests and collecting evidence — or when the user asks to verify the work. Produces verification.md.
+metadata:
+  author: Matt Butler
 ---
 
 # Verify

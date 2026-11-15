@@ -80,6 +80,11 @@ def protocol_table(rows):
                       for stage, artifact in rows))
 
 
+# check_skill_authors holds every SKILL.md's metadata.author to
+# plugin.json's author.name; the clean tree's author is "A".
+SKILL_METADATA = "metadata:\n  author: A\n"
+
+
 def make_clean_tree(root):
     """Seed the smallest tree on which every checker reports zero problems."""
     plugin_dir = root / ".claude-plugin"
@@ -87,7 +92,7 @@ def make_clean_tree(root):
     # check_plugin_skills holds the description to naming every utility
     # skill, so the smallest clean tree carries them all.
     (plugin_dir / "plugin.json").write_text(json.dumps(
-        {"name": "t", "version": "0",
+        {"name": "t", "version": "0", "author": {"name": "A"},
          "description": "t — utility skills ("
                         + ", ".join(protocol.UTILITY_SKILLS) + ")"}),
         encoding="utf-8")
@@ -108,7 +113,8 @@ def make_clean_tree(root):
         skill_dir = root / "skills" / slug
         skill_dir.mkdir(parents=True)
         (skill_dir / "SKILL.md").write_text(
-            f"---\nname: {slug}\ndescription: d\n---\n\n{recital_body(slug)}",
+            f"---\nname: {slug}\ndescription: d\n{SKILL_METADATA}---\n\n"
+            f"{recital_body(slug)}",
             encoding="utf-8")
     for slug in TEMPLATED_STAGES:
         (root / "skills" / slug / "TEMPLATE.md").write_text(
@@ -119,7 +125,7 @@ def make_clean_tree(root):
     # check_router_conditionals holds the same file to naming its four
     # frontmatter conditionals and the Implement checkbox rule.
     (root / "skills" / "next" / "SKILL.md").write_text(
-        "---\nname: next\ndescription: d\n---\n\n"
+        f"---\nname: next\ndescription: d\n{SKILL_METADATA}---\n\n"
         "Honor the `ux:` field in `prd.md` frontmatter, the `re-entry:`"
         " field in `defect.md` frontmatter, the `outcome:` field in"
         " `release.md` frontmatter, the `users-observed:` field in"
@@ -1154,6 +1160,77 @@ class TestReadmeFigure(CheckerTreeTest):
         # embed line can only be judged on a README that exists.
         (self.root / "README.md").unlink()
         self.assertEqual(lint.check_readme_figure(self.root), [])
+
+
+class TestSkillAuthors(CheckerTreeTest):
+    """Every SKILL.md carries the Agent Skills spec's metadata.author,
+    equal to plugin.json's author.name (#1778): SkillEvaluator fails a
+    skill without it, and a new skill would otherwise drift silently."""
+
+    def write_idea(self, frontmatter):
+        (self.root / "skills" / "idea" / "SKILL.md").write_text(
+            f"---\nname: idea\ndescription: d\n{frontmatter}---\n\nbody\n",
+            encoding="utf-8")
+
+    def rewrite_manifest(self, **fields):
+        path = self.root / ".claude-plugin" / "plugin.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        path.write_text(json.dumps({**data, **fields}), encoding="utf-8")
+
+    def test_a_clean_tree_is_clean(self):
+        self.assertEqual(lint.check_skill_authors(self.root), [])
+
+    def test_missing_metadata_author_is_reported(self):
+        self.write_idea("")
+        self.assertEqual(lint.check_skill_authors(self.root),
+                         ["skills/idea/SKILL.md metadata.author is missing"])
+
+    def test_a_wrong_author_is_reported(self):
+        self.write_idea("metadata:\n  author: X\n")
+        self.assertEqual(
+            lint.check_skill_authors(self.root),
+            ["skills/idea/SKILL.md metadata.author is 'X', expected 'A'"])
+
+    def test_a_top_level_author_does_not_satisfy_the_check(self):
+        self.write_idea("author: A\n")
+        self.assertEqual(lint.check_skill_authors(self.root),
+                         ["skills/idea/SKILL.md metadata.author is missing"])
+
+    def test_a_metadata_block_that_is_not_a_map_counts_as_missing(self):
+        self.write_idea("metadata:\n  - author: A\n")
+        self.assertEqual(lint.check_skill_authors(self.root),
+                         ["skills/idea/SKILL.md metadata.author is missing"])
+
+    def test_a_metadata_map_without_author_counts_as_missing(self):
+        self.write_idea("metadata:\n  owner: A\n")
+        self.assertEqual(lint.check_skill_authors(self.root),
+                         ["skills/idea/SKILL.md metadata.author is missing"])
+
+    def test_a_skill_outside_the_taxonomy_is_held_too(self):
+        extra = self.root / "skills" / "extra"
+        extra.mkdir()
+        (extra / "SKILL.md").write_text(
+            "---\nname: extra\ndescription: d\n---\n\nbody\n",
+            encoding="utf-8")
+        self.assertEqual(lint.check_skill_authors(self.root),
+                         ["skills/extra/SKILL.md metadata.author is missing"])
+
+    def test_a_missing_skill_or_frontmatter_belongs_to_check_skills(self):
+        (self.root / "skills" / "idea" / "SKILL.md").unlink()
+        (self.root / "skills" / "prd" / "SKILL.md").write_text(
+            "body only\n", encoding="utf-8")
+        self.assertEqual(lint.check_skill_authors(self.root), [])
+
+    def test_a_manifest_without_author_name_is_one_problem(self):
+        for author in (None, "A", {}, {"name": ""}, {"name": 3}):
+            with self.subTest(author=author):
+                self.rewrite_manifest(author=author)
+                self.assertEqual(lint.check_skill_authors(self.root),
+                                 ["plugin.json has no author.name"])
+
+    def test_an_unreadable_manifest_belongs_to_check_manifest(self):
+        (self.root / ".claude-plugin" / "plugin.json").unlink()
+        self.assertEqual(lint.check_skill_authors(self.root), [])
 
 
 class TestPluginSkills(CheckerTreeTest):
