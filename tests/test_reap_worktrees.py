@@ -42,7 +42,8 @@ class Fake:
     def __init__(self, listing, over=None, merged=None):
         self.listing = listing
         self.over = over or {}
-        self.merged = merged if merged is not None else [{"headRefOid": TIP}]
+        self.merged = merged if merged is not None else [
+            {"number": 7, "headRefOid": TIP}]
         self.calls = []
 
     def key(self, a):
@@ -55,11 +56,15 @@ class Fake:
         if "ls-files" in a:
             return "ls-files"
         if "fetch" in a:
-            return "fetch"
+            return "fetch-pr" if any(x.startswith("pull/") for x in a) \
+                else "fetch"
+        if "cat-file" in a:
+            return "cat-file"
         if "list" in a:
             return "list"
         if "merge-base" in a:
-            return "merge-base"
+            return "merge-base" if a[-1] == "refs/remotes/origin/main" \
+                else "merge-base-head"
         if "remove" in a:
             return "remove"
         if "-D" in a:
@@ -74,8 +79,10 @@ class Fake:
             if isinstance(r, Exception):
                 raise r
             return r
+        # a merged head contains the tip only when a test says so
         return {"list": proc(self.listing),
-                "gh-merged": proc(json.dumps(self.merged))}.get(k, proc())
+                "gh-merged": proc(json.dumps(self.merged)),
+                "merge-base-head": proc(rc=1)}.get(k, proc())
 
     def ran(self, key):
         return [c for c in self.calls if self.key(c) == key]
@@ -416,14 +423,14 @@ class FailsClosed(Case):
                   "refs/remotes/origin/main")
 
     def test_merged_pr_with_different_head_oid(self):
-        fake = Fake(self.listing(), merged=[{"headRefOid": OTHER}],
+        fake = Fake(self.listing(), merged=[{"number": 7, "headRefOid": OTHER}],
                     over={"merge-base": proc(rc=1)})
         self.keep(fake, "tip not merged: no merged PR carries it and it is "
                         "not on refs/remotes/origin/main")
 
     def test_failed_gh_merged_call(self):
         r = ("`gh pr list --head work --base main --state merged --json "
-             "headRefOid` exited 1: nope")
+             "number,headRefOid` exited 1: nope")
         self.keep(Fake(self.listing(),
                        over={"gh-merged": proc(rc=1, err="nope")}), r, r)
 
@@ -464,6 +471,113 @@ class FailsClosed(Case):
         self.assertEqual(code, 0)
         self.assertEqual(fake.ran("remove"),
                          [["git", "worktree", "remove", second]])
+
+
+class UpdatedBranch(Case):
+    """The merge train's update-branch (or a retry worker) leaves the
+    merged PR's final head a descendant of the worker's tip, and the
+    squash merge puts neither on main (#1818)."""
+
+    def fake(self, **over):
+        base = {"merge-base": proc(rc=1),
+                "merge-base-head": proc(),
+                "cat-file": proc(rc=1)}
+        base.update(over)
+        return Fake(self.listing(),
+                    merged=[{"number": 7, "headRefOid": OTHER}], over=base)
+
+    def dry(self, fake):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = reap_worktrees.main(
+                ["--no-fetch"], runner=fake, cwd=self.repo,
+                size=lambda p: 1, which=lambda b: "x")
+        return code, buf.getvalue()
+
+    def test_tip_ancestor_of_merged_head_is_reaped(self):
+        fake = self.fake()
+        code, out = self.go(fake)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.removed(fake))
+        self.assertEqual(fake.ran("fetch-pr"),
+                         [["git", "fetch", "--no-tags", "origin",
+                           "pull/7/head"]])
+        self.assertEqual(fake.ran("merge-base-head"),
+                         [["git", "merge-base", "--is-ancestor", TIP, OTHER]])
+
+    def test_merged_head_already_local_is_not_fetched(self):
+        fake = self.fake(**{"cat-file": proc()})
+        code, out = self.go(fake)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(self.removed(fake))
+        self.assertFalse(fake.ran("fetch-pr"))
+
+    def test_tip_in_no_merged_head_is_kept(self):
+        fake = self.fake(**{"merge-base-head": proc(rc=1)})
+        code, out = self.go(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(self.removed(fake))
+        self.assertIn(f"reap: keep {self.wt} (tip not merged: no merged PR "
+                      "carries it and it is not on refs/remotes/origin/main)",
+                      out)
+
+    def test_failed_head_fetch_keeps_the_worktree(self):
+        fake = self.fake(**{"fetch-pr": proc(rc=128, err="no such ref")})
+        code, out = self.go(fake)
+        self.assertEqual(code, 1)
+        self.assertFalse(self.removed(fake))
+        self.assertFalse(fake.ran("merge-base-head"))
+        self.assertIn("`git fetch --no-tags origin pull/7/head` exited 128: "
+                      "no such ref", out)
+
+    def test_head_fetch_that_cannot_run_keeps_the_worktree(self):
+        fake = self.fake(**{"fetch-pr": OSError("no git")})
+        code, _ = self.go(fake)
+        self.assertEqual(code, 1)
+        self.assertFalse(self.removed(fake))
+
+    def test_failed_head_ancestry_call_keeps_the_worktree(self):
+        fake = self.fake(**{"merge-base-head": proc(rc=128,
+                                                    err="bad object")})
+        code, out = self.go(fake)
+        self.assertEqual(code, 1)
+        self.assertFalse(self.removed(fake))
+        self.assertIn("exited 128: bad object", out)
+
+    def test_malformed_merged_pr_fields_keep_the_worktree(self):
+        for bad in ({"number": "7; rm", "headRefOid": OTHER},
+                    {"number": True, "headRefOid": OTHER},
+                    {"number": 7, "headRefOid": "--all"}):
+            fake = Fake(self.listing(), merged=[bad],
+                        over={"merge-base": proc(rc=1),
+                              "merge-base-head": proc()})
+            code, out = self.go(fake)
+            self.assertEqual(code, 1, bad)
+            self.assertFalse(self.removed(fake))
+            self.assertFalse(fake.ran("fetch-pr"))
+            self.assertIn("gh merged-PR list was not the expected JSON", out)
+
+    def test_no_fetch_dry_run_never_fetches_a_missing_head(self):
+        fake = self.fake()
+        code, out = self.dry(fake)
+        self.assertEqual(code, 0)
+        self.assertFalse(fake.ran("fetch-pr"))
+        self.assertFalse(fake.ran("fetch"))
+        self.assertIn(f"reap: keep {self.wt} (merged head of PR #7 is not "
+                      "local and --no-fetch forbids fetching it)", out)
+
+    def test_no_fetch_dry_run_uses_a_local_head(self):
+        code, out = self.dry(self.fake(**{"cat-file": proc()}))
+        self.assertEqual(code, 0)
+        self.assertIn("would-remove", out)
+
+    def test_detached_worktree_searches_no_merged_heads(self):
+        fake = Fake(self.listing(branch=None), merged=[],
+                    over={"merge-base": proc(rc=1),
+                          "merge-base-head": proc()})
+        self.go(fake)
+        self.assertFalse(self.removed(fake))
+        self.assertFalse(fake.ran("merge-base-head"))
 
 
 class FetchAndUsage(Case):
@@ -532,6 +646,66 @@ class RealGit(unittest.TestCase):
         if args[0] == "lsof":
             return proc()
         return subprocess.run(args, capture_output=True, text=True, cwd=cwd)
+
+    def updated_branch_pr(self, t, contains_tip):
+        """A worktree whose PR #7 merged after update-branch: origin's
+        refs/pull/7/head is a merge commit made in another clone (so the
+        reaping repo must fetch it), and main holds a squash that is not
+        the worker's tip. Returns (repo, wt, head oid)."""
+        origin, repo = os.path.join(t, "o.git"), os.path.join(t, "r")
+        other = os.path.join(t, "other")
+        git_repo.init(origin, "--bare", "-b", "main")
+        git_repo.clone(origin, repo)
+        self.git("commit", "-q", "--allow-empty", "-m", "base", cwd=repo)
+        self.git("push", "-q", "origin", "HEAD:main", cwd=repo)
+        wt = os.path.join(repo, ".claude", "worktrees", "w")
+        self.git("worktree", "add", "-q", "-b", "work", wt, cwd=repo)
+        self.git("commit", "-q", "--allow-empty", "-m", "done", cwd=wt)
+        self.git("push", "-q", "origin", "work", cwd=wt)
+        git_repo.clone(origin, other)
+        self.git("commit", "-q", "--allow-empty", "-m", "main moved",
+                 cwd=other)
+        self.git("push", "-q", "origin", "HEAD:main", cwd=other)
+        start = "origin/work" if contains_tip else "HEAD~1"
+        self.git("switch", "-q", "-c", "upd", start, cwd=other)
+        self.git("merge", "-q", "--no-ff", "-m",
+                 "update-branch", "main", cwd=other)
+        self.git("push", "-q", "origin", "upd:refs/pull/7/head", cwd=other)
+        self.git("switch", "-q", "main", cwd=other)
+        self.git("commit", "-q", "--allow-empty", "-m", "squash of #7",
+                 cwd=other)
+        self.git("push", "-q", "origin", "HEAD:main", cwd=other)
+        head = subprocess.run(["git", "rev-parse", "upd"], cwd=other,
+                              check=True, capture_output=True,
+                              text=True).stdout.strip()
+        return repo, wt, head
+
+    def reap_with_merged(self, repo, head):
+        def runner(args, cwd=None):
+            if args[0] == "gh" and "merged" in args:
+                return proc(json.dumps([{"number": 7, "headRefOid": head}]))
+            return self.runner(args, cwd)
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = reap_worktrees.main(
+                ["--apply"], runner=runner, cwd=repo,
+                size=lambda p: 1, which=lambda b: "x")
+        return code, buf.getvalue()
+
+    def test_tip_under_an_update_branch_merge_commit_is_reaped(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo, wt, head = self.updated_branch_pr(os.path.realpath(t), True)
+            code, out = self.reap_with_merged(repo, head)
+            self.assertEqual(code, 0, out)
+            self.assertFalse(os.path.exists(wt), out)
+
+    def test_merged_head_that_lacks_the_tip_keeps_it(self):
+        with tempfile.TemporaryDirectory() as t:
+            repo, wt, head = self.updated_branch_pr(os.path.realpath(t), False)
+            code, out = self.reap_with_merged(repo, head)
+            self.assertEqual(code, 0, out)
+            self.assertTrue(os.path.exists(wt))
+            self.assertIn("tip not merged", out)
 
     def test_local_branch_or_tag_named_origin_main_cannot_stand_in(self):
         for kind in ("branch", "tag"):
