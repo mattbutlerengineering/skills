@@ -275,11 +275,22 @@ class TestBinaryContrastBounds(unittest.TestCase):
     period graded in quadratic time and a "but" paragraphs later matched."""
 
     def test_a_200_kb_reply_of_not_just_grades_in_linear_time(self):
+        # Pinned by growth, not an absolute bound (#1794): the best of
+        # several runs at 4x the input over the best at 1x stays near 4 for
+        # linear grading and near 16 for quadratic; the cut sits at 8.
         import time
-        text = "not just " * 22000
-        start = time.monotonic()
-        self.assertEqual(vg.slop(text), [])
-        self.assertLess(time.monotonic() - start, 2.0)
+
+        def best(text, reps=3):
+            low = float("inf")
+            for _ in range(reps):
+                start = time.perf_counter()
+                result = vg.slop(text)
+                low = min(low, time.perf_counter() - start)
+            self.assertEqual(result, [])
+            return low
+
+        ratio = best("not just " * 11000) / max(best("not just " * 2750), 1e-6)
+        self.assertLess(ratio, 8.0)
 
     def test_a_but_past_a_blank_line_is_not_a_contrast(self):
         text = ("- Not just the index changes\n\nRun the tests\n\n"

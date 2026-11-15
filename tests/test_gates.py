@@ -3128,17 +3128,29 @@ class TestEvidenceRollUp(unittest.TestCase):
     # The long-line pin (maintenance:a-long-line-stalls-the-gate): a 44 kB
     # line of zero-preceded matches took 5.9 s when every zero-count read
     # scanned the whole prefix (quadratic), and takes milliseconds with the
-    # bounded window. The bound sits far from both, so a loaded runner
-    # never flakes it and a quadratic read never passes it.
-    LONG_LINE_SECONDS = 1.0
+    # bounded window. Pinned by growth, not by an absolute bound (#1794): a
+    # loaded runner slows both sizes alike, so the ratio of the best of
+    # several runs at 4x the input to the best at 1x holds near 4 for a
+    # linear read and near 16 for a quadratic one. The cut sits at 8.
+    GROWTH_FACTOR = 4
+    MAX_RATIO = 8.0
+
+    @staticmethod
+    def _best_of(fn, arg, reps=3):
+        best = float("inf")
+        for _ in range(reps):
+            started = time.perf_counter()
+            fn(arg)
+            best = min(best, time.perf_counter() - started)
+        return best
 
     def test_a_long_zero_count_line_reads_in_linear_time(self):
-        line = "0 not run, " * 4000
-        started = time.perf_counter()
-        names = gates._names_unknown(line)
-        elapsed = time.perf_counter() - started
-        self.assertFalse(names)
-        self.assertLess(elapsed, self.LONG_LINE_SECONDS)
+        small = "0 not run, " * 1000
+        large = "0 not run, " * (1000 * self.GROWTH_FACTOR)
+        self.assertFalse(gates._names_unknown(large))
+        ratio = (self._best_of(gates._names_unknown, large)
+                 / max(self._best_of(gates._names_unknown, small), 1e-6))
+        self.assertLess(ratio, self.MAX_RATIO)
 
     def test_a_wide_zero_count_over_a_disclosure_stays_refused(self):
         # Review major (maintenance:a-long-line-stalls-the-gate): a 17-char
