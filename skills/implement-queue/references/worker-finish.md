@@ -52,4 +52,6 @@ label or `stealable`, whatever the PR looks like: the gate put them
 there on purpose. A worker resumed twice with no new commit counts as
 stalled: stop it, do not resume it again, and reconcile its issue the
 same way. Report each repair as drift, with the count of issues claimed
-against the count repaired.
+against the count repaired. Under `source: work-orders` the `wo:*`
+mapping in [work-orders.md](work-orders.md#reconcile-in-this-mode)
+replaces the labels above.

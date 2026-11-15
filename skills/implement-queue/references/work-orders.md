@@ -159,6 +159,38 @@ applies, because it finishes the same attempt on the same PR rather than
 starting a second one. A second flag ends that attempt: the order is not
 retried, and its PR is reported with the reviewer's output.
 
+## Reconcile in this mode
+
+This replaces the label mapping in
+[Reconcile before Phase 4](worker-finish.md#reconcile-before-phase-4);
+its other rules (check rather than trust, skip any order a live worker
+still holds, reconcile a stalled worker's order, report each repair as
+drift with claimed against repaired) still apply. For every order this
+session claimed that still carries `wo:in-progress` or no `wo:*` label,
+read the PRs that close its mirrored issue and give it the terminal state
+"Claiming is a debt" requires:
+
+- **An open PR, draft or ready, green, pending or red** → leave it. The
+  PR is the terminal state. Report a draft or red one as such; Phase 0's
+  single infrastructure re-run is the only re-run it gets. The PR-open
+  leg (`make wo-needs-review`, from the PR event) writes
+  `wo:needs-review`. An order still on `wo:in-progress` beside an open PR
+  is drift to report, never a label to apply by hand.
+- **A merged PR** → leave it. The PR-merge leg writes `wo:merged`, and
+  this mode never applies it.
+- **No PR at all**, including a worker that reported the evidence or
+  already-resolved outcome and posted its comment → `make wo-failed
+  ISSUE=<n>`. In this mode only a PR or `wo:failed` ends a claim, so the
+  evidence comment is input to the human's retry decision, not a state.
+  Never close the issue or check the breakdown row: both planes are a
+  human's to move.
+- **No open or merged PR and at least one closed unmerged** →
+  `make wo-failed ISSUE=<n>`. This replaces the
+  [closed-unmerged rule](lifecycle.md#a-pr-closed-unmerged): under "Do
+  not retry inside the round" the order is not returned to
+  `wo:ready-for-agent`. The closed PR still counts as a failure toward
+  SKILL.md's three-failure circuit breaker.
+
 Never create a `WO-####` issue, and never write a breakdown row, to make
 something eligible. The mirror is one-way (ADR-0032). An empty queue is an
 answer.
