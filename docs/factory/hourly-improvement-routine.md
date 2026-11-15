@@ -116,7 +116,8 @@ pick is report material:
    `needs-human` or any of the profile's `hold_labels`, not blocked by
    an open issue, not covered by an open PR, and not one whose own
    text asks for Owner design or Owner spend consent; oldest first.
-   Only if it fits the size bound.
+   Only if it fits the size bound, and only one labelled `ready`, the
+   one state a driver may claim from (§5's claim step).
 3. **A process gap with evidence.** The sources, in order, each
    reproduced in this run before it counts:
    - *An unenforced stated rule.* A rule written in `CLAUDE.md`, a
@@ -158,6 +159,16 @@ If scoping reveals more, don't start; propose the split.
 
 ## 5 Implement
 
+- **Claim a rung 2 pick first.** Before any branch, commit or
+  dispatch, run
+  [the claim step](../../skills/implement-queue/references/claim.md)
+  (ADR-0130) on the issue, its pre-claim read included. This routine is
+  a driver of `ready` issues like any other: an unclaimed issue keeps
+  `ready`, and the implement queue claims it and duplicates the work
+  (#1795). An issue the step skips is not this run's: report it and
+  take the next rung 2 candidate, or go on down the ladder. While the
+  claim holds, the routine finishes the issue as that file's
+  `While a driver other than the queue holds the claim` section says.
 - Branch `hourly/YYYY-MM-DDTHH-<slug>` off fresh `origin/main`.
 - **The routine is the orchestrator, not the author.** When the
   environment can dispatch a subagent, one worker is dispatched with
@@ -197,7 +208,13 @@ Closes #<the run's issue>
 
 ## Merge danger
 <Door: and Blast radius: lines, per the protocol's Pull request body section>
+
+Driver: hourly-improvement-routine
 ```
+
+The closing `Driver:` line names this routine as the PR's driver
+(ADR-0130), so the implement queue never fixes, re-runs or updates the
+PR. A green one still goes through its gate and merge train.
 
 ## 6 Gate and merge
 
