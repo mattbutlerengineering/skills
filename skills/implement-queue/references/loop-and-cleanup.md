@@ -34,7 +34,6 @@ that needs it. A phrase such as "this file", "above", "below" or
 
 ## Recurring use
 
-Recurring use: `/loop 30m` with this skill.
 The interval is a minimum gap between iterations, not a bound on one
 iteration, and an iteration that waits on CI can outlast it. A
 re-invocation in the same session while an iteration is in flight

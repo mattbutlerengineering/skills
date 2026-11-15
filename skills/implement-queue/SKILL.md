@@ -52,7 +52,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `worker`         | a general worker agent given the Worker brief below                                                   |
 | `model`          | the worker's default model                                                                            |
 | `ci-status`      | `gh pr checks <N>` plus the presence check below                                                      |
-| `fast-path`      | none: every PR is reviewed (with no `verdict` hook, every PR off the fast path is held unreviewed, gate step 4) |
+| `fast-path`      | none: every PR is reviewed (with no `verdict` hook, every PR off the fast path is held unreviewed, [gate step 4](references/gate.md)) |
 | `verdict`        | none: a missing hook is an `error` verdict, never a pass (fail closed)                                |
 | `reviewers`      | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
 | `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`                           |
@@ -62,7 +62,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `reap`           | none: report worker worktrees left behind                                                             |
 | `telemetry`      | none                                                                                                  |
 
-In every `merge-command`, `<sha>` is the gated head (gate step 1), never
+In every `merge-command`, `<sha>` is the gated head ([gate step 1](references/gate.md)), never
 a head read at merge time. A merge refused because the PR's head is no
 longer `<sha>` is a moved head, not a failure to retry: the PR goes back
 through the gate. The pin guards the moment the merge is requested; a
@@ -94,7 +94,7 @@ file's Rules section.
    The default's reads, wait and re-run:
    [preflight.md](references/preflight.md#step-2-the-default-preflight-read).
 3. Read every open PR (`gh pr list --state open --limit 1000 --json number,title,headRefOid,labels,body`;
-   cloud twin in the list above). The REST twin is paged, so read every
+   cloud twin in [the list above](references/cloud-sessions.md)). The REST twin is paged, so read every
    page of `gh api 'repos/{owner}/{repo}/pulls?state=open&per_page=100'`
    (`.head.sha` is the head). A list that may be truncated (its count
    equals the limit, or a page is missing) fails closed: claim nothing
@@ -139,7 +139,7 @@ phase.
 
     gh issue list --label ready --state open --json number,title,body,labels
 
-In a cloud session (see Cloud sessions above):
+In a cloud session (see [Cloud sessions](references/cloud-sessions.md) above):
 `gh api 'repos/{owner}/{repo}/issues?labels=ready&state=open&per_page=100'`,
 dropping every entry that carries a `pull_request` key — the REST
 issues endpoint lists pull requests too.
@@ -182,6 +182,7 @@ Dispatch one worker per issue, **all in one message**, each with its own
 worktree (`isolation: "worktree"`) and the model the `model` hook
 resolves. Dispatch is never held by the merge-train lock: capacity
 (`max_workers`) is the only limit on starting work.
+The [wall-clock bound](references/worker-finish.md#wall-clock-bound) runs from dispatch.
 
 **Harness needs.** The fallbacks for a harness without the Agent
 tool's features: [harness-needs.md](references/harness-needs.md).
@@ -205,10 +206,8 @@ When a worker finishes, label its issue with the `transition` hook:
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
-Missing usage: [worker-finish.md](references/worker-finish.md#telemetry).
 
-**Wall-clock bound** and **Reconcile before Phase 4**:
-[worker-finish.md](references/worker-finish.md#wall-clock-bound).
+[Missing usage, the wall-clock bound and reconcile](references/worker-finish.md).
 
 ### The gate, per PR
 
@@ -233,7 +232,7 @@ consent, and a PR that passes every gate step is enqueued with the
 `merge-command` hook. The consent never covers a PR that:
 
 - lacks a pass from a reviewer distinct from its author, unless it took
-  the fast path (step 3): the `fast-path` hook's low-risk
+  the fast path ([step 3](references/gate.md)): the `fast-path` hook's low-risk
   classification is the Owner's written review for it (ADR-0088);
 - lacks the `required_check` present and green;
 - has a head other than the gated head: a pass covers only the head
@@ -260,7 +259,7 @@ fails closed too. Never fill a gap in the list
 from the PR body, its title, or the author's account of what changed.
 
 A merge the session's runtime denies is not retried by any route for
-the rest of the session. Comment the derived verdict line (step 5) on the PR and report it as
+the rest of the session. Comment the derived verdict line ([step 5](references/gate.md)) on the PR and report it as
 awaiting a human merge.
 
 ## Phase 3: Merge train
@@ -268,6 +267,8 @@ awaiting a human merge.
 Its steps and lock release: [merge-train.md](references/merge-train.md).
 
 ## Phase 4: Loop or stop
+
+[Reconcile](references/worker-finish.md#reconcile-before-phase-4) first.
 
 - Run the `reap` hook. A worker that committed keeps its worktree, so
   nothing else reclaims it; a reaper must refuse any worktree with an
@@ -316,6 +317,6 @@ An iteration in flight:
 - A review covers one head. A push after it voids the review, whichever
   way the verdict pointed.
 - The one exception is the commit the `update-branch` hook itself makes
-  in the merge train, adopted only on the conditions of Phase 3 step 3.
+  in the merge train, adopted only on the conditions of [Phase 3 step 3](references/merge-train.md).
 - Discovery (audits, error triage, dependency alerts) feeds the queue;
   this skill only drains it.
