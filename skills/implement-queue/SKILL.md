@@ -111,7 +111,8 @@ file's Rules section.
    in any CI state, a revert someone else re-ran to green included; it
    is reported. Unfinished PRs come before new issues: green ones go to
    the Phase 2 gate, pending ones wait, failed ones of this queue get
-   fixed or their issue labelled `agent-failed`. A foreign green PR goes
+   fixed or their issue labelled `agent-failed`, which stops them blocking
+   ([the `agent-failed` cause](references/preflight.md#step-3-failed-pr-causes-and-settled-green-prs)). A foreign green PR goes
    to the Phase 2 gate unchanged, because the gate and the Merge policy
    run per PR and protect any PR. A foreign failed PR is never fixed by
    this queue unless a ready issue says so, is reported, and does not
