@@ -231,8 +231,9 @@ Steps 1 Head and CI, 2 Holds, 3 Fast path, 4 Review, 5 Verdict:
 
 ## Merge policy
 
-Under `merge: off` (the default) a PR that passes the gate is labelled
-for the human merge, ADR-0033's gate 3, and the report lists it as
+Under `merge: off` (the default) a PR that passes the gate is left for
+the human merge, ADR-0033's gate 3, with no label change (`has-pr`
+stays), and the report lists it as
 **reviewed, green, awaiting merge**. This skill merges nothing.
 
 Under `source: work-orders` the merge is always off, whatever `merge:`

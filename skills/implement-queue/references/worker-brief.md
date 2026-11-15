@@ -15,16 +15,7 @@ Every worker prompt carries:
 5. Push the branch and open a PR with `Closes #<N>`; confirm its base is
    `main`. End the PR body with the line `Driver: implement-queue`, which
    marks the PR as queue-driven; Phase 0 step 3 reads the `Driver:` line
-   to tell this queue's PRs from another driver's.
-   The search only pre-filters (it matches the phrase loosely), so this
-   command selects on the exact line and counts the merged PRs that carry
-   it, up to the `--limit` bound of 1000:
-
-       gh pr list --state merged --limit 1000 --json body \
-         --search '"Driver: implement-queue" in:body' \
-         --jq '[.[] | select(.body | test("(?m)^Driver: implement-queue\\s*$"))] | length'
-
-   Never merge.
+   to tell this queue's PRs from another driver's. Never merge.
 6. Never commit secrets or credentials; validate external input at
    boundaries; an existing vulnerability found on the way is fixed first.
 7. Run every subprocess in the foreground under a time bound

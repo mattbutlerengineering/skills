@@ -136,6 +136,11 @@ work that is not the reviewer's.
 
 ## Retry policy
 
+Flags so far counts the PR's comments whose first line is a
+`reviewer-verdict: flag` line, authored by the queue's own account (the
+author rule of [merge-train.md](merge-train.md) step 1), so a later
+session counts the same flags this one posted.
+
 | Flags so far | Action                                                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
 | 1            | Send the reviewer's issues to a new worker on the same branch (no new PR); it fixes with TDD and changes nothing those issues do not need, then the gate runs again as a re-review. |
