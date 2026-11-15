@@ -94,6 +94,38 @@ class WorkOrderBriefListIsNumberedInOrder(unittest.TestCase):
                    re.findall(r"^(\d+)\. ", section, flags=re.MULTILINE)]
         self.assertEqual(numbers, list(range(1, len(numbers) + 1)))
 
+    def _brief(self):
+        text = (ROOT / "skills/implement-queue/references/work-orders.md"
+                ).read_text(encoding="utf-8")
+        return " ".join(text.split("## Worker brief", 1)[1]
+                        .split("\n## ", 1)[0].split())
+
+    def test_brief_carries_the_time_bound_and_stall_abort(self):
+        brief = self._brief()
+        for needle in ("foreground under a time bound",
+                       "Never start a background or watch process",
+                       "Stall-abort: after two resumes"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, brief)
+
+    def test_brief_carries_the_45_minute_bound_and_check_in(self):
+        brief = self._brief()
+        self.assertIn("within 45 minutes", brief)
+        self.assertIn("answer the orchestrator's check-in", brief)
+
+    def test_brief_carries_evidence_outcomes_mapped_to_wo_failed(self):
+        brief = self._brief()
+        self.assertIn("evidence outcome", brief)
+        self.assertIn("already-resolved outcome", brief)
+        self.assertIn("make wo-failed ISSUE=<n>", brief)
+
+    def test_brief_carries_the_catch_classes_inline(self):
+        brief = self._brief()
+        for needle in ("hallucination", "regression", "gate bypass",
+                       "criteria gap", "each acceptance criterion"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, brief)
+
 
 if __name__ == "__main__":
     unittest.main()
