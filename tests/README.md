@@ -103,6 +103,8 @@
   (init/clone with auto-gc and auto-maintenance off, #874)
 - `harness_contract.py` — RunEvalContract mixin for the run_eval twins
 - `make_parse.py` — Makefile text extraction for the lockstep tests
+- `linear_time.py` — pins a linear-time claim by growth (best of
+  repeats at N and 4N), never a wall-clock bound (#1794)
 - `workflow_parse.py` — workflow text extraction for the run-step tests
 - `timings.json` — each suite's last recorded wall time, which
   `run_tests.py` schedules longest-first from, after every module with

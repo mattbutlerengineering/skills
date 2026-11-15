@@ -14,7 +14,6 @@ import re
 import subprocess
 import sys
 import tempfile
-import time
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -31,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from factory_fixture import CONFIG  # noqa: E402
 from fixture_tree import FixtureTree  # noqa: E402
+import linear_time  # noqa: E402
 from frontmatter_shapes import SHAPES  # noqa: E402
 from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
 from test_work_orders import (  # noqa: E402
@@ -3128,17 +3128,13 @@ class TestEvidenceRollUp(unittest.TestCase):
     # The long-line pin (maintenance:a-long-line-stalls-the-gate): a 44 kB
     # line of zero-preceded matches took 5.9 s when every zero-count read
     # scanned the whole prefix (quadratic), and takes milliseconds with the
-    # bounded window. The bound sits far from both, so a loaded runner
-    # never flakes it and a quadratic read never passes it.
-    LONG_LINE_SECONDS = 1.0
-
+    # bounded window. Pinned by growth, not a wall-clock bound, which a
+    # loaded full suite flaked (#1794).
     def test_a_long_zero_count_line_reads_in_linear_time(self):
-        line = "0 not run, " * 4000
-        started = time.perf_counter()
-        names = gates._names_unknown(line)
-        elapsed = time.perf_counter() - started
-        self.assertFalse(names)
-        self.assertLess(elapsed, self.LONG_LINE_SECONDS)
+        self.assertFalse(gates._names_unknown("0 not run, " * 800))
+        ratio = linear_time.growth(gates._names_unknown,
+                                   lambda n: "0 not run, " * n, 200)
+        self.assertLess(ratio, linear_time.GROWTH_LIMIT)
 
     def test_a_wide_zero_count_over_a_disclosure_stays_refused(self):
         # Review major (maintenance:a-long-line-stalls-the-gate): a 17-char
