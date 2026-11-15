@@ -222,12 +222,22 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    prints nothing on stdout (`gh` writes its "no matches" notice to
    stderr on a terminal). A failed `gh` call is a failure, not an empty
    list. A detached worktree has no branch and skips this test.
-4. **Positive evidence that this tip merged.** Either `<tip>` is a
+4. **Positive evidence that this tip merged.** One of: `<tip>` is a
    `headRefOid` in `gh pr list --head <branch> --base main --state
-   merged --json headRefOid`, or `git merge-base --is-ancestor <tip>
+   merged --json number,headRefOid`; `git merge-base --is-ancestor <tip>
    refs/remotes/origin/main` exits 0 (the full ref: a bare `origin/main`
    resolves a local branch or tag of that name first, and an unmerged
-   branch so named would pass). A merged PR for the branch *name* is not
+   branch so named would pass); or `git merge-base --is-ancestor <tip>
+   <headRefOid>` exits 0 for one of those merged PRs, because Phase 3's
+   `update-branch` merge commit or a retry worker's later commits make
+   the final head a descendant of the worker's tip and the squash merge
+   puts neither on main. A head not already local (`git cat-file -e`)
+   is fetched first with `git fetch --no-tags origin pull/<number>/head`;
+   under `--no-fetch` it is not fetched and the worktree is kept. A
+   failed fetch or `git` call, or a `number` or `headRefOid` that is not
+   a positive integer and a full object name, is a failure. Only the
+   worktree's own branch's merged PRs are searched, so a retry worker on
+   a differently named local branch is kept. A merged PR for the branch *name* is not
    evidence: a branch that gained commits after its PR merged, or
    reused the name, fails here. A tip no merged PR carries, on a branch
    with no PR, is unmerged work, never reaped.
