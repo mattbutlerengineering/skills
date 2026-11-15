@@ -132,8 +132,8 @@ file's Rules section.
 
 4. Look for another queue session, and report it before claiming:
    [preflight.md](references/preflight.md#step-4-another-queue-session).
-5. Count the backlog's leaks, stale `has-pr` and issues with no state
-   label, and apply the closed-unmerged rule to each `has-pr` issue
+5. Count the backlog's leaks (stale `has-pr`, no state label,
+   `agent-failed`, stale `in-progress`), and apply the closed-unmerged rule to each `has-pr` issue
    whose PRs all closed unmerged: [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
 
 ## Phase 1: Claim a batch
@@ -294,7 +294,8 @@ Its steps and lock release: [merge-train.md](references/merge-train.md).
   posted) and the already-resolved outcome are not failures: they leave
   the count unchanged. Report each with its evidence.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
-  every failure with its cause, and Phase 0 step 5's two counts even
+  every failure with its cause, and Phase 0 step 5's four counts
+  ([as lifecycle.md words them](references/lifecycle.md#phase-0-step-5-count-the-leaks)) even
   with no batch; with no `verdict` hook under `merge: auto`,
   also that every merge in the run took the fast path unreviewed.
   Under `source: work-orders`, also the

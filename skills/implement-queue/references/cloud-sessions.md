@@ -30,13 +30,18 @@ twins have no binary to run through, and the MCP twin is the way:
   open; no entry carries a `pull_request` key there, so nothing to drop.
 - Phase 0 step 5 ([lifecycle.md](lifecycle.md)): the `has-pr` list is
   `gh api 'repos/{owner}/{repo}/issues?labels=has-pr&state=open&per_page=100' --paginate`
-  and the no-state-label count reads
+  the no-state-label count reads
   `gh api 'repos/{owner}/{repo}/issues?state=open&per_page=100' --paginate`,
+  and the `agent-failed` count reads
+  `gh api 'repos/{owner}/{repo}/issues?labels=agent-failed&state=open&per_page=100' --paginate`,
   each dropping every entry that carries a `pull_request` key; the
-  timeline read is REST already. MCP: `list_issues` with
-  `labels: ["has-pr"]`, and with state open alone; the timeline has no
-  MCP twin, so with no `gh` every `has-pr` issue is reported, never
-  changed. The reconcile's count for
+  stale-`in-progress` count reuses step 4's list, whose twins
+  [preflight.md](preflight.md#step-4-another-queue-session) gives, and
+  the timeline reads are REST already. MCP: `list_issues` with
+  `labels: ["has-pr"]`, with `labels: ["agent-failed"]`, and with
+  state open alone; the timeline has no MCP twin, so with no `gh`
+  every `has-pr` issue is reported, never changed, and no
+  `in-progress` issue is counted stale. The reconcile's count for
   [the closed-unmerged rule](lifecycle.md#a-pr-closed-unmerged) is
   the same timeline read; with no `gh` it cannot be read, so the
   reconcile sets `agent-failed`.

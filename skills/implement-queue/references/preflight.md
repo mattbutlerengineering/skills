@@ -109,10 +109,12 @@ that needs it. A phrase such as "this file", "above", "below" or
 
 4. Look for another queue session, and report it before claiming. List
    the open issues that carry `in-progress` and that this session did
-   not claim, with `gh issue list --label in-progress --state open --json number,title,updatedAt`
-   (cloud: `gh api 'repos/{owner}/{repo}/issues?labels=in-progress&state=open&per_page=100'`,
+   not claim, with `gh issue list --label in-progress --state open --limit 1000 --json number,title,updatedAt`
+   (cloud: `gh api 'repos/{owner}/{repo}/issues?labels=in-progress&state=open&per_page=100' --paginate`,
    dropping every entry that carries a `pull_request` key; MCP:
-   `list_issues` with `labels: ["in-progress"]`, state open). A fresh
+   `list_issues` with `labels: ["in-progress"]`, state open). A list
+   that reaches the limit is reported as "at least" that count, and so
+   is the stale-`in-progress` count built from it. A fresh
    session has claimed none, so every one counts, and a looping session
    subtracts the issues it claimed in earlier iterations, never one Phase 1
    skipped. Give each its
