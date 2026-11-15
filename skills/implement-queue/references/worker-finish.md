@@ -38,7 +38,9 @@ PR → `needs-review`; an open PR with red gates, a PR closed unmerged,
 or no PR at all (unless the evidence outcome below applies) →
 `agent-failed`. A worker that reported the evidence outcome and posted
 its comment on the issue has no PR by design: its issue is
-`needs-review`. An issue whose PR merged is
+`needs-review`. One that reported the already-resolved outcome and
+posted its evidence has none either: close its issue as
+[lifecycle.md](lifecycle.md#already-resolved) says. An issue whose PR merged is
 delivered: leave it to GitHub's close. Never remove a `hold_labels`
 label or `stealable`, whatever the PR looks like: the gate put them
 there on purpose. A worker resumed twice with no new commit counts as

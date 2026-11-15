@@ -19,6 +19,9 @@ MIGRATION = (ROOT / "skills" / "implement-queue" / "references"
              / "profile-migration.md")
 
 ROW = re.compile(r"^\|\s*`([a-z][a-z-_]*)`\s*\|", re.M)
+SKILL_DIR = SKILL.parent
+LINK = re.compile(r"\]\(([^)#\s]*)#([^)\s]+)\)")
+HEADING = re.compile(r"^#{1,6} (.+)$", re.M)
 
 
 def names(text, start, end):
@@ -47,6 +50,63 @@ class TestMigrationNamesEveryRow(unittest.TestCase):
         self.assertEqual(
             names(self.migration, "## Hooks", "## What the check reports"),
             skill_hooks)
+
+
+
+def slug(heading):
+    """GitHub's heading anchor: lower case, punctuation other than
+    hyphens and spaces dropped, spaces to hyphens."""
+    kept = re.sub(r"[^\w\- ]", "", heading.strip().lower())
+    return kept.replace(" ", "-")
+
+
+class TestOutcomeTable(unittest.TestCase):
+    """#1796: a worker outcome with no row left issues open and
+    stateless, out of the queue for good. Every outcome lands in a
+    state the queue reads, or closes the issue."""
+
+    def outcomes(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        body = skill.split("| Outcome", 1)[1].split("\n\n", 1)[0]
+        rows = [line.split("|")[1:3] for line in body.splitlines()[2:]]
+        return {outcome.strip(): state.strip() for outcome, state in rows}
+
+    def test_every_outcome_is_a_label_or_closed(self):
+        skill = SKILL.read_text(encoding="utf-8")
+        labels = names(skill, "| Label", "## Rules")
+        self.assertIn("ready", labels)
+        for outcome, state in self.outcomes().items():
+            with self.subTest(outcome=outcome):
+                self.assertTrue(state.startswith("closed")
+                                or state.strip("`") in labels, state)
+
+    def test_an_already_resolved_issue_is_closed(self):
+        resolved = [state for outcome, state in self.outcomes().items()
+                    if outcome.startswith("Already resolved")]
+        self.assertEqual(len(resolved), 1)
+        self.assertTrue(resolved[0].startswith("closed"))
+
+
+class TestSkillAnchorsResolve(unittest.TestCase):
+    """Detector I checks that a linked file exists and ignores the
+    fragment, so a renamed heading breaks a pointer silently. Every
+    `file.md#anchor` link inside the skill names a real heading."""
+
+    def test_every_fragment_names_a_heading(self):
+        checked = 0
+        for doc in sorted(SKILL_DIR.rglob("*.md")):
+            for target, anchor in LINK.findall(doc.read_text("utf-8")):
+                if target.startswith(("http:", "https:")):
+                    continue
+                path = (doc.parent / target).resolve() if target else doc
+                if not path.is_relative_to(SKILL_DIR.resolve()):
+                    continue
+                checked += 1
+                with self.subTest(doc=doc.name, link=f"{target}#{anchor}"):
+                    slugs = {slug(h) for h in HEADING.findall(
+                        path.read_text(encoding="utf-8"))}
+                    self.assertIn(anchor, slugs)
+        self.assertGreater(checked, 10)
 
 
 if __name__ == "__main__":
