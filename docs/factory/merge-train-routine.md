@@ -172,7 +172,7 @@ Exactly one journal comment per run:
 **YYYY-MM-DD HH:MM — <normal | report-only | stopped>**: <merged N, awaiting human M, failed K>
 - Verdicts: <one line per open PR: number, verdict, reason>
 - Train: <per PR touched: updated / merged / failed after update / head moved after review / awaiting a human merge, with the citation>
-- Health: <main red, profile missing, denials, marker repairs>
+- Health: <main red, profile missing, denials, marker repairs, previous marker looks wrong, start not recorded>
 - Proposals: <amendments to this file or the profile, as diffs>
 - Spend: <estimate for this run>
 ```

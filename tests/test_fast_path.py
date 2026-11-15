@@ -205,8 +205,9 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         merge, and gate step 3 does not read a moved head as an unproven
         input."""
         root = Path(__file__).resolve().parent.parent
-        clause = ("the head moved: return to gate step 1 on the new head,"
-                  " and nothing recorded for the old one counts")
+        clause = ("the head moved: return to gate step 1 on the new head"
+                  " (at most once per run, as gate step 1 bounds it), and"
+                  " nothing recorded for the old one counts")
         for name in ("fast-path", "changed-files"):
             with self.subTest(hook=name):
                 text = " ".join(self.hook(name).split())
@@ -218,6 +219,48 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
                       " nothing recorded for the old one counts", gate)
         self.assertIn("A head that moved since step 1 is not an unproven"
                       " input: the gate restarts from step 1", gate)
+
+    def test_a_moved_head_restarts_the_gate_at_most_once_per_run(self):
+        """#1838: each restart on a moved head can re-enter a CI wait, so
+        gate step 1 bounds it to one per PR per run, and a second move
+        reports **head moved** and stops; the hooks defer to that bound."""
+        root = Path(__file__).resolve().parent.parent
+        for name in ("fast-path", "changed-files"):
+            with self.subTest(hook=name):
+                text = " ".join(self.hook(name).split())
+                self.assertIn("return to gate step 1 on the new head (at"
+                              " most once per run, as gate step 1 bounds"
+                              " it), and nothing recorded", text)
+        gate = " ".join((root / "skills" / "implement-queue" / "references"
+                         / "gate.md").read_text(encoding="utf-8").split())
+        self.assertIn("The gate restarts at most once per run for a PR: a"
+                      " head that moves again is reported as **head"
+                      " moved** and the gate ends there, with nothing"
+                      " merged", gate)
+        self.assertIn("The bound counts every head move seen inside the"
+                      " gate, and a [merge train](merge-train.md) mismatch"
+                      " that sends the PR back through the gate (Phase 3"
+                      " step 1, or step 3 as step 1 does) counts as the"
+                      " one restart; the `update-branch` commit adopted on"
+                      " the conditions of Phase 3 step 3 is not a move",
+                      gate)
+        train = " ".join((root / "skills" / "implement-queue" / "references"
+                          / "merge-train.md").read_text(encoding="utf-8")
+                         .split())
+        for token in ("send the PR back through the gate",
+                      "handle it as step 1 does",
+                      "exactly two parents"):
+            self.assertIn(token, train)
+
+    def test_the_commit_check_is_tied_to_an_equal_head(self):
+        """#1838: `git cat-file -e` confirms the recorded head only when
+        FETCH_HEAD equals it; a moved head has already restarted."""
+        for name in ("fast-path", "changed-files"):
+            with self.subTest(hook=name):
+                text = " ".join(self.hook(name).split())
+                self.assertIn("If they are equal, confirm `git cat-file -e"
+                              " <sha>^{commit}` exits 0", text)
+                self.assertNotIn("Then confirm `git cat-file", text)
 
     def test_the_hourly_routine_classifies_the_recorded_head(self):
         """#1819: the routine's gate step 3 defers to the profile's hook on
@@ -231,6 +274,78 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
                       " head", step)
         self.assertNotIn("branch checkout", step)
         self.assertNotIn("after `git fetch origin`", step)
+
+    @staticmethod
+    def hourly_step(number):
+        root = Path(__file__).resolve().parent.parent
+        routine = " ".join((root / "docs" / "factory"
+                            / "hourly-improvement-routine.md"
+                            ).read_text(encoding="utf-8").split())
+        gate = routine.split("## 6 Gate and merge", 1)[1]
+        gate = gate.split("## 7 ", 1)[0]
+        return gate.split(f"{number}. **", 1)[1].split(
+            f"{number + 1}. **", 1)[0]
+
+    def test_the_hourly_routine_records_the_head_in_its_own_step_1(self):
+        """#1838: the routine's step 1 records the head itself, as the
+        orchestrator's gate step 1 does, so step 3 borrows nothing."""
+        step1 = self.hourly_step(1)
+        self.assertIn("Record the PR's head SHA once, as the orchestrator's"
+                      " gate step 1 does; every later step uses it", step1)
+        step3 = self.hourly_step(3)
+        self.assertIn("the head recorded in step 1", step3)
+        self.assertNotIn("orchestrator's gate step 1", step3)
+
+    def test_the_hourly_routine_rereads_the_head_before_review_and_merge(self):
+        """#1838: gate.md step 1 reads the head again before the review is
+        dispatched and before the merge; the routine does the same."""
+        self.assertIn("Read the PR's head again before the review is"
+                      " dispatched, before the verdict comment and"
+                      " immediately before the merge", self.hourly_step(1))
+        self.assertIn("after reading the head again as step 1 says,"
+                      " dispatch the universal reviewer",
+                      self.hourly_step(4))
+        self.assertIn("read the head again, as step 1 says, then run the"
+                      " `merge-command` hook", self.hourly_step(6))
+
+    def test_the_hourly_routine_bounds_moved_head_restarts(self):
+        """#1838: each restart can re-enter a thirty-minute CI wait, so a
+        run restarts once; a second move reports **head moved** and the
+        next run's finish-first mode picks the PR up."""
+        step1 = self.hourly_step(1)
+        self.assertIn("at most once per run: a head that moves again →"
+                      " report **head moved** and stop; the next run finds"
+                      " the PR in finish-first mode", step1)
+        self.assertIn("once per run, as step 1 bounds it",
+                      self.hourly_step(3))
+
+
+    def test_the_hourly_update_branch_commit_is_adopted_by_the_train_rule(self):
+        """#1844 review: the routine's own `update-branch` commit is not a
+        moved head only on merge-train Phase 3 step 3's conditions, which
+        the routine points at rather than restates."""
+        root = Path(__file__).resolve().parent.parent
+        self.assertIn("adopted on the conditions of [the merge train]"
+                      "(../../skills/implement-queue/references/"
+                      "merge-train.md) Phase 3 step 3, is not a moved head",
+                      self.hourly_step(6))
+        train = (root / "skills" / "implement-queue" / "references"
+                 / "merge-train.md").read_text(encoding="utf-8")
+        self.assertTrue(train.startswith("# Phase 3: Merge train\n"))
+        self.assertIn("\n3. Read the PR's head, then run the `update-branch`"
+                      " hook.", train)
+        self.assertIn("exactly two parents", train)
+
+    def test_the_hourly_journal_files_a_moved_head_as_pr_open(self):
+        """#1844 review: **head moved** leaves the PR open, so the journal's
+        `pr-open` header lists it."""
+        root = Path(__file__).resolve().parent.parent
+        routine = " ".join((root / "docs" / "factory"
+                            / "hourly-improvement-routine.md"
+                            ).read_text(encoding="utf-8").split())
+        self.assertIn("`pr-open` for any run that left its PR open"
+                      " (awaiting CI, review or a human merge, head moved,"
+                      " or PR-only mode)", routine)
 
 
 class TestFailClosed(unittest.TestCase):

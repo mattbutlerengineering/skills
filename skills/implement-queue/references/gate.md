@@ -13,7 +13,15 @@ that needs it. A phrase such as "this file", "above", "below" or
    Read the PR's head again before the review is dispatched, before the
    verdict comment and immediately before the merge; if it differs from
    the recorded head, the gate restarts from step 1 on the new head and
-   nothing recorded for the old one counts. Run the `ci-status` hook.
+   nothing recorded for the old one counts. The gate restarts at most
+   once per run for a PR: a head that moves again is reported as **head
+   moved** and the gate ends there, with nothing merged; the next run
+   gates the PR from step 1. The bound counts every head move seen
+   inside the gate, and a [merge train](merge-train.md) mismatch that
+   sends the PR back through the gate (Phase 3 step 1, or step 3 as
+   step 1 does) counts as the one restart; the `update-branch` commit
+   adopted on the conditions of Phase 3 step 3 is not a move. Run the
+   `ci-status` hook.
    With a `required_check`, green
    means that check is **present and successful**. A rollup with no
    failures and no pending checks is not green when the required check
@@ -43,8 +51,9 @@ that needs it. A phrase such as "this file", "above", "below" or
    It is the PR's record of why it merges without a reviewer, and the
    gated head a later session reads (Phase 3 step 1). It is never a
    verdict: it carries no score, and step 4's re-review detection keys
-   only on a `reviewer-verdict: flag` first line, so a PR that leaves
-   the fast path gets a first review.
+   only on a `reviewer-verdict: flag` first line or a header
+   `specialist-verdict: block` line, so a PR that leaves the fast path
+   gets a first review.
 4. **Review.** When Phase 0's profile check found no `verdict` hook, no
    verdict can be derived and a review could not lead to a merge, so
    for a PR that is not on the fast path (step 3) this step does not
@@ -58,8 +67,10 @@ that needs it. A phrase such as "this file", "above", "below" or
    [the reviewer contract](reviewer-contract.md) defines. A
    reviewer is never the PR's author. When the PR already carries a
    verdict comment from this queue whose first line is a
-   `reviewer-verdict: flag` line (read by the comment rule of Phase 3
-   step 1), the universal review is a re-review: also hand the reviewer
+   `reviewer-verdict: flag` line, or whose header lines carry a
+   `specialist-verdict: block` line as the contract's Retry policy
+   defines them (read by the comment rule of Phase 3 step 1), the
+   universal review is a re-review: also hand the reviewer
    `priorIssues` (that comment's issues), `priorHeadSha` (its `Head:`
    line) and `fixDiff`, as the contract's Re-review section defines. A
    prior comment that cannot be read, or that has no `Head:` line,
@@ -99,7 +110,10 @@ that needs it. A phrase such as "this file", "above", "below" or
    Post a verdict comment on the PR whose first line is the line the
    hook printed, verbatim, so every comment carries the score, and whose
    second line is `Head: <sha>`, the recorded head, so the comment says
-   which head it covers. When the hook printed no `reviewer-verdict:`
+   which head it covers. After the `Head:` line comes one
+   `specialist-verdict: block (<reviewer>)` line per specialist that
+   blocked, as the contract's Retry policy defines, so a later session
+   can count the block. When the hook printed no `reviewer-verdict:`
    line, the first line is `reviewer-verdict: error (<reason>)`, with
    `<reason>` one of `no verdict hook`, `hook did not run`, `hook exit
    <code>` (an exit code other than 0 or 1 that printed no such line),
