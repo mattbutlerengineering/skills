@@ -36,7 +36,10 @@ twins have no binary to run through, and the MCP twin is the way:
   timeline read is REST already. MCP: `list_issues` with
   `labels: ["has-pr"]`, and with state open alone; the timeline has no
   MCP twin, so with no `gh` every `has-pr` issue is reported, never
-  changed.
+  changed. The reconcile's count for
+  [the closed-unmerged rule](lifecycle.md#a-pr-closed-unmerged) is
+  the same timeline read; with no `gh` it cannot be read, so the
+  reconcile sets `agent-failed`.
 - The already-resolved close ([lifecycle.md](lifecycle.md#already-resolved)):
   `gh api -X PATCH repos/{owner}/{repo}/issues/<N> -f state=closed -f state_reason=completed`.
   MCP: `issue_write` with `method: update`, `state: closed` and
