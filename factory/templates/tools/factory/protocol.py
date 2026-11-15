@@ -105,7 +105,9 @@ def read_frontmatter(path):
     Single error contract: returns None when the file has no frontmatter
     block; a present-but-fieldless block is an empty dict. Callers decide
     what a missing block means for them. Values may be `|` literal block
-    scalars (following indented lines joined with newlines). The block
+    scalars (following indented lines joined with newlines), or, under a
+    key with an empty value, a one-level `key: value` map read as a dict
+    (see _nested_map). The block
     is the one frontmatter_end bounds; CRLF files split like LF ones.
     """
     return parse_frontmatter(path.read_text(encoding="utf-8"))
@@ -122,14 +124,21 @@ def parse_frontmatter(text):
     fields = {}
     key = None
     block_lines = None
+    nested_lines = None
     for line in lines[1:end]:
         if block_lines is not None and (line.startswith("  ") or not line.strip()):
             block_lines.append(line[2:])
             continue
+        if nested_lines is not None and (line[:1].isspace() or not line.strip()):
+            nested_lines.append(line)
+            continue
         if key is not None and block_lines is not None:
             fields[key] = "\n".join(block_lines).rstrip("\n")
+        if key is not None and nested_lines is not None:
+            fields[key] = _nested_map(nested_lines)
         key = None
         block_lines = None
+        nested_lines = None
         if ":" not in line:
             continue
         key, value = (part.strip() for part in line.split(":", 1))
@@ -137,9 +146,35 @@ def parse_frontmatter(text):
             block_lines = []
         else:
             fields[key] = value
+            if value == "":
+                nested_lines = []
     if key is not None and block_lines is not None:
         fields[key] = "\n".join(block_lines).rstrip("\n")
+    if key is not None and nested_lines is not None:
+        fields[key] = _nested_map(nested_lines)
     return fields
+
+
+def _nested_map(lines):
+    """The value of a key whose own value is empty, from the indented
+    lines under it (#1777): those lines belong to that key and never set
+    a top-level field. A one-level `key: value` block — its first line
+    an entry, every entry at that line's indent — reads as a dict; any
+    other block (a `- item` list, no lines at all) keeps the empty value
+    the key always had."""
+    body = [line for line in lines if line.strip()]
+    if not body:
+        return ""
+    first = body[0]
+    indent = len(first) - len(first.lstrip())
+    if first.lstrip().startswith("-") or ":" not in first:
+        return ""
+    entries = {}
+    for line in body:
+        if len(line) - len(line.lstrip()) == indent and ":" in line:
+            name, value = (part.strip() for part in line.split(":", 1))
+            entries[name] = value
+    return entries
 
 
 # Pi (oh-my-pi) caps a skill description at 1024 chars; a longer one
