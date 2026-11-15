@@ -1,6 +1,6 @@
 ---
 name: architect
-description: Use when requirements exist and the technical design is needed — architecture, data model, stack, interfaces — or when the user asks for technical design directly. Drafts from artifacts and codebase, then asks only about trade-offs. Produces architecture.md.
+description: Use when requirements exist and the technical design is needed — architecture, data model, stack, interfaces — or when the user asks for technical design directly. Drafts from artifacts and codebase, then asks only about trade-offs. Produces architecture.md. Not `deepen` (which reviews the shape of existing code, outside any run), not `decompose` (which breaks a finished design into work items), not `prisma-migrations` (which takes a schema change to a database).
 metadata:
   author: Matt Butler
 ---
