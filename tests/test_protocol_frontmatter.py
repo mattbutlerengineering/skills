@@ -73,6 +73,46 @@ class TestBlockScalars(unittest.TestCase):
                          {"description": "multi", "name": "idea"})
 
 
+class TestNestedBlocks(unittest.TestCase):
+    """Indented lines under a key with an empty value belong to that key
+    and never set or overwrite a top-level field (#1777). A one-level
+    `key: value` block reads as a dict; anything else (a list) keeps the
+    empty value the key had before."""
+
+    def test_nested_key_never_overwrites_a_top_level_field(self):
+        fields = parse_frontmatter("---\nname: capture\ndescription: d\n"
+                                   "metadata:\n  name: other\n---\n")
+        self.assertEqual(fields["name"], "capture")
+
+    def test_one_level_map_reads_as_a_dict(self):
+        fields = parse_frontmatter("---\nname: capture\nmetadata:\n"
+                                   "  author: someone\n  version: 1\n"
+                                   "description: d\n---\n")
+        self.assertEqual(fields, {"name": "capture",
+                                  "metadata": {"author": "someone",
+                                               "version": "1"},
+                                  "description": "d"})
+        self.assertNotIn("author", fields)
+
+    def test_blank_line_inside_a_map_keeps_it_nested(self):
+        fields = parse_frontmatter("---\nmetadata:\n  author: a\n\n"
+                                   "  name: other\nname: idea\n---\n")
+        self.assertEqual(fields, {"metadata": {"author": "a",
+                                               "name": "other"},
+                                  "name": "idea"})
+
+    def test_a_list_keeps_its_empty_value_and_leaks_nothing(self):
+        fields = parse_frontmatter("---\nname: idea\nassumptions:\n"
+                                   "  - \"a: b\"\n    name: wrapped\n"
+                                   "---\n")
+        self.assertEqual(fields, {"name": "idea", "assumptions": ""})
+
+    def test_deeper_lines_are_not_entries_of_the_one_level_map(self):
+        fields = parse_frontmatter("---\nmetadata:\n  author: a\n"
+                                   "    deep: x\n---\n")
+        self.assertEqual(fields, {"metadata": {"author": "a"}})
+
+
 class TestLineEndings(unittest.TestCase):
     def test_crlf_file_parses_like_lf(self):
         path = write("---\r\nname: idea\r\ndescription: d\r\n---\r\n\r\nbody\r\n")
