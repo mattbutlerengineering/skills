@@ -133,8 +133,8 @@ file's Rules section.
 4. Look for another queue session, and report it before claiming:
    [preflight.md](references/preflight.md#step-4-another-queue-session).
 5. Count the backlog's leaks, stale `has-pr` and issues with no state
-   label, and return each `has-pr` issue whose PRs all closed unmerged
-   to `ready`: [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
+   label, and apply the closed-unmerged rule to each `has-pr` issue
+   whose PRs all closed unmerged: [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
 
 ## Phase 1: Claim a batch
 
@@ -212,6 +212,8 @@ When a worker finishes, label its issue with the `transition` hook:
 | Already resolved on `main`, no change needed, evidence posted | closed ([lifecycle.md](references/lifecycle.md#already-resolved)) |
 | No usable change | `agent-failed` |
 | Second failure on the same issue | `stealable` |
+| PR closed unmerged, the issue's first ([rule](references/lifecycle.md#a-pr-closed-unmerged)) | `ready` |
+| PR closed unmerged, the issue's second or later | `needs-review` |
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.

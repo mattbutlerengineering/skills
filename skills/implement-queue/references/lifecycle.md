@@ -34,9 +34,11 @@ Run after step 4, every iteration, before Phase 1.
 Skip any issue whose PR is in this session's gate or train. For each
 of the others, read the PRs that refer to it from its timeline:
 
-    gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null and .source.issue.repository.full_name == "{owner}/{repo}") | [.source.issue.number, .source.issue.state, (.source.issue.pull_request.merged_at // "-")] | @tsv'
+    gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null and .source.issue.repository.full_name == "{owner}/{repo}") | [.source.issue.number, .source.issue.state, (.source.issue.pull_request.merged_at // "-")] | @tsv' | sort -u
 
-The timeline catches a PR that only `Refs` the issue, which a
+A PR appears once per event that references the issue, so `sort -u`
+leaves one row per PR, and every count below counts distinct PR
+numbers. The timeline catches a PR that only `Refs` the issue, which a
 closing-reference read misses. It also catches a PR that only mentions
 the issue, so every reading below errs toward leaving the label alone:
 
@@ -58,8 +60,11 @@ issue that carries one is still dropped by Phase 1.
 One rule decides an issue whose referring PRs all closed unmerged,
 wherever the queue meets it: step 5 here, and the
 [reconcile before Phase 4](worker-finish.md#reconcile-before-phase-4),
-which defers to it. Count the PRs the timeline read above lists as
-closed with no merge time (`-`), every session's, not only this one's:
+which defers to it. Count the distinct PRs the timeline read above
+lists as closed with no merge time (`-`), every session's, not only
+this one's. A PR that only mentions the issue still counts: an
+over-count can only hold the issue for a human, never spend a worker,
+so the error falls on the cheap side:
 
 - Exactly one: run the `transition` hook to `ready`, and report it as
   returned. One closed attempt earns one more.
@@ -70,8 +75,8 @@ closed with no merge time (`-`), every session's, not only this one's:
   (#1801).
 - A timeline that cannot be read: the count is unknown. Step 5 changes
   nothing and reports it; the reconcile, which must not leave
-  `in-progress` behind, runs the `transition` hook to `needs-review`
-  and reports it.
+  `in-progress` behind, runs the `transition` hook to `agent-failed`
+  and reports it, as for no PR at all.
 
 **No state label.** Count the open issues that carry none of the
 Labels table's labels, no `hold_labels` label and no `wo:*` label:

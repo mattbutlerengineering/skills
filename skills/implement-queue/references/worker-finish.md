@@ -39,7 +39,10 @@ PR → `needs-review`; an open PR with red gates, or no PR at all
 or merged PR and at least one closed unmerged →
 [the closed-unmerged rule](lifecycle.md#a-pr-closed-unmerged), which
 counts every closed PR on the issue's timeline: `ready` after the
-first, `needs-review` from the second. A worker that reported the
+first, `needs-review` from the second. A closed PR counts as a
+failure toward Phase 4's three-consecutive-failures stop; for the
+second one the rule's `needs-review` replaces the Outcome table's
+`stealable` row, since a second closed PR is the Owner's call. A worker that reported the
 evidence outcome and posted its comment on the issue has no PR by
 design: its issue is `needs-review`. One that reported the already-resolved outcome and
 posted its evidence has none either: close its issue as
