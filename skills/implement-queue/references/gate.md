@@ -16,7 +16,12 @@ that needs it. A phrase such as "this file", "above", "below" or
    nothing recorded for the old one counts. The gate restarts at most
    once per run for a PR: a head that moves again is reported as **head
    moved** and the gate ends there, with nothing merged; the next run
-   gates the PR from step 1. Run the `ci-status` hook.
+   gates the PR from step 1. The bound counts every head move seen
+   inside the gate, and a [merge train](merge-train.md) mismatch that
+   sends the PR back through the gate (Phase 3 step 1, or step 3 as
+   step 1 does) counts as the one restart; the `update-branch` commit
+   adopted on the conditions of Phase 3 step 3 is not a move. Run the
+   `ci-status` hook.
    With a `required_check`, green
    means that check is **present and successful**. A rollup with no
    failures and no pending checks is not green when the required check

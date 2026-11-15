@@ -205,8 +205,9 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         merge, and gate step 3 does not read a moved head as an unproven
         input."""
         root = Path(__file__).resolve().parent.parent
-        clause = ("the head moved: return to gate step 1 on the new head,"
-                  " and nothing recorded for the old one counts")
+        clause = ("the head moved: return to gate step 1 on the new head"
+                  " (at most once per run, as gate step 1 bounds it), and"
+                  " nothing recorded for the old one counts")
         for name in ("fast-path", "changed-files"):
             with self.subTest(hook=name):
                 text = " ".join(self.hook(name).split())
@@ -227,14 +228,29 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         for name in ("fast-path", "changed-files"):
             with self.subTest(hook=name):
                 text = " ".join(self.hook(name).split())
-                self.assertIn("at most once per run, as gate step 1"
-                              " bounds it", text)
+                self.assertIn("return to gate step 1 on the new head (at"
+                              " most once per run, as gate step 1 bounds"
+                              " it), and nothing recorded", text)
         gate = " ".join((root / "skills" / "implement-queue" / "references"
                          / "gate.md").read_text(encoding="utf-8").split())
         self.assertIn("The gate restarts at most once per run for a PR: a"
                       " head that moves again is reported as **head"
                       " moved** and the gate ends there, with nothing"
                       " merged", gate)
+        self.assertIn("The bound counts every head move seen inside the"
+                      " gate, and a [merge train](merge-train.md) mismatch"
+                      " that sends the PR back through the gate (Phase 3"
+                      " step 1, or step 3 as step 1 does) counts as the"
+                      " one restart; the `update-branch` commit adopted on"
+                      " the conditions of Phase 3 step 3 is not a move",
+                      gate)
+        train = " ".join((root / "skills" / "implement-queue" / "references"
+                          / "merge-train.md").read_text(encoding="utf-8")
+                         .split())
+        for token in ("send the PR back through the gate",
+                      "handle it as step 1 does",
+                      "exactly two parents"):
+            self.assertIn(token, train)
 
     def test_the_commit_check_is_tied_to_an_equal_head(self):
         """#1838: `git cat-file -e` confirms the recorded head only when
