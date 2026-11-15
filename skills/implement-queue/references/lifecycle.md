@@ -117,10 +117,21 @@ Nothing in this skill moves an `agent-failed` issue back to `ready`;
 returning one requires a human, who relabels it `ready`, usually after
 sharpening the issue. Step 5 counts the ones nobody has returned yet.
 The Outcome table's "Second failure on the same issue" row applies
-when a worker's outcome is "No usable change" and the issue's timeline
-already shows an `agent-failed` labeled event: the `transition` hook
-then sets `stealable` instead of `agent-failed`. A worker on an issue
-with no earlier `agent-failed` event takes the "No usable change" row.
+only on the worker-outcome path: when a worker's outcome is "No usable
+change" and the issue's timeline already shows an `agent-failed`
+labeled event (any line from
+`gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "labeled" and .label.name == "agent-failed") | .created_at'`),
+the `transition` hook then sets `stealable` instead of `agent-failed`.
+A worker on an issue with no earlier `agent-failed` event takes the
+"No usable change" row. So does one whose timeline cannot be read, or
+a session with no `gh` (the GitHub MCP server has no timeline read):
+without evidence of an earlier failure the queue sets `agent-failed`,
+the less aggressive outcome, and never escalates to `stealable`.
+Every other setter of `agent-failed` always sets it, earlier event or
+not: [the reconcile](worker-finish.md#reconcile-before-phase-4), the
+closed-unmerged rule's unreadable-timeline case above,
+[Phase 0 step 3's `agent-failed` cause](preflight.md#step-3-failed-pr-causes-and-settled-green-prs)
+and [the merge train's CI-fix issue](merge-train.md).
 A second closed PR is not this row: it follows
 [the closed-unmerged rule](#a-pr-closed-unmerged).
 
