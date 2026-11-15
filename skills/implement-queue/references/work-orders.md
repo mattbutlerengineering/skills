@@ -32,6 +32,29 @@ SKILL.md's Phase 0 applies. In addition, `git status` must be clean on an
 up-to-date default branch, and `make check` must pass. A red tree is the
 work, and fixing it beats starting three new things on top of it.
 
+### Which open PRs are this queue's
+
+Phase 0 step 3 reads SKILL.md's issue labels to decide which open PRs
+belong to this queue. A work order's issue never carries them, so in
+this mode the rule reads the `wo:*` labels instead: a PR belongs to this
+queue when it closes an issue carrying `wo:in-progress`,
+`wo:needs-review` or `wo:failed` *and* its body ends with the line
+`Driver: implement-queue` (Worker brief item 5 below). The `Driver:`
+line is required here, not merely uncontradicted, because the cloud
+fallback's assembler claims through the same labels and its PRs are not
+this queue's. Every other PR is foreign, and step 3 treats it as
+foreign. Everything else step 3 does with a PR of this queue still
+applies: green ones go to the gate, failed ones block claiming.
+
+Where step 3 would label a failed PR's issue `agent-failed`, this mode
+runs `make wo-failed ISSUE=<n>` instead and never applies
+`agent-failed` to a work order's issue. The `agent-failed` cause in
+[preflight.md](preflight.md#step-3-failed-pr-causes-and-settled-green-prs)
+reads `wo:failed` in its place. A failed PR of this queue whose issue
+carries `wo:failed` is not fixed or re-run again. It is reported, with
+its failing job linked, for a human to close or take over, and it does
+not block claiming.
+
 ## Plan the batch, never by hand
 
     python3 work_queue.py plan          # or tools/factory/work_queue.py
@@ -111,6 +134,35 @@ message, one worktree per worker. Each worker's prompt must carry:
 11. Say in the result which checks were not verified locally: list under
     `not verified locally` every CI check the PR will face that you did
     not or could not run, each with the reason.
+12. Run every subprocess in the foreground under a time bound
+    (`timeout 600 <cmd>` or the tool's own timeout; state a longer bound
+    for a slow step). Never start a background or watch process and wait
+    on it. A command that hits its bound is killed and its output
+    recorded, never retried unchanged. Stall-abort: after two resumes
+    without a new commit, or two resumes that each hit a bound, stop:
+    commit what works, open a draft PR if anything is usable, and report
+    the blocking command.
+13. Evidence outcome: when no repo change can fix the order (for example
+    a scheduled routine that never fired), post the evidence on the
+    issue, open no PR and report the evidence outcome. Already-resolved
+    outcome: when the order is already fixed on the default branch, post
+    the merged PR or a repeatable measurement on the issue, open no PR
+    and report the already-resolved outcome. Never invent a change to
+    have something to push. Neither outcome closes the issue or checks
+    the breakdown row; the orchestrator releases the order with
+    `make wo-failed ISSUE=<n>` (Reconcile in this mode).
+14. Finish or hand off within 45 minutes from dispatch, and answer the
+    orchestrator's check-in at once.
+15. Before opening the PR, check your diff against the four catch classes
+    of the reviewer contract: hallucination (code that runs but does not
+    do what the order asked), regression (tests removed or behaviour
+    changed without a reason), gate bypass (lint, typecheck or test
+    output misread as passing) and criteria gap (acceptance criteria
+    skipped or met poorly). Check the diff against each acceptance
+    criterion of the row's `Accept:` too, and list in the result each
+    criterion with how you verified it. Change nothing the order does not
+    ask for: a case found outside its row is named in the PR body, not
+    implemented.
 
 Model per work order follows `factory.json`'s routing bands. Mechanical
 work does not need the implementation model.

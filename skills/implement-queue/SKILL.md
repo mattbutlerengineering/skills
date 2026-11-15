@@ -103,7 +103,9 @@ file's Rules section.
    carrying `in-progress`, `has-pr`, `needs-review`, `agent-failed` or
    `stealable` and its body has no `Driver:` line naming a driver other
    than `implement-queue`; every other PR is foreign (another agent's, a
-   bot's, a routine's). A PR whose `Driver:` line names another driver
+   bot's, a routine's). Under `source: work-orders` the `wo:*` rule in
+   [work-orders.md](references/work-orders.md#which-open-prs-are-this-queues)
+   replaces this one. A PR whose `Driver:` line names another driver
    is that driver's, which claimed its issue through
    [the claim step](references/claim.md). A PR the evidence says must
    not merge (the third cause below) is never gated, re-run toward green
