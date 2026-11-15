@@ -123,9 +123,30 @@ not a source until a run records that it reports `previous_filename`.
 The skill's default, stated because it needs a session permission the
 Owner grants outside this repo. `<sha>` is the gated head (the skill's
 gate step 1), so an `--auto` merge is enabled only at the head the
-review saw. A merge the runtime denies is reported
-as awaiting a human merge and never retried by another route
-(ADR-0087).
+review saw. A merge the runtime or the Owner refuses (a permission
+refusal) is reported as awaiting a human merge and never retried by
+another route: no REST call, no MCP tool (ADR-0087).
+
+A GraphQL 403 (`GitHub GraphQL not available from Claude Code
+sessions`) or `spawn gh ENOENT` is a capability gap, not a refusal
+(the skill's `references/cloud-sessions.md`). On the 403, merge with the
+REST twin, `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f
+merge_method=squash -f sha=<sha>`; with no `gh`, with the MCP
+`merge_pull_request` (`merge_method: squash`, `expectedHeadSha: <sha>`).
+A twin merge still owes both obligations below:
+
+- **The branch delete.** Run the delete steps below with REST reads in
+  place of the GraphQL ones: `gh api repos/{owner}/{repo}/pulls/<N>`
+  gives `merged` (true is `MERGED`), `.head.ref`, `.head.sha`, and
+  `isCrossRepository` as `.head.repo.full_name != .base.repo.full_name`;
+  step 3 reads `gh api 'repos/{owner}/{repo}/pulls?base=<headRefName>&state=open'
+  --jq length` and needs `0`. With no `gh` (the MCP twin) no delete can
+  run: report the branch by name.
+- **The post-merge check read.** Before the train starts its next PR,
+  wait for the merge to land on `main` and for `main`'s `check` to
+  finish, as for any merge (`docs/factory/merge-train-routine.md` §4
+  step 5), read through the `preflight` twin. Red `main` stops the
+  train.
 
 `--delete-branch` has left the remote branch behind in this repo (#1636),
 so delete it yourself once `gh pr view <N> --json
