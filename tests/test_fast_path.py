@@ -233,6 +233,51 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         self.assertNotIn("after `git fetch origin`", step)
 
 
+    @staticmethod
+    def hourly_step(number):
+        root = Path(__file__).resolve().parent.parent
+        routine = " ".join((root / "docs" / "factory"
+                            / "hourly-improvement-routine.md"
+                            ).read_text(encoding="utf-8").split())
+        gate = routine.split("## 6 Gate and merge", 1)[1]
+        gate = gate.split("## 7 ", 1)[0]
+        return gate.split(f"{number}. **", 1)[1].split(
+            f"{number + 1}. **", 1)[0]
+
+    def test_the_hourly_routine_records_the_head_in_its_own_step_1(self):
+        """#1838: the routine's step 1 records the head itself, as the
+        orchestrator's gate step 1 does, so step 3 borrows nothing."""
+        step1 = self.hourly_step(1)
+        self.assertIn("Record the PR's head SHA once, as the orchestrator's"
+                      " gate step 1 does; every later step uses it", step1)
+        step3 = self.hourly_step(3)
+        self.assertIn("the head recorded in step 1", step3)
+        self.assertNotIn("orchestrator's gate step 1", step3)
+
+    def test_the_hourly_routine_rereads_the_head_before_review_and_merge(self):
+        """#1838: gate.md step 1 reads the head again before the review is
+        dispatched and before the merge; the routine does the same."""
+        self.assertIn("Read the PR's head again before the review is"
+                      " dispatched and immediately before the merge",
+                      self.hourly_step(1))
+        self.assertIn("after reading the head again as step 1 says,"
+                      " dispatch the universal reviewer",
+                      self.hourly_step(4))
+        self.assertIn("read the head again, as step 1 says, then run the"
+                      " `merge-command` hook", self.hourly_step(6))
+
+    def test_the_hourly_routine_bounds_moved_head_restarts(self):
+        """#1838: each restart can re-enter a thirty-minute CI wait, so a
+        run restarts once; a second move reports **head moved** and the
+        next run's finish-first mode picks the PR up."""
+        step1 = self.hourly_step(1)
+        self.assertIn("at most once per run: a head that moves again →"
+                      " report **head moved** and stop; the next run finds"
+                      " the PR in finish-first mode", step1)
+        self.assertIn("once per run, as step 1 bounds it",
+                      self.hourly_step(3))
+
+
 class TestFailClosed(unittest.TestCase):
     def test_a_failed_git_exits_2_with_a_problem_string(self):
         code, out, _ = run(["docs/kb/a.md"], failing=["diff"])

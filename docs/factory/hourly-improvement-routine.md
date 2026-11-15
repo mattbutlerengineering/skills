@@ -220,22 +220,30 @@ PR. A green one still goes through its gate and merge train.
 
 Implement-queue's gate, run for this one PR under the profile:
 
-1. **CI.** Wait for `required_check` (`check`) to be present and green
-   on the PR's current head, polling no more than once a minute for at
-   most thirty minutes. A rollup with no `check` run is not green.
-   Still pending at the limit → report **awaiting CI** and stop; the
-   next run finds the PR in finish-first mode.
+1. **Head and CI.** Record the PR's head SHA once, as the orchestrator's
+   gate step 1 does; every later step uses it. Read the PR's head again
+   before the review is dispatched and immediately before the merge; if
+   it differs from the recorded head, restart this gate from step 1 on
+   the new head, and nothing recorded for the old one counts. Restart
+   at most once per run: a head that moves again → report **head
+   moved** and stop; the next run finds the PR in finish-first mode.
+   Wait for `required_check` (`check`) to be present and green on the
+   recorded head, polling no more than once a minute for at most thirty
+   minutes. A rollup with no `check` run is not green. Still pending at
+   the limit → report **awaiting CI** and stop; the next run finds the
+   PR in finish-first mode.
 2. **Holds.** A `hold_labels` label on the PR or its issue ends the
    gate: no review, no merge.
 3. **Fast path.** Run the profile's `fast-path` hook on the recorded
-   head, the PR's head SHA recorded once as the orchestrator's gate
-   step 1 states, which the hook's own text says how to fetch and
-   check. `fast-path: low-risk`, with no
+   head, the head recorded in step 1, which the hook's own text says
+   how to fetch and check. `fast-path: low-risk`, with no
    specialist matched, is the review (ADR-0088). A head that moved
    since it was recorded restarts this gate from step 1 on the new
-   head. A failed fetch, a recorded head that does not resolve, or exit
+   head, once per run, as step 1 bounds it. A failed fetch, a recorded
+   head that does not resolve, or exit
    2 fails closed: review.
-4. **Review.** Otherwise dispatch the universal reviewer with the input
+4. **Review.** Otherwise, after reading the head again as step 1 says,
+   dispatch the universal reviewer with the input
    [the reviewer contract](../../skills/implement-queue/references/reviewer-contract.md)
    defines. The reviewer is never the author; snapshot
    `git status --porcelain` before and after, and a changed checkout
@@ -262,7 +270,9 @@ Implement-queue's gate, run for this one PR under the profile:
    hook and wait for a green `check` on the new head
    (`docs/kb/cross-pr-merge-hazards.md`). Re-check steps 1 to 5 on
    that head — a label or a review can change while the run waits —
-   then run the `merge-command` hook. A merge the runtime
+   recording it as step 1 does (the routine's own update is not a
+   moved head); read the head again, as step 1 says, then run the
+   `merge-command` hook. A merge the runtime
    denies is reported as **awaiting a human merge** with the denial,
    and is never retried by another route in this run (ADR-0087). Wait
    for the merge to land and for `main`'s `check` to finish; a red
