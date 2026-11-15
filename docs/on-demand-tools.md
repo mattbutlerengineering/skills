@@ -142,3 +142,36 @@ pre-pass only, like the free tools above:
     descriptions, and for a `TEMPLATE.md` in a skill root: generic
     template rules that conflict with this repo's skill contract (one
     plugin version, ADR-0095; trigger-tuned descriptions).
+  Second pass, same tool and version, origin/main 7a11059 (verified
+  2026-11-15):
+  - "Unexpected nesting depth for general skill" (every skill): an artifact
+    of scanning the checkout, whose folder is itself named `skills`, so
+    paths read skills/skills/<name>. On a `git archive` export
+    (<tmp>/repo/skills/<name>) the finding disappears; run the per-skill
+    checks on the export too.
+  - "Broad description without negative triggers" matches the literal
+    "Do NOT use" phrasing only. Descriptions that state boundaries in
+    house style ("Not `doctor` (...)", "Designing the data model is
+    architect; ...") are flagged anyway. Of eight flagged, only
+    `architect` truly lacked one (fixed by its own issue).
+  - "Deeply nested references" fires when a references file cross-links a
+    sibling reference. In all five flagged skills (deepen, implement-queue,
+    lean, polish, review) the sibling is also linked directly from
+    SKILL.md, so nothing is two levels deep.
+  - "Resource-based skill lacks documentation of available resources"
+    (`prisma-migrations`) is wrong: SKILL.md lists all three `assets/`
+    files.
+  - "missing-reference caveats" (info) mean only that targets outside the
+    skill folder were not inspected; detector I verifies every markdown
+    link target exists.
+  - "Description contains vague words" (`factory-init`) and "uses
+    first/second person" (`house-voice`, where the "my" sits inside quoted
+    user phrases) are keyword hits on specific, third-person descriptions.
+  - `author_format` (high, blocking) wants the author as a name followed by
+    an address in angle brackets (`Name <email@host>`). The Owner declined
+    it (2026-11-15) because it would publish an email address, so every
+    skill still exits 1 at Tier 1 on it. A future sweep does not
+    re-propose it without the Owner.
+  - Tier 2 needs an embedding provider key (`SKILL_EVAL_EMBEDDING_PROVIDER`
+    set to `nv_build` with `NVIDIA_API_KEY`, or to `openai` with
+    `OPENAI_API_KEY`); it does not run offline.
