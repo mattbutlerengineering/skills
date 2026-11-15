@@ -50,9 +50,10 @@ file changes only by a PR: its commit is the consent record.
 `HEAD`, which can lag the pushed head. Get it locally first: `git fetch
 origin` and `git fetch origin pull/<N>/head`, then compare `git
 rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
-moved: return to gate step 1 on the new head, and nothing recorded for
-the old one counts, this classification included. Then confirm `git
-cat-file -e <sha>^{commit}` exits 0. A fetch that fails, or a recorded
+moved: return to gate step 1 on the new head (at most once per run, as
+gate step 1 bounds it), and nothing recorded for the old one counts,
+this classification included. If they are equal, confirm `git cat-file
+-e <sha>^{commit}` exits 0. A fetch that fails, or a recorded
 head that does not resolve to a commit, means the classifier cannot
 prove its input: fail closed, review the PR and dispatch every
 specialist. Exit 0 prints
@@ -94,8 +95,9 @@ The source of the `gate_paths` check. `<sha>` is the recorded head
 (gate step 1), never the checkout's `HEAD`. Get it locally first: `git
 fetch origin` and `git fetch origin pull/<N>/head`, then compare `git
 rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
-moved: return to gate step 1 on the new head, and nothing recorded for
-the old one counts, this list included. Then confirm `git cat-file -e
+moved: return to gate step 1 on the new head (at most once per run, as
+gate step 1 bounds it), and nothing recorded for the old one counts,
+this list included. If they are equal, confirm `git cat-file -e
 <sha>^{commit}` exits 0. A fetch that fails, or a recorded head that
 does not resolve to a commit, means the list cannot be proven current:
 fail closed, a human merge. It reads `git diff --name-only -z --no-renames
@@ -130,15 +132,23 @@ not a source until a run records that it reports `previous_filename`.
 The skill's default, stated because it needs a session permission the
 Owner grants outside this repo. `<sha>` is the gated head (the skill's
 gate step 1), so an `--auto` merge is enabled only at the head the
-review saw. A merge the runtime or the Owner refuses (a permission
+review saw. `--auto` does not wait here: `main` has no branch
+protection, so no check is required and GitHub merges at once
+(`docs/kb/main-unprotected.md`; #1840 and #1841 merged before `check`
+finished on their updated heads). So after an `update-branch`, or
+whenever the head changed, wait until the `check` run is `completed`
+with conclusion `success` on that exact head before running this
+command. A merge the runtime or the Owner refuses (a permission
 refusal) is reported as awaiting a human merge and never retried by
 another route: no REST call, no MCP tool (ADR-0087).
 
-A GraphQL 403 (`GitHub GraphQL not available from Claude Code
+An HTTP 403 (`GitHub GraphQL not available from Claude Code
 sessions`) or `spawn gh ENOENT` is a capability gap, not a refusal
-(the skill's `references/cloud-sessions.md`). On the 403, merge with the
-REST twin, `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f
-merge_method=squash -f sha=<sha>`; with no `gh`, with the MCP
+(the skill's `references/cloud-sessions.md`). On the 403, and only
+once `ci-status` is green at the gated head, merge with the REST twin,
+`gh api -X PUT repos/{owner}/{repo}/pulls/<N>/merge -f
+merge_method=squash -f sha=<sha>`, which merges a red head as readily
+as a green one (`docs/kb/main-unprotected.md`); with no `gh`, with the MCP
 `merge_pull_request` (`merge_method: squash`, `expectedHeadSha: <sha>`).
 A twin merge still owes both obligations below:
 
@@ -158,7 +168,7 @@ A twin merge still owes both obligations below:
 `--delete-branch` has left the remote branch behind in this repo (#1636),
 so delete it yourself once `gh pr view <N> --json
 state,headRefName,headRefOid,isCrossRepository` reports `MERGED`. If the
-PR is not yet `MERGED` (an `--auto` merge waiting on checks), do nothing
+PR is not yet `MERGED` (the merge has not landed yet), do nothing
 now and repeat this step when it is. Delete only when all of these hold,
 and otherwise leave the branch alone and report it by name. Each command
 must exit 0: a failed `gh` or `git` call is a failure, never an empty
@@ -191,6 +201,10 @@ protection).
 The skill's default, stated because the merge train depends on it: one
 PR at a time, `update-branch`, then a green `check` against the main of
 that moment before the next PR starts (`docs/kb/cross-pr-merge-hazards.md`).
+The update moves the head, and `--auto` does not wait for checks here
+(`docs/kb/main-unprotected.md`), so run the `merge-command` only once
+the `check` run on the new head is `completed` with conclusion
+`success`.
 
 ## reap
 
