@@ -219,6 +219,33 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         self.assertIn("A head that moved since step 1 is not an unproven"
                       " input: the gate restarts from step 1", gate)
 
+    def test_a_moved_head_restarts_the_gate_at_most_once_per_run(self):
+        """#1838: each restart on a moved head can re-enter a CI wait, so
+        gate step 1 bounds it to one per PR per run, and a second move
+        reports **head moved** and stops; the hooks defer to that bound."""
+        root = Path(__file__).resolve().parent.parent
+        for name in ("fast-path", "changed-files"):
+            with self.subTest(hook=name):
+                text = " ".join(self.hook(name).split())
+                self.assertIn("at most once per run, as gate step 1"
+                              " bounds it", text)
+        gate = " ".join((root / "skills" / "implement-queue" / "references"
+                         / "gate.md").read_text(encoding="utf-8").split())
+        self.assertIn("The gate restarts at most once per run for a PR: a"
+                      " head that moves again is reported as **head"
+                      " moved** and the gate ends there, with nothing"
+                      " merged", gate)
+
+    def test_the_commit_check_is_tied_to_an_equal_head(self):
+        """#1838: `git cat-file -e` confirms the recorded head only when
+        FETCH_HEAD equals it; a moved head has already restarted."""
+        for name in ("fast-path", "changed-files"):
+            with self.subTest(hook=name):
+                text = " ".join(self.hook(name).split())
+                self.assertIn("If they are equal, confirm `git cat-file -e"
+                              " <sha>^{commit}` exits 0", text)
+                self.assertNotIn("Then confirm `git cat-file", text)
+
     def test_the_hourly_routine_classifies_the_recorded_head(self):
         """#1819: the routine's gate step 3 defers to the profile's hook on
         the recorded head, not the checkout after a bare fetch."""

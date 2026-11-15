@@ -51,8 +51,9 @@ file changes only by a PR: its commit is the consent record.
 origin` and `git fetch origin pull/<N>/head`, then compare `git
 rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
 moved: return to gate step 1 on the new head, and nothing recorded for
-the old one counts, this classification included. Then confirm `git
-cat-file -e <sha>^{commit}` exits 0. A fetch that fails, or a recorded
+the old one counts, this classification included; at most once per run,
+as gate step 1 bounds it. If they are equal, confirm `git cat-file -e
+<sha>^{commit}` exits 0. A fetch that fails, or a recorded
 head that does not resolve to a commit, means the classifier cannot
 prove its input: fail closed, review the PR and dispatch every
 specialist. Exit 0 prints
@@ -95,7 +96,8 @@ The source of the `gate_paths` check. `<sha>` is the recorded head
 fetch origin` and `git fetch origin pull/<N>/head`, then compare `git
 rev-parse FETCH_HEAD` with the recorded head. If they differ, the head
 moved: return to gate step 1 on the new head, and nothing recorded for
-the old one counts, this list included. Then confirm `git cat-file -e
+the old one counts, this list included; at most once per run, as gate
+step 1 bounds it. If they are equal, confirm `git cat-file -e
 <sha>^{commit}` exits 0. A fetch that fails, or a recorded head that
 does not resolve to a commit, means the list cannot be proven current:
 fail closed, a human merge. It reads `git diff --name-only -z --no-renames

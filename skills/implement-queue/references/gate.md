@@ -13,7 +13,10 @@ that needs it. A phrase such as "this file", "above", "below" or
    Read the PR's head again before the review is dispatched, before the
    verdict comment and immediately before the merge; if it differs from
    the recorded head, the gate restarts from step 1 on the new head and
-   nothing recorded for the old one counts. Run the `ci-status` hook.
+   nothing recorded for the old one counts. The gate restarts at most
+   once per run for a PR: a head that moves again is reported as **head
+   moved** and the gate ends there, with nothing merged; the next run
+   gates the PR from step 1. Run the `ci-status` hook.
    With a `required_check`, green
    means that check is **present and successful**. A rollup with no
    failures and no pending checks is not green when the required check
