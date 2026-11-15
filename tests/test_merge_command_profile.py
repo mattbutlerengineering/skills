@@ -45,6 +45,7 @@ class TestMergeWaitsForAGreenCheck(unittest.TestCase):
                       "`completed` with conclusion `success`",
                       "on that exact head"):
             self.assertIn(token, text)
+        self.assertNotIn("waiting on checks", text)
 
     def test_update_branch_waits_for_check_on_the_new_head(self):
         text = hook("update-branch")

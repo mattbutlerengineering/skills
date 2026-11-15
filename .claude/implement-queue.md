@@ -140,7 +140,7 @@ command. A merge the runtime or the Owner refuses (a permission
 refusal) is reported as awaiting a human merge and never retried by
 another route: no REST call, no MCP tool (ADR-0087).
 
-A GraphQL 403 (`GitHub GraphQL not available from Claude Code
+An HTTP 403 (`GitHub GraphQL not available from Claude Code
 sessions`) or `spawn gh ENOENT` is a capability gap, not a refusal
 (the skill's `references/cloud-sessions.md`). On the 403, and only
 once `ci-status` is green at the gated head, merge with the REST twin,
@@ -166,7 +166,7 @@ A twin merge still owes both obligations below:
 `--delete-branch` has left the remote branch behind in this repo (#1636),
 so delete it yourself once `gh pr view <N> --json
 state,headRefName,headRefOid,isCrossRepository` reports `MERGED`. If the
-PR is not yet `MERGED` (an `--auto` merge waiting on checks), do nothing
+PR is not yet `MERGED` (the merge has not landed yet), do nothing
 now and repeat this step when it is. Delete only when all of these hold,
 and otherwise leave the branch alone and report it by name. Each command
 must exit 0: a failed `gh` or `git` call is a failure, never an empty

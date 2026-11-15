@@ -279,7 +279,8 @@ A merge the session's runtime or the Owner refuses (a permission
 refusal) is not retried by any route for the rest of the session. Comment the derived verdict line ([step 5](references/gate.md)) on the PR and report it as
 awaiting a human merge. An HTTP 403 `GitHub GraphQL not available from
 Claude Code sessions`, or `spawn gh ENOENT`, is a capability gap, not a
-refusal; any other 403 is a refusal: [run the twin](references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal).
+refusal: [run the twin](references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal).
+Any other 403 is a refusal.
 
 ## Phase 3: Merge train
 
