@@ -43,3 +43,15 @@ next iteration starts only after the report. A session with no memory
 of an iteration in flight cannot tell, and Phase 0 step 4 shows it the
 `in-progress` issues and recently pushed PRs that iteration holds, which
 it leaves alone like any other listed there.
+
+## Counting queue-driven PRs
+
+Moved from [worker-brief.md](worker-brief.md): no worker needs it. A report that counts the merged PRs this queue drove keys on the
+`Driver: implement-queue` line the worker brief puts last in every PR
+body. The search only pre-filters (it matches the phrase loosely), so
+this command selects on the exact line and counts the merged PRs that
+carry it, up to the `--limit` bound of 1000:
+
+    gh pr list --state merged --limit 1000 --json body \
+      --search '"Driver: implement-queue" in:body' \
+      --jq '[.[] | select(.body | test("(?m)^Driver: implement-queue\\s*$"))] | length'
