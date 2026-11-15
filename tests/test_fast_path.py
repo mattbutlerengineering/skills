@@ -232,7 +232,6 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         self.assertNotIn("branch checkout", step)
         self.assertNotIn("after `git fetch origin`", step)
 
-
     @staticmethod
     def hourly_step(number):
         root = Path(__file__).resolve().parent.parent
@@ -258,8 +257,8 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
         """#1838: gate.md step 1 reads the head again before the review is
         dispatched and before the merge; the routine does the same."""
         self.assertIn("Read the PR's head again before the review is"
-                      " dispatched and immediately before the merge",
-                      self.hourly_step(1))
+                      " dispatched, before the verdict comment and"
+                      " immediately before the merge", self.hourly_step(1))
         self.assertIn("after reading the head again as step 1 says,"
                       " dispatch the universal reviewer",
                       self.hourly_step(4))
@@ -276,6 +275,34 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
                       " the PR in finish-first mode", step1)
         self.assertIn("once per run, as step 1 bounds it",
                       self.hourly_step(3))
+
+
+    def test_the_hourly_update_branch_commit_is_adopted_by_the_train_rule(self):
+        """#1844 review: the routine's own `update-branch` commit is not a
+        moved head only on merge-train Phase 3 step 3's conditions, which
+        the routine points at rather than restates."""
+        root = Path(__file__).resolve().parent.parent
+        self.assertIn("adopted on the conditions of [the merge train]"
+                      "(../../skills/implement-queue/references/"
+                      "merge-train.md) Phase 3 step 3, is not a moved head",
+                      self.hourly_step(6))
+        train = (root / "skills" / "implement-queue" / "references"
+                 / "merge-train.md").read_text(encoding="utf-8")
+        self.assertTrue(train.startswith("# Phase 3: Merge train\n"))
+        self.assertIn("\n3. Read the PR's head, then run the `update-branch`"
+                      " hook.", train)
+        self.assertIn("exactly two parents", train)
+
+    def test_the_hourly_journal_files_a_moved_head_as_pr_open(self):
+        """#1844 review: **head moved** leaves the PR open, so the journal's
+        `pr-open` header lists it."""
+        root = Path(__file__).resolve().parent.parent
+        routine = " ".join((root / "docs" / "factory"
+                            / "hourly-improvement-routine.md"
+                            ).read_text(encoding="utf-8").split())
+        self.assertIn("`pr-open` for any run that left its PR open"
+                      " (awaiting CI, review or a human merge, head moved,"
+                      " or PR-only mode)", routine)
 
 
 class TestFailClosed(unittest.TestCase):
