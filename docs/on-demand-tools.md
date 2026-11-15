@@ -107,3 +107,38 @@ pre-pass, deliberately **not** a gate:
   failed command or fetch is a failure, never a pass. Root-only and outside
   every gate (ADR-0128); it needs `git`, `gh` and `lsof`.
   <!-- drift-ignore: .claude/worktrees/ -->
+
+External, never a dependency and never CI (the repo is stdlib-only):
+installed into a throwaway virtualenv outside the repo, and a review
+pre-pass only, like the free tools above:
+
+- NVIDIA SkillEvaluator (`skillevaluator`, a pip package) — validates a
+  skill against the Agent Skills spec. Install with `uv venv --python
+  3.12 <tmp>/.venv && uv pip install --python <tmp>/.venv/bin/python
+  skillevaluator`, then per skill `<tmp>/.venv/bin/skillevaluator validate
+  skills/<name> --tiers 1 -r json -o <tmp>/r/<name>`. Tier 1 is offline
+  and free; Tier 3 (live agent evaluation) needs a model key and costs
+  money. A plugin-level run goes over a `git archive origin/main
+  .claude-plugin skills` export, never the checkout: on the checkout it
+  walks `.claude/worktrees/` and did not finish in 10 minutes, and even
+  the 744 KB export takes over 10 minutes. Exit 0 pass, 1 changes
+  required (any failed Tier 1 validator). It is good for the spec's
+  schema (it found the missing `metadata.author`), secrets and
+  unicode-smuggling scans, and a second opinion on description overlap.
+  Never evidence for (false positives on this repo's skills, observed
+  2026-11-15 with skillevaluator 0.9.0 at origin/main 81adfe1):
+  - PII-CRITICAL on any `scheme://user:password@host` URL, placeholders
+    included (`USER:PASSWORD@HOST` fails too); `prisma-migrations`'
+    examples need the password segment.
+  - Security "Hidden Instructions" on the repo's own HTML-comment
+    markers: the md-claims ignore marker, the drift-ignore marker and SVG
+    authoring comments.
+  - "Tool misuse", "anti-refusal" or "credential access" on text that
+    forbids the thing or names it in a diagnostic (a sentence forbidding
+    a hard git reset, a mention of the netrc file).
+  - "Whitespace padding" on Markdown table column alignment.
+  - Quality deductions for a missing `version`, `## Purpose`,
+    `## Limitations`, `## Troubleshooting` or `## Examples`, for long
+    descriptions, and for a `TEMPLATE.md` in a skill root: generic
+    template rules that conflict with this repo's skill contract (one
+    plugin version, ADR-0095; trigger-tuned descriptions).
