@@ -83,3 +83,26 @@ Tool names are the GitHub MCP server's; a host may prefix them. With
 neither `gh` nor an MCP tool for the intent, a stated hook cannot run:
 fail closed. Claim nothing you cannot transition, merge nothing you
 cannot check, and report the missing capability.
+
+## A capability gap is not a permission refusal
+
+A **permission refusal** is the session's runtime or the Owner saying
+no to the merge: a denied permission prompt, a tool-use rule or a
+classifier that blocks the call, or any refusal not named below, a 403
+with another message included. It ends every route for the rest of the
+session: no REST call, no MCP tool, no other `gh` subcommand (the
+Merge policy in SKILL.md).
+
+A **capability gap** is the environment unable to run the command at
+all, and nobody refused anything. Each has one next step:
+
+- `gh pr merge` answers HTTP 403 `GitHub GraphQL not available from
+  Claude Code sessions`: run the REST `merge-command` twin above.
+- `gh` is absent (`spawn gh ENOENT`): run the MCP `merge-command` twin.
+
+A twin merge owes what the default owed. It deletes the branch (the
+delete the profile's `merge-command` hook states, else the REST twin's
+`DELETE`); where no delete can run, as with the MCP twin, it reports
+the branch by name. And the train makes the same post-merge
+read before its next PR as after a default merge. A twin call that is
+itself refused is a permission refusal.

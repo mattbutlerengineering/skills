@@ -269,9 +269,10 @@ files, so read the PR's head again after it, and a head that differs
 fails closed too. Never fill a gap in the list
 from the PR body, its title, or the author's account of what changed.
 
-A merge the session's runtime denies is not retried by any route for
-the rest of the session. Comment the derived verdict line ([step 5](references/gate.md)) on the PR and report it as
-awaiting a human merge.
+A merge the session's runtime or the Owner refuses (a permission
+refusal) is not retried by any route for the rest of the session. Comment the derived verdict line ([step 5](references/gate.md)) on the PR and report it as
+awaiting a human merge. A GraphQL 403 or `spawn gh ENOENT` is a
+capability gap, not a refusal: [run the twin](references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal).
 
 ## Phase 3: Merge train
 
