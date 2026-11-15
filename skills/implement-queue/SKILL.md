@@ -31,36 +31,37 @@ hook's command.
 
 Frontmatter keys (all optional):
 
-| Key              | Default                                                        | Meaning                                                                                |
-| ---------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| `source`         | `issues`                                                       | `issues`: plain `ready` issues. `work-orders`: factory work orders, per [references/work-orders.md](references/work-orders.md). An invocation that asks for work orders overrides it for that run. |
-| `merge`          | `off`                                                          | `off`: stop at reviewed, green PRs. `auto`: enqueue them for merge (see Merge policy). |
-| `max_workers`    | `3`                                                            | Workers in flight at once.                                                             |
-| `required_check` | none                                                           | The check name that must be present and green (e.g. a CI gate job).                    |
-| `hold_labels`    | `[needs-review]`                                               | A PR or issue carrying one is never merged by this skill.                              |
-| `priority`       | `[security, ci-fix, feature, audit]`                           | Label order for claiming; oldest first within a tier.                                  |
-| `gate_paths`     | `[docs/adr/**, docs/design/**, **/prd.md, **/architecture.md]` | A PR changing a match, old path of a rename included, always needs a human merge (ADR-0036). |
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `source` | `issues` | `issues`: plain `ready` issues. `work-orders`: factory work orders, per [references/work-orders.md](references/work-orders.md). An invocation that asks for work orders overrides it for that run. |
+| `merge` | `off` | `off`: stop at reviewed, green PRs. `auto`: enqueue them for merge (see Merge policy). |
+| `max_workers` | `3` | Workers in flight at once. |
+| `required_check` | none | The check name that must be present and green (e.g. a CI gate job). |
+| `hold_labels` | `[needs-review]` | A PR or issue carrying one is never merged by this skill. |
+| `priority` | `[security, ci-fix, feature, audit]` | Label order for claiming; oldest first within a tier. |
+| `gate_paths` | `[docs/adr/**, docs/design/**, **/prd.md, **/architecture.md]` | A PR changing a match, old path of a rename included, always needs a human merge (ADR-0036). |
 
 Hooks (each a `## <name>` section with the exact command or rule):
 
-| Hook             | Default when absent                                                                                   |
-| ---------------- | ----------------------------------------------------------------------------------------------------- |
-| `preflight`      | the gate's own green on the head SHA of `origin/main`, read from its check runs (Phase 0, step 2)     |
-| `transition`     | `gh issue edit` swapping the state labels in the Labels table                                         |
-| `compose`        | take candidates in priority order, skipping any that would change a file an issue already taken, or an open PR in the gate or the train, changes (Phase 1) |
-| `base-freshness` | `git fetch origin` and confirm this checkout shares history with `origin/main`                        |
-| `worker`         | a general worker agent given the Worker brief below                                                   |
-| `model`          | the worker's default model                                                                            |
-| `ci-status`      | `gh pr checks <N>` plus the presence check below                                                      |
-| `fast-path`      | none: every PR is reviewed (with no `verdict` hook, every PR off the fast path is held unreviewed, [gate step 4](references/gate.md)) |
-| `verdict`        | none: a missing hook is an `error` verdict, never a pass (fail closed)                                |
-| `reviewers`      | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
-| `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`                           |
-| `update-branch`  | `gh pr update-branch <N>`                                                                             |
-| `changed-files`  | `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`: every `filename` plus every `previous_filename`; its length must equal `gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files`, else fail closed |
-| `lock`           | none: one session at a time is the only lock                                                          |
-| `reap`           | none: report worker worktrees left behind                                                             |
-| `telemetry`      | none                                                                                                  |
+| Hook | Default when absent |
+| --- | --- |
+| `preflight` | the gate's own green on the head SHA of `origin/main`, read from its check runs (Phase 0, step 2) |
+| `transition` | `gh issue edit` swapping the state labels in the Labels table |
+| `compose` | take candidates in priority order, skipping any that would change a file an issue already taken, or an open PR in the gate or the train, changes (Phase 1) |
+| `promote` | none: no issue is promoted to `ready` ([lifecycle.md](references/lifecycle.md#the-promote-hook)) |
+| `base-freshness` | `git fetch origin` and confirm this checkout shares history with `origin/main` |
+| `worker` | a general worker agent given the Worker brief below |
+| `model` | the worker's default model |
+| `ci-status` | `gh pr checks <N>` plus the presence check below |
+| `fast-path` | none: every PR is reviewed (with no `verdict` hook, every PR off the fast path is held unreviewed, [gate step 4](references/gate.md)) |
+| `verdict` | none: a missing hook is an `error` verdict, never a pass (fail closed) |
+| `reviewers` | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
+| `merge-command` | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>` |
+| `update-branch` | `gh pr update-branch <N>` |
+| `changed-files` | `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`: every `filename` plus every `previous_filename`; its length must equal `gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files`, else fail closed |
+| `lock` | none: one session at a time is the only lock |
+| `reap` | none: report worker worktrees left behind |
+| `telemetry` | none |
 
 In every `merge-command`, `<sha>` is the gated head ([gate step 1](references/gate.md)), never
 a head read at merge time. A merge refused because the PR's head is no
@@ -130,6 +131,9 @@ file's Rules section.
 
 4. Look for another queue session, and report it before claiming:
    [preflight.md](references/preflight.md#step-4-another-queue-session).
+5. Count the backlog's leaks, stale `has-pr` and issues with no state
+   label, and return each `has-pr` issue whose PRs all closed unmerged
+   to `ready`: [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
 
 ## Phase 1: Claim a batch
 
@@ -165,6 +169,9 @@ issue always gets a slot. Drop any issue that:
   file. A dropped issue keeps `ready`, is reported with the path and
   the issue or PR it waits for, and is claimed in a later iteration.
 
+Fewer than `max_workers` left → run the `promote` hook, if any, once:
+[lifecycle.md](references/lifecycle.md#the-promote-hook).
+
 Take at most `max_workers`, and claim each with
 [the claim step](references/claim.md), the one claim every driver of
 `ready` issues in the repo runs (ADR-0130). Dispatch no worker for an
@@ -196,13 +203,14 @@ Every worker prompt carries the items in [worker-brief.md](references/worker-bri
 
 When a worker finishes, label its issue with the `transition` hook:
 
-| Outcome                                                  | State          |
-| -------------------------------------------------------- | -------------- |
-| PR open, gates green                                     | `has-pr`       |
-| Partial work (draft PR)                                  | `needs-review` |
+| Outcome | State |
+| --- | --- |
+| PR open, gates green | `has-pr` |
+| Partial work (draft PR) | `needs-review` |
 | Investigated: no repo change can fix it, evidence posted | `needs-review` |
-| No usable change                                         | `agent-failed` |
-| Second failure on the same issue                         | `stealable`    |
+| Already resolved on `main`, no change needed, evidence posted | closed ([lifecycle.md](references/lifecycle.md#already-resolved)) |
+| No usable change | `agent-failed` |
+| Second failure on the same issue | `stealable` |
 
 Then run the `telemetry` hook, if any, with the worker's real usage.
 Leave cost empty when the usage carries none; never estimate it.
@@ -280,10 +288,11 @@ Its steps and lock release: [merge-train.md](references/merge-train.md).
 - More ready issues and budget left → Phase 0. Three consecutive failures
   (workers or train) → release locks, stop and report. The evidence
   outcome (a worker's issue left `needs-review` with its evidence
-  posted) is not a failure: it leaves the count unchanged. Report it
-  with its evidence.
+  posted) and the already-resolved outcome are not failures: they leave
+  the count unchanged. Report each with its evidence.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
-  every failure with its cause; with no `verdict` hook under `merge: auto`,
+  every failure with its cause, and Phase 0 step 5's two counts even
+  with no batch; with no `verdict` hook under `merge: auto`,
   also that every merge in the run took the fast path unreviewed.
   Under `source: work-orders`, also the
   planner's deferrals, each order's spend record, and every released
@@ -295,14 +304,14 @@ An iteration in flight:
 
 ## Labels
 
-| Label          | Meaning                                                                                     |
-| -------------- | ------------------------------------------------------------------------------------------- |
-| `ready`        | Available to claim                                                                          |
-| `in-progress`  | A worker has it                                                                             |
-| `has-pr`       | PR open, in the gate or the train                                                           |
+| Label | Meaning |
+| --- | --- |
+| `ready` | Available to claim |
+| `in-progress` | A worker has it |
+| `has-pr` | PR open, in the gate or the train |
 | `needs-review` | Partial work, a repeat flag, or evidence that no repo change can fix it; a human looks next |
-| `agent-failed` | No usable change this time                                                                  |
-| `stealable`    | Failed twice; needs a different approach                                                    |
+| `agent-failed` | No usable change this time |
+| `stealable` | Failed twice; needs a different approach |
 
 ## Rules
 

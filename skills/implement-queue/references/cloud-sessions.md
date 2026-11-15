@@ -28,6 +28,19 @@ twins have no binary to run through, and the MCP twin is the way:
 - Open PRs (Phase 0): MCP `list_pull_requests`, state open.
 - Claim (Phase 1): MCP `list_issues` with `labels: ["ready"]`, state
   open; no entry carries a `pull_request` key there, so nothing to drop.
+- Phase 0 step 5 ([lifecycle.md](lifecycle.md)): the `has-pr` list is
+  `gh api 'repos/{owner}/{repo}/issues?labels=has-pr&state=open&per_page=100' --paginate`
+  and the no-state-label count reads
+  `gh api 'repos/{owner}/{repo}/issues?state=open&per_page=100' --paginate`,
+  each dropping every entry that carries a `pull_request` key; the
+  timeline read is REST already. MCP: `list_issues` with
+  `labels: ["has-pr"]`, and with state open alone; the timeline has no
+  MCP twin, so with no `gh` every `has-pr` issue is reported, never
+  changed.
+- The already-resolved close ([lifecycle.md](lifecycle.md#already-resolved)):
+  `gh api -X PATCH repos/{owner}/{repo}/issues/<N> -f state=closed -f state_reason=completed`.
+  MCP: `issue_write` with `method: update`, `state: closed` and
+  `state_reason: completed`.
 - `transition`: `gh api -X POST repos/{owner}/{repo}/issues/<N>/labels -f 'labels[]=<to>'`
   then `gh api -X DELETE repos/{owner}/{repo}/issues/<N>/labels/<from>`,
   one pair per swap in the Labels table. MCP: `issue_read` with

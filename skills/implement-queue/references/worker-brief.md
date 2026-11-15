@@ -45,7 +45,10 @@ Every worker prompt carries:
 9. An evidence comment with no PR is a valid result when the cause is
    outside the repo (for example a scheduled routine that never fired):
    post the evidence on the issue, open no PR and report the evidence
-   outcome. Never invent a change to have something to push.
+   outcome. When the issue is already fixed on `main`, post the merged
+   PR or a measurement anyone can repeat on the issue, open no PR and
+   report the already-resolved outcome. Never invent a change to have
+   something to push.
 10. Say in the result which checks were not verified locally: list under
    `not verified locally` every CI check the PR will face that you did
    not or could not run, each with the reason. `has-pr` then means local
