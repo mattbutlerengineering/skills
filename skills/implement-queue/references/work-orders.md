@@ -32,6 +32,29 @@ SKILL.md's Phase 0 applies. In addition, `git status` must be clean on an
 up-to-date default branch, and `make check` must pass. A red tree is the
 work, and fixing it beats starting three new things on top of it.
 
+### Which open PRs are this queue's
+
+Phase 0 step 3 reads SKILL.md's issue labels to decide which open PRs
+belong to this queue. A work order's issue never carries them, so in
+this mode the rule reads the `wo:*` labels instead: a PR belongs to this
+queue when it closes an issue carrying `wo:in-progress`,
+`wo:needs-review` or `wo:failed` *and* its body ends with the line
+`Driver: implement-queue` (Worker brief item 5 below). The `Driver:`
+line is required here, not merely uncontradicted, because the cloud
+fallback's assembler claims through the same labels and its PRs are not
+this queue's. Every other PR is foreign, and step 3 treats it as
+foreign. Everything else step 3 does with a PR of this queue still
+applies: green ones go to the gate, failed ones block claiming.
+
+Where step 3 would label a failed PR's issue `agent-failed`, this mode
+runs `make wo-failed ISSUE=<n>` instead and never applies
+`agent-failed` to a work order's issue. The `agent-failed` cause in
+[preflight.md](preflight.md#step-3-failed-pr-causes-and-settled-green-prs)
+reads `wo:failed` in its place. A failed PR of this queue whose issue
+carries `wo:failed` is not fixed or re-run again. It is reported, with
+its failing job linked, for a human to close or take over, and it does
+not block claiming.
+
 ## Plan the batch, never by hand
 
     python3 work_queue.py plan          # or tools/factory/work_queue.py
