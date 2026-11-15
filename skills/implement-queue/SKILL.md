@@ -135,8 +135,9 @@ file's Rules section.
 4. Look for another queue session, and report it before claiming:
    [preflight.md](references/preflight.md#step-4-another-queue-session).
 5. Count the backlog's leaks (stale `has-pr`, no state label,
-   `agent-failed`, stale `in-progress`), and apply the closed-unmerged rule to each `has-pr` issue
-   whose PRs all closed unmerged: [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
+   `agent-failed`, stale `in-progress`), and apply the closed-unmerged
+   rule to each `has-pr` issue whose PRs all closed unmerged:
+   [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
 
 ## Phase 1: Claim a batch
 
@@ -302,8 +303,10 @@ Its steps and lock release: [merge-train.md](references/merge-train.md).
   outcome (a worker's issue left `needs-review` with its evidence
   posted) and the already-resolved outcome are not failures: they leave
   the count unchanged. Report each with its evidence.
-- Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
-  every failure with its cause, and Phase 0 step 5's four counts
+- Report: issues claimed, PRs opened, PRs merged or awaiting merge
+  (counting the merged ones:
+  [loop-and-cleanup.md](references/loop-and-cleanup.md#counting-queue-driven-prs)),
+  and every failure with its cause, and Phase 0 step 5's four counts
   ([as lifecycle.md words them](references/lifecycle.md#phase-0-step-5-count-the-leaks)) even
   with no batch; with no `verdict` hook under `merge: auto`,
   also that every merge in the run took the fast path unreviewed.
@@ -321,7 +324,7 @@ An iteration in flight:
 | --- | --- |
 | `ready` | Available to claim |
 | `in-progress` | A worker has it |
-| `has-pr` | PR open, in the gate or the train |
+| `has-pr` | PR open: in the gate or the train, or reviewed and awaiting the human merge |
 | `needs-review` | Partial work, a repeat flag, or evidence that no repo change can fix it; a human looks next |
 | `agent-failed` | No usable change this time |
 | `stealable` | Failed twice; needs a different approach |
