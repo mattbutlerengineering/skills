@@ -34,6 +34,15 @@ that needs it. A phrase such as "this file", "above", "below" or
    classification counts as the review for the Merge policy (ADR-0088). If the hook
    cannot prove its own inputs are current (a stale build, an unreadable
    classifier), fail closed: review the PR and dispatch every specialist.
+   When the fast path applies, post a fast-path comment on the PR, after
+   reading its head again as step 1 does before the verdict comment:
+   its first line is the line the hook printed, verbatim (`fast-path:
+   low-risk`), and its second line is `Head: <sha>`, the recorded head.
+   It is the PR's record of why it merges without a reviewer, and the
+   gated head a later session reads (Phase 3 step 1). It is never a
+   verdict: it carries no score, and step 4's re-review detection keys
+   only on a `reviewer-verdict: flag` first line, so a PR that leaves
+   the fast path gets a first review.
 4. **Review.** When Phase 0's profile check found no `verdict` hook, no
    verdict can be derived and a review could not lead to a merge, so
    for a PR that is not on the fast path (step 3) this step does not

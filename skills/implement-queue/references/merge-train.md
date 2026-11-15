@@ -13,10 +13,13 @@ the head of every enqueued PR, then unsticks the ones that fell behind
    repos/{owner}/{repo}/pulls/<N> --jq .head.sha`) with its gated head.
    The gated head is the recorded head of gate step 1 in the session
    that ran the gate. In a later session it is the `Head:` line of the
-   PR's latest verdict comment, read only from comments authored by the
-   queue's own account (`gh api user --jq .login`; the REST comment's
-   `user.login`) whose first line is a `reviewer-verdict:` line;
-   otherwise the PR has no gated head. A PR with no gated head, or a
+   PR's latest verdict comment or fast-path comment (gate step 3), read
+   only from comments authored by the queue's own account (`gh api user
+   --jq .login`; the REST comment's `user.login`) whose first line is a
+   `reviewer-verdict:` line or is `fast-path: low-risk`; otherwise the
+   PR has no gated head. A fast-path comment supplies a gated head only:
+   it is never a reviewer pass, and gate step 4's re-review detection
+   reads only `reviewer-verdict:` comments. A PR with no gated head, or a
    head that differs, is a mismatch: run `gh pr merge <N> --disable-auto`,
    send the PR back through the gate, and take no further step here for
    it. The REST and MCP merges are never enqueued, so they have nothing
