@@ -135,8 +135,9 @@ file's Rules section.
 4. Look for another queue session, and report it before claiming:
    [preflight.md](references/preflight.md#step-4-another-queue-session).
 5. Count the backlog's leaks (stale `has-pr`, no state label,
-   `agent-failed`, stale `in-progress`), and apply the closed-unmerged rule to each `has-pr` issue
-   whose PRs all closed unmerged: [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
+   `agent-failed`, stale `in-progress`), and apply the closed-unmerged
+   rule to each `has-pr` issue whose PRs all closed unmerged:
+   [lifecycle.md](references/lifecycle.md#phase-0-step-5-count-the-leaks).
 
 ## Phase 1: Claim a batch
 
