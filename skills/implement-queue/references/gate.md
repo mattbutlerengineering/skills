@@ -34,6 +34,8 @@ that needs it. A phrase such as "this file", "above", "below" or
    classification counts as the review for the Merge policy (ADR-0088). If the hook
    cannot prove its own inputs are current (a stale build, an unreadable
    classifier), fail closed: review the PR and dispatch every specialist.
+   A head that moved since step 1 is not an unproven input: the gate
+   restarts from step 1 on the new head, as step 1 says.
    When the fast path applies, post a fast-path comment on the PR, after
    reading its head again as step 1 does before the verdict comment:
    its first line is the line the hook printed, verbatim (`fast-path:

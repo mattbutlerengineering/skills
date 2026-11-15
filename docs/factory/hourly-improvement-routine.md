@@ -227,10 +227,14 @@ Implement-queue's gate, run for this one PR under the profile:
    next run finds the PR in finish-first mode.
 2. **Holds.** A `hold_labels` label on the PR or its issue ends the
    gate: no review, no merge.
-3. **Fast path.** Run the profile's `fast-path` hook in the branch
-   checkout after `git fetch origin`. `fast-path: low-risk`, with no
-   specialist matched, is the review (ADR-0088). Exit 2 fails closed:
-   review.
+3. **Fast path.** Run the profile's `fast-path` hook on the recorded
+   head, the PR's head SHA recorded once as the orchestrator's gate
+   step 1 states, which the hook's own text says how to fetch and
+   check. `fast-path: low-risk`, with no
+   specialist matched, is the review (ADR-0088). A head that moved
+   since it was recorded restarts this gate from step 1 on the new
+   head. A failed fetch, a recorded head that does not resolve, or exit
+   2 fails closed: review.
 4. **Review.** Otherwise dispatch the universal reviewer with the input
    [the reviewer contract](../../skills/implement-queue/references/reviewer-contract.md)
    defines. The reviewer is never the author; snapshot
