@@ -70,8 +70,9 @@ twins have no binary to run through, and the MCP twin is the way:
   is left to the repo's delete-on-merge setting and reported.
 - `update-branch`: `gh api -X PUT repos/{owner}/{repo}/pulls/<N>/update-branch`.
   MCP: `update_pull_request_branch`.
-- The verdict comment (gate step 5): MCP `add_issue_comment`, which
-  takes a pull request number too.
+- The verdict comment (gate step 5) and the fast-path comment (gate
+  step 3): MCP `add_issue_comment`, which takes a pull request number
+  too.
 
 Tool names are the GitHub MCP server's; a host may prefix them. With
 neither `gh` nor an MCP tool for the intent, a stated hook cannot run:
