@@ -294,7 +294,7 @@ Its steps and lock release: [merge-train.md](references/merge-train.md).
   posted) and the already-resolved outcome are not failures: they leave
   the count unchanged. Report each with its evidence.
 - Report: issues claimed, PRs opened, PRs merged or awaiting merge, and
-  every failure with its cause, and Phase 0 step 5's two counts even
+  every failure with its cause, and Phase 0 step 5's four counts even
   with no batch; with no `verdict` hook under `merge: auto`,
   also that every merge in the run took the fast path unreviewed.
   Under `source: work-orders`, also the
