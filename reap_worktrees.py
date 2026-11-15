@@ -164,26 +164,29 @@ def test_no_open_pr(runner, repo, branch):
     return True, "", False
 
 
-def _merged_prs(runner, repo, branch):
-    """([(number, headRefOid)], None) for the branch's merged PRs into
-    main, or (None, (reason, is_problem)) on a failure."""
-    args = ["gh", "pr", "list", "--head", branch, "--base", "main",
-            "--state", "merged", "--json", "number,headRefOid"]
+def _merged_prs(runner, repo, select):
+    """([(number, headRefOid)], None) for the same-repo PRs merged into
+    main that `select` (`--head <branch>` or `--search <tip>`) finds, or
+    (None, (reason, is_problem)) on a failure. A cross-repo (fork) PR is
+    dropped: only a same-repo PR's pull ref is evidence (#1835)."""
+    args = ["gh", "pr", "list", *select, "--base", "main",
+            "--state", "merged", "--json", "number,headRefOid,isCrossRepository"]
     proc, why = _try(runner, args, cwd=repo)
     if why:
         return None, (why, True)
     if proc.returncode != 0:
         return None, (_failed(args, proc), True)
     try:
-        prs = [(p["number"], p["headRefOid"]) for p in json.loads(proc.stdout)]
+        prs = [(p["number"], p["headRefOid"], p["isCrossRepository"])
+               for p in json.loads(proc.stdout)]
     except (ValueError, TypeError, KeyError):
         prs = None
     # Both fields reach a git argv, so validate them at the boundary.
     if prs is None or not all(
             type(n) is int and n > 0 and isinstance(o, str)
-            and OID.fullmatch(o) for n, o in prs):
+            and OID.fullmatch(o) and type(x) is bool for n, o, x in prs):
         return None, ("gh merged-PR list was not the expected JSON", True)
-    return prs, None
+    return [(n, o) for n, o, x in prs if not x], None
 
 
 def _in_merged_head(runner, repo, tip, number, oid, fetch):
@@ -213,12 +216,22 @@ def _in_merged_head(runner, repo, tip, number, oid, fetch):
     return None, (_failed(args, proc), True)
 
 
+def _any_head_contains(runner, repo, tip, prs, fetch):
+    """(True|False, None) for whether any of `prs`' merged heads contains
+    `tip`, or (None, (reason, is_problem)) on the first failure."""
+    for number, oid in prs:
+        contained, err = _in_merged_head(runner, repo, tip, number, oid, fetch)
+        if err or contained:
+            return contained, err
+    return False, None
+
+
 def test_tip_merged(runner, repo, branch, tip, fetch=True):
     if not tip:
         return False, "no HEAD commit", True
     prs = []
     if branch is not None:
-        prs, err = _merged_prs(runner, repo, branch)
+        prs, err = _merged_prs(runner, repo, ["--head", branch])
         if err:
             return (False,) + err
         if tip in {oid for _, oid in prs}:
@@ -234,12 +247,21 @@ def test_tip_merged(runner, repo, branch, tip, fetch=True):
     # The merge train's update-branch merge commit, or a retry worker's
     # later commits, make the merged head a descendant of this tip, and
     # the squash merge puts neither on main (#1818).
-    for number, oid in prs:
-        contained, err = _in_merged_head(runner, repo, tip, number, oid, fetch)
+    contained, err = _any_head_contains(runner, repo, tip, prs, fetch)
+    if err or contained:
+        return (False,) + err if err else (True, "", False)
+    # A retry worker's differently named local branch has no PRs of its
+    # own; it pushed this tip to its PR's branch, so search by commit and
+    # hold each hit to the same ancestry check.
+    if branch is not None:
+        found, err = _merged_prs(runner, repo, ["--search", tip])
         if err:
             return (False,) + err
-        if contained:
-            return True, "", False
+        seen = {number for number, _ in prs}
+        contained, err = _any_head_contains(
+            runner, repo, tip, [p for p in found if p[0] not in seen], fetch)
+        if err or contained:
+            return (False,) + err if err else (True, "", False)
     return False, f"tip not merged: no merged PR carries it and it is not on {REMOTE_MAIN}", False
 
 

@@ -222,25 +222,35 @@ the porcelain `branch` line without its `refs/heads/` prefix, and
    prints nothing on stdout (`gh` writes its "no matches" notice to
    stderr on a terminal). A failed `gh` call is a failure, not an empty
    list. A detached worktree has no branch and skips this test.
-4. **Positive evidence that this tip merged.** One of: `<tip>` is a
+4. **Positive evidence that this tip merged.** The evidence is that
+   `<tip>` is preserved: on `refs/remotes/origin/main`, or under a
+   merged same-repo PR's pull ref (`refs/pull/<number>/head`); it does
+   not claim the tip's content reached main. One of: `<tip>` is a
    `headRefOid` in `gh pr list --head <branch> --base main --state
-   merged --json number,headRefOid`; `git merge-base --is-ancestor <tip>
-   refs/remotes/origin/main` exits 0 (the full ref: a bare `origin/main`
-   resolves a local branch or tag of that name first, and an unmerged
-   branch so named would pass); or `git merge-base --is-ancestor <tip>
-   <headRefOid>` exits 0 for one of those merged PRs, because Phase 3's
-   `update-branch` merge commit or a retry worker's later commits make
-   the final head a descendant of the worker's tip and the squash merge
-   puts neither on main. A head not already local (`git cat-file -e`)
-   is fetched first with `git fetch --no-tags origin pull/<number>/head`;
-   under `--no-fetch` it is not fetched and the worktree is kept. A
-   failed fetch or `git` call, or a `number` or `headRefOid` that is not
-   a positive integer and a full object name, is a failure. Only the
-   worktree's own branch's merged PRs are searched, so a retry worker on
-   a differently named local branch is kept. A merged PR for the branch *name* is not
-   evidence: a branch that gained commits after its PR merged, or
-   reused the name, fails here. A tip no merged PR carries, on a branch
-   with no PR, is unmerged work, never reaped.
+   merged --json number,headRefOid,isCrossRepository`; `git merge-base
+   --is-ancestor <tip> refs/remotes/origin/main` exits 0 (the full ref:
+   a bare `origin/main` resolves a local branch or tag of that name
+   first, and an unmerged branch so named would pass); or `git
+   merge-base --is-ancestor <tip> <headRefOid>` exits 0 for one of
+   those merged PRs, because Phase 3's `update-branch` merge commit or a
+   retry worker's later commits make the final head a descendant of the
+   worker's tip and the squash merge puts neither on main. A retry
+   worker works on a differently named local branch (`retry-<pr>`) with
+   no PRs of its own, so when those fail the same ancestry check runs
+   on each PR that `gh pr list --search <tip> --base main --state
+   merged --json number,headRefOid,isCrossRepository` returns (a PR
+   already checked is skipped); a detached worktree searches neither
+   list. A PR whose `isCrossRepository` is `true` is never evidence, in
+   either list. A head not already local (`git cat-file -e
+   <oid>^{commit}`) is fetched first with `git fetch --no-tags origin
+   pull/<number>/head`; under `--no-fetch` it is not fetched and the
+   worktree is kept. A failed fetch, `gh` or `git` call, or a `number`
+   that is not a positive integer, a `headRefOid` that is not a full
+   object name, or an `isCrossRepository` that is not a boolean, is a
+   failure. A merged PR for the branch *name* is not evidence: a branch
+   that gained commits after its PR merged, or reused the name, fails
+   here. A tip that no merged same-repo PR's head contains and that is
+   not on main is unmerged work, never reaped.
 
 On a pass, `git worktree remove <path>` (never `--force`), then, if it
 had a branch other than `main`, `git branch -D -- <branch>` (the `--` keeps a branch named `-x` from
