@@ -60,8 +60,10 @@ issue, never touch its labels and report it. This claim narrows the race
 window and is not a lock: the documentation gives a 404 only for a label
 that does not exist, so if two removals both returned 200 two sessions
 would each hold the claim. The queue's Rules keep one queue session per
-repo at a time; between drivers the label claim is a best-effort mutex
-that makes a collision unlikely and detectable by the secondary check.
+repo at a time, and that Rule, not any check here, is what keeps two
+claims apart; between drivers the label claim is a best-effort mutex
+that makes a collision unlikely, and the secondary check below cannot
+be relied on to detect one.
 Then add `in-progress` with
 the `transition` hook's add. Start no work before that 200 and the
 add of `in-progress`. A failed add means this session won the removal
@@ -71,7 +73,18 @@ the add, read the timeline again
 with the same command and confirm, as a secondary check, exactly one
 `in-progress` labeled event since the last `ready` labeled event, whose
 `created_at` is at or after the time noted, comparing whole seconds, which
-shows only that the event was created after this session's read. There
+shows only that the event was created after this session's read. This
+check catches an add that lags or failed, and an add made by another
+session before this session's read; it does not detect two sessions
+that both got a 200 removing `ready`. In that race both sessions add
+`in-progress`, and the second add targets a label the issue already
+carries. GitHub's REST documentation for "Add labels to an issue" and
+the `labeled` entry under "Issue event types" do not say that such an
+add creates a `labeled` event, and no `labeled` event for a label the
+issue already carried appears in this repository's issue timelines
+(200 issues, 354 `labeled` events, read 2026-11-15). Both sessions act
+as the same account, so each can see one event created after its own
+read and proceed. There
 is no MCP twin for the removal,
 the `Date` read or the timeline read, so a session with no `gh` cannot
 run this check and must claim nothing. On an unreadable timeline after
@@ -80,7 +93,7 @@ it is and report it. With no `in-progress` labeled event after the add
 (the timeline lags, or the transition failed), skip the issue, start
 no work on it, leave the label as it is and report it. With two or
 more `in-progress` labeled events, or one whose `created_at` is earlier
-than the time noted, this session lost the race, so skip the issue,
+than the time noted, another session may hold the issue, so skip the issue,
 start no work on it, leave the label as it is and report it. Never
 move the issue back to `ready` after a lost race, because the session
 that holds it may already have started work. An issue skipped here is
