@@ -136,10 +136,15 @@ work that is not the reviewer's.
 
 ## Retry policy
 
-Flags so far counts the PR's comments whose first line is a
-`reviewer-verdict: flag` line, authored by the queue's own account (the
+Flags so far counts the PR's comments that record a flag or a
+specialist block: a comment whose first line is a
+`reviewer-verdict: flag` line, or one carrying a
+`specialist-verdict: block` line (below), counted once if it carries
+both. Only comments authored by the queue's own account count (the
 author rule of [merge-train.md](merge-train.md) step 1), so a later
-session counts the same flags this one posted.
+session counts the same flags this one posted. The count is cumulative
+across every head the PR has had and includes the verdict comment just
+posted, so a PR's first flag or block reads 1.
 
 | Flags so far | Action                                                                                                                  |
 | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
@@ -158,4 +163,9 @@ the issue. No `deferred` findings, no issue. When the issue cannot be
 filed, the findings stay in the verdict comment and the report says
 so.
 
-A specialist `block` follows the same table.
+A specialist `block` follows the same table. The verdict comment's
+first line is the universal reviewer's, so it reads `pass` when only a
+specialist blocked; the comment therefore records each block on a line
+of its own after the `Head:` line,
+`specialist-verdict: block (<reviewer>)`, with `<reviewer>` the
+specialist's name, and that line is what the count reads.

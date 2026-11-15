@@ -109,5 +109,21 @@ class TestSkillAnchorsResolve(unittest.TestCase):
         self.assertGreater(checked, 10)
 
 
+class TestPhase4SectionsAreLinked(unittest.TestCase):
+    """#1833: references/loop-and-cleanup.md is Phase 4's overflow, and
+    a section SKILL.md never links is one no session reads. Every `##`
+    section in it has a `loop-and-cleanup.md#anchor` link in SKILL.md."""
+
+    def test_every_section_is_linked_from_the_skill(self):
+        cleanup = SKILL_DIR / "references" / "loop-and-cleanup.md"
+        sections = {slug(h) for h in re.findall(
+            r"^## (.+)$", cleanup.read_text(encoding="utf-8"), re.M)}
+        self.assertGreater(len(sections), 3)
+        linked = {anchor for target, anchor in LINK.findall(
+            SKILL.read_text(encoding="utf-8"))
+            if target == "references/loop-and-cleanup.md"}
+        self.assertEqual(sections - linked, set())
+
+
 if __name__ == "__main__":
     unittest.main()
