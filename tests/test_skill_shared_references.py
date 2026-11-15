@@ -150,6 +150,8 @@ class WorkOrderReconcileAndOwnershipRules(unittest.TestCase):
     def test_reconcile_drift_case_names_the_dispatch_shim(self):
         section = self._section("## Reconcile in this mode")
         self.assertIn("gh workflow run validator.yml -f pr=N", section)
+        self.assertIn("for a human to run", section)
+        self.assertIn("re-runs the whole validator for that PR", section)
 
     def test_reconcile_points_to_the_phase_0_rule(self):
         section = self._section("## Reconcile in this mode")
@@ -166,8 +168,20 @@ class WorkOrderReconcileAndOwnershipRules(unittest.TestCase):
 
     def test_ownership_rule_says_a_red_pr_is_released_not_fixed(self):
         section = self._section("### Which open PRs are this queue's")
-        self.assertIn("is not fixed by a new worker", section)
-        self.assertIn("reviewer gate's one same-branch fix", section)
+        self.assertIn("is not given a second worker to make it green",
+                      section)
+        self.assertIn("goes straight to `make wo-failed`", section)
+        self.assertIn("a second attempt at a work order is a human's call",
+                      section)
+        self.assertIn("The only worker a PR of this queue gets after its "
+                      "first is the reviewer gate's one same-branch fix",
+                      section)
+        self.assertNotIn("is not fixed by a new worker", section)
+
+    def test_ownership_cross_reference_names_both_reconcile_states(self):
+        section = self._section("### Which open PRs are this queue's")
+        self.assertIn("still on `wo:in-progress` or with no `wo:*` label",
+                      section)
 
 
 if __name__ == "__main__":

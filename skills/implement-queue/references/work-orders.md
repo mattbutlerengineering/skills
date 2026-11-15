@@ -49,12 +49,13 @@ applies: green ones go to the gate, failed ones block claiming until
 released.
 
 A failed PR of this queue, from this round or an earlier one, is not
-fixed by a new worker: that would be a second attempt, which "Do not
-retry inside the round" leaves to a human. After Phase 0's single
+given a second worker to make it green. After Phase 0's single
 infrastructure re-run, a PR still red goes straight to `make wo-failed`.
-The only fix any PR of this queue gets is the reviewer gate's one
-same-branch fix after a first flag (Report and release), which finishes
-the same attempt.
+This mode sets that rule because a second attempt at a work order is a
+human's call. The only worker a PR of this queue gets after its first
+is the reviewer gate's one same-branch fix after a first flag (Report
+and release), which finishes the same attempt. Phase 3's branch updates
+are not a worker and still apply.
 
 Where step 3 would label a failed PR's issue `agent-failed`, this mode
 runs `make wo-failed ISSUE=<n>` instead and never applies
@@ -68,8 +69,9 @@ not block claiming.
 So Phase 0 can put `wo:failed` on an order whose PR is still open,
 while [Reconcile in this mode](#reconcile-in-this-mode) treats an open
 PR as the terminal state. The two do not conflict: Reconcile runs at a
-round's end on orders still on `wo:in-progress`, and `make wo-failed`
-goes through the lifecycle machine either way.
+round's end on orders still on `wo:in-progress` or with no `wo:*`
+label, and `make wo-failed` goes through the lifecycle machine either
+way.
 
 ## Plan the batch, never by hand
 
@@ -243,9 +245,11 @@ read the PRs that close its mirrored issue and give it the terminal state
   single infrastructure re-run is the only re-run it gets. The PR-open
   leg (`make wo-needs-review`, from the PR event) writes
   `wo:needs-review`. An order still on `wo:in-progress` beside an open PR
-  is drift to report, never a label to apply by hand. Its repair route
-  is the dispatch shim, which re-runs the PR-open leg:
-  `gh workflow run validator.yml -f pr=N`. A red PR of this queue is
+  is drift to report, never a label to apply by hand. Report it with
+  its repair route for a human to run, the dispatch shim
+  `gh workflow run validator.yml -f pr=N`. The shim re-runs the whole
+  validator for that PR (its check, review and label legs), not just
+  the label flip. A red PR of this queue is
   still released in Phase 0 by
   [its own rule](#which-open-prs-are-this-queues).
 - **A merged PR** → leave it. The PR-merge leg writes `wo:merged`, and
