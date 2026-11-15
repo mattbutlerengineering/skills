@@ -6,12 +6,17 @@ strings; nothing here calls a model or the network.
 """
 import io
 import re
+import sys
 import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 
 import voice_grade as vg
+
+# run_tests.py runs tests.<module>; the sibling helper needs tests/ on path
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import linear_time  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "plugin-evals/house-voice/fixtures"
@@ -275,11 +280,11 @@ class TestBinaryContrastBounds(unittest.TestCase):
     period graded in quadratic time and a "but" paragraphs later matched."""
 
     def test_a_200_kb_reply_of_not_just_grades_in_linear_time(self):
-        import time
-        text = "not just " * 22000
-        start = time.monotonic()
-        self.assertEqual(vg.slop(text), [])
-        self.assertLess(time.monotonic() - start, 2.0)
+        # Pinned by growth, not a wall-clock bound, which a loaded full
+        # suite flaked (#1794).
+        self.assertEqual(vg.slop("not just " * 4000), [])
+        ratio = linear_time.growth(vg.slop, lambda n: "not just " * n, 1000)
+        self.assertLess(ratio, linear_time.GROWTH_LIMIT)
 
     def test_a_but_past_a_blank_line_is_not_a_contrast(self):
         text = ("- Not just the index changes\n\nRun the tests\n\n"
