@@ -117,14 +117,29 @@ pre-pass only, like the free tools above:
   3.12 <tmp>/.venv && uv pip install --python <tmp>/.venv/bin/python
   skillevaluator`, then per skill `<tmp>/.venv/bin/skillevaluator validate
   skills/<name> --tiers 1 -r json -o <tmp>/r/<name>`. Tier 1 is offline
-  and free; Tier 3 (live agent evaluation) needs a model key and costs
-  money. A plugin-level run goes over a `git archive origin/main
+  and free. Tier 2 needs an embedding provider key
+  (`SKILL_EVAL_EMBEDDING_PROVIDER=nv_build` with `NVIDIA_API_KEY`, or
+  `openai` with `OPENAI_API_KEY`) and does not run offline; Tier 3 (live
+  agent evaluation) needs a model key, the `skillevaluator[tier3]` extra
+  (it imports `harbor`) and Docker, and costs money. Neither has been run
+  on this repo: the Owner chose (2026-11-15) to skip them rather than add
+  a model-provider key (NVIDIA Build, OpenAI, Anthropic for Tier 3, or an
+  OpenAI-compatible local endpoint via `SKILL_EVAL_LLM_BASE_URL` /
+  `SKILL_EVAL_EMBEDDING_BASE_URL`), so `trigger_eval.py` and `claude
+  plugin eval` remain the measures of skill behaviour. Per-skill
+  checks also belong on the export described next, as
+  `<tmp>/repo/skills/<name>`. A
+  plugin-level run goes over a `git archive origin/main
   .claude-plugin skills` export, never the checkout: on the checkout it
   walks `.claude/worktrees/` and did not finish in 10 minutes, and even
   the 744 KB export takes over 10 minutes. Exit 0 pass, 1 changes
   required (any failed Tier 1 validator). It is good for the spec's
   schema (it found the missing `metadata.author`), secrets and
   unicode-smuggling scans, and a second opinion on description overlap.
+  Its `author_format` validator (high, blocking) wants `metadata.author`
+  as `Name <email@host>`; the Owner declined that (2026-11-15) because it
+  would publish an email address, so every skill still exits 1 at Tier 1
+  on it. Do not re-propose the format without the Owner.
   Never evidence for (false positives on this repo's skills, observed
   2026-11-15 with skillevaluator 0.9.0 at origin/main 81adfe1):
   - PII-CRITICAL on any `scheme://user:password@host` URL, placeholders
@@ -142,3 +157,27 @@ pre-pass only, like the free tools above:
     descriptions, and for a `TEMPLATE.md` in a skill root: generic
     template rules that conflict with this repo's skill contract (one
     plugin version, ADR-0095; trigger-tuned descriptions).
+  Also never evidence for (second pass, observed 2026-11-15 with
+  skillevaluator 0.9.0 at origin/main 7a11059):
+  - "Unexpected nesting depth for general skill" on every skill: the
+    checkout's folder is itself named `skills`, so paths read
+    `skills/skills/<name>`. On the `git archive` export the finding
+    disappears.
+  - "Broad description without negative triggers": it matches literal
+    "Do NOT use" phrasing only, and flags descriptions that state their
+    boundaries in the house style ("Not `doctor` (...)", "Designing the
+    data model is architect; ..."). Of eight flagged, only `architect`
+    truly lacked one, and its description now names its boundaries.
+  - "Deeply nested references" when a references file cross-links a
+    sibling reference: in all five flagged skills (`deepen`,
+    `implement-queue`, `lean`, `polish`, `review`) the sibling is also
+    linked directly from SKILL.md, so nothing is two levels deep.
+  - "Resource-based skill lacks documentation of available resources"
+    on `prisma-migrations`, whose SKILL.md lists all three `assets/`
+    files.
+  - "missing-reference" caveats (info): they mean only that link targets
+    outside the skill folder were not inspected; detector I checks that
+    every markdown link target exists.
+  - "Description contains vague words" (`factory-init`) and "uses
+    first/second person" (`house-voice`, whose "my" sits inside quoted
+    user phrases): keyword hits on specific, third-person descriptions.
