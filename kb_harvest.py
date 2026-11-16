@@ -506,16 +506,20 @@ def memory_candidates(memory_dir, pages):
 def main_checkout(root):
     """root's main checkout: the parent of git's common dir, so a linked
     worktree finds the transcripts filed under the main checkout's slug
-    (#710). root itself when git cannot say (not a repo, no git), and
-    exactly as given when it already is the main checkout."""
+    (#710). root itself when git cannot say (not a repo, no git), when
+    it already is the main checkout, and in a submodule, whose git dir
+    is its common dir (#1862)."""
     root = Path(root).absolute()
     try:
         out = cli.runner("git")(["-C", str(root), "rev-parse",
                                  "--path-format=absolute",
-                                 "--git-common-dir"]).stdout
+                                 "--git-dir", "--git-common-dir"]).stdout
     except cli.CLI_FAILURES:
         return root
-    main = Path(out.strip()).parent
+    lines = out.splitlines()
+    if len(lines) != 2 or lines[0] == lines[1]:
+        return root
+    main = Path(lines[1].strip()).parent
     return root if main == root.resolve() else main
 
 

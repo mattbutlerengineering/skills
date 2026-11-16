@@ -5,6 +5,7 @@ retry. A facet of tests/test_conductor_merge.py (its TurnCase harness,
 scratch repo and fake ports), split out so the merge-turn suites run as
 parallel modules (#916).
 """
+import json
 import subprocess
 import sys
 import unittest
@@ -134,6 +135,37 @@ class TestMergeTurnStalls(TurnCase):
                                        "isInMergeQueue": True}]))
         self.assertStalled(summary, "PR #44 did not merge from the queue"
                            " within 30 minutes")
+
+    def test_an_item_pr_the_repo_already_merged_is_recorded_as_merged(self):
+        # #1881: ADR-0105 extends #807 to item PRs; no open PR is left
+        # to land, and nothing is pushed onto the merged branch.
+        self.item({"src.txt": "x\n"})
+        gh = self.fake_gh()
+        gh.fake.answers.update({
+            ("pr", "list", "--head", BRANCH, "--state", "open"): "[]",
+            ("pr", "list", "--head", BRANCH, "--state", "merged"):
+                json.dumps([{"number": 44, "headRefOid": self.head(),
+                             "mergeCommit": {"oid": "r1"}}])})
+        pushes = len(self.calls("git", "push"))
+        summary, problems = self.turn(SHIPPED, gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual((summary["stall"], summary["sha"], summary["pr"]),
+                         (None, "r1", 44))
+        self.assertEqual(self.rows[-1]["to"], "merged")
+        self.assertEqual(self.rows[-1]["reason"],
+                         "merged by the repo as PR #44")
+        self.assertEqual(len(self.calls("git", "push")), pushes)
+        self.assertFalse(self.gh.fake.called("pr", "merge"))
+
+    def test_an_open_pr_is_landed_even_when_an_older_one_merged(self):
+        self.item({"src.txt": "x\n"})
+        gh = self.fake_gh()
+        gh.fake.answers[("pr", "list", "--head", BRANCH, "--state",
+                         "merged")] = json.dumps([{
+                             "number": 9, "headRefOid": "0" * 40,
+                             "mergeCommit": {"oid": "old"}}])
+        summary, problems = self.turn(SHIPPED, gh=gh)
+        self.assertEqual((problems, summary["sha"]), ([], "m1"))
 
     def test_a_stalled_merge_resumes_as_a_merge(self):
         rows = START + SHIPPED + [moved("#12", "ship", "merging"),

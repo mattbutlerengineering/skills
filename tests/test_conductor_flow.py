@@ -17,7 +17,7 @@ import conductor_landed as landed
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
-from fake_git import FakeGit  # noqa: E402
+from fake_git import FakeGit, raw_diff  # noqa: E402
 
 LEDGER = "docs/factory/batches/b1/ledger.jsonl"
 AT = "2026-10-10T12:00:00Z"
@@ -192,6 +192,19 @@ class TestTransitions(unittest.TestCase):
             rows + [answered("ask-2", "retry", "#12")], "#12", "build"),
             ["cd: #12 leaves stalled only for spec, after a retry answer"])
 
+    def test_a_retry_resumes_a_state_that_is_not_a_step_at_its_next_step(self):
+        # #1870: awaiting-gate and reviewed are states, so a retry of a
+        # stall from them continues at build and ship.
+        for frm, step in (("awaiting-gate", "build"), ("reviewed", "ship")):
+            rows = [moved("#12", "spec", frm), moved("#12", frm, "stalled"),
+                    stall_ask("ask-2", "#12"),
+                    answered("ask-2", "retry", "#12")]
+            self.assertEqual(self.problems(rows, "#12", step), [], frm)
+            self.assertEqual(
+                self.problems(rows, "#12", frm),
+                [f"cd: #12 leaves stalled only for {step}, after a retry"
+                 " answer"], frm)
+
     def test_the_first_request_for_changes_returns_to_build_once(self):
         rows = [moved("#12", "x", "review")]
         self.assertEqual(self.problems(rows, "#12", "build"), [])
@@ -234,6 +247,17 @@ class TestTransitions(unittest.TestCase):
     def test_an_item_outside_the_plan_is_refused(self):
         self.assertEqual(self.problems([], "#99", "spec"),
                          ["cd: #99 is not an item of this batch's plan"])
+
+
+class TestRetryOfAnOutsideMergeFromReviewed(unittest.TestCase):
+    def test_next_offers_ship_not_the_reviewed_state(self):
+        rows = START + [moved("#12", "review", "reviewed", verdict="pass",
+                              author_runs=["a"], reviewer_run="r")]
+        _, writes, _ = flow.survey(rows, NOW, 3, alive,
+                                   {"#12": {"merged_pr": LANDED}})
+        rows += writes + [answered(writes[1]["id"], "retry", "#12")]
+        ready, _, _ = flow.survey(rows, NOW, 3, alive, {})
+        self.assertIn({"item": "#12", "step": "ship"}, ready)
 
 
 class TestMove(unittest.TestCase):
@@ -462,6 +486,13 @@ class TestSurveyWrites(unittest.TestCase):
         ready, _, _ = flow.survey(START + resumed, NOW, 3, dead, {})
         self.assertIn({"item": "#14", "step": "merge"}, ready)
 
+    def test_a_dead_merge_turn_offers_no_retry_up(self):
+        # #1874: a merge has no band, so retry-up would only mean retry.
+        rows = START + [moved("#12", "ship", "merging", pid=4242)]
+        _, writes, _ = flow.survey(rows, NOW, 3, dead, {})
+        self.assertEqual(writes[1]["options"], ["retry", "block"])
+        self.assertTrue(writes[1]["question"].endswith("Retry, or block?"))
+
     def test_an_idle_step_stalls_after_twice_its_wall_clock_limit(self):
         # #14 is size M: a 90-minute limit, so 180 minutes idle stalls.
         rows = [launch("#14", "planned", "build")]
@@ -610,16 +641,15 @@ class TestVerdict(unittest.TestCase):
 
 
 class TestGitFacts(unittest.TestCase):
-    def git(self, changed, tree="", shows=None):
-        return FakeGit({("diff",): changed, ("ls-tree",): tree,
+    def git(self, changed, blobs=None, shows=None):
+        return FakeGit({("diff",): raw_diff(changed.split(), blobs),
                         **{("show", spec): text
                            for spec, text in (shows or {}).items()}})
 
     def test_gate_blobs_are_the_changed_gate_files_blob_ids(self):
         git = self.git(
             "docs/features/x/prd.md\nconductor.py\ndocs/adr/0090-y.md\n",
-            "100644 blob aaa\tdocs/adr/0090-y.md\n"
-            "100644 blob bbb\tdocs/features/x/prd.md\n")
+            {"docs/adr/0090-y.md": "aaa", "docs/features/x/prd.md": "bbb"})
         self.assertEqual(flow.gate_blobs(git, "conductor/b1-12"), (
             {"docs/adr/0090-y.md": "aaa", "docs/features/x/prd.md": "bbb"},
             []))

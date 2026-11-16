@@ -20,7 +20,7 @@ import conductor_run
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
-from fake_git import FakeGit  # noqa: E402
+from fake_git import FakeGit, raw_diff  # noqa: E402
 import git_repo  # noqa: E402
 from test_conductor_flow import (BUDGET, PLAN, START,  # noqa: E402
                                  answered, failed, launch, moved, ran,
@@ -116,7 +116,7 @@ def Git(tmp, changed="", shows=None, failing=None, log="", heads=None,
         ("rev-parse", "--path-format=absolute", "--git-common-dir"):
             f"{Path(tmp) / '.git'}\n",
         ("worktree", "add"): add_worktree, ("log",): log,
-        ("diff",): changed, ("ls-tree", "--name-only"): listed,
+        ("diff",): raw_diff(changed.split("\n")[:-1] if changed else []), ("ls-tree", "--name-only"): listed,
         ("ls-tree", "-r", "--name-only"): listed_runs,
         # Read at call time: a Worker's commit changes what a ref holds.
         ("show",): lambda args: shows.get(args[-1], "")},

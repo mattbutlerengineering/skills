@@ -453,6 +453,23 @@ class TestStale(unittest.TestCase):
             f"kb: docs/kb/cache.md is stale: src/a.py changed since"
             f" verified {self.sha[:7]} — re-verify it"])
 
+    def test_sources_with_spaces_and_non_ascii_keep_their_names(self):
+        # Issue #1882: split() broke "my notes.md" in two and git
+        # C-quotes a non-ASCII path unless asked for -z.
+        write(self.root / "src" / "my notes.md", "a\n")
+        write(self.root / "src" / "caf\u00e9.md", "a\n")
+        git(self.root, "add", "-A")
+        git(self.root, "commit", "-q", "-m", "named")
+        sha = git(self.root, "rev-parse", "HEAD")
+        self.indexed(sources="src/my notes.md, src/caf\u00e9.md",
+                     verified=sha)
+        write(self.root / "src" / "my notes.md", "b\n")
+        write(self.root / "src" / "caf\u00e9.md", "b\n")
+        git(self.root, "commit", "-qam", "edit")
+        self.assertEqual(kb.lint(self.root), [
+            f"kb: docs/kb/cache.md is stale: src/caf\u00e9.md, src/my notes.md"
+            f" changed since verified {sha[:7]} — re-verify it"])
+
     def test_renamed_source_names_where_it_went(self):
         self.indexed(sources="src/a.py", verified=self.sha)
         git(self.root, "mv", "src/a.py", "src/c.py")
