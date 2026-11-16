@@ -151,6 +151,7 @@ jobs:
           path: .idea-to-prod
       - name: Headless markdown-claims audit
         run: |
+          set -o pipefail
           if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
             echo "::warning::ANTHROPIC_API_KEY is not set; skipping."
             exit 0

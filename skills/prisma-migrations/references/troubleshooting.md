@@ -55,10 +55,18 @@ Drift detected: Your database schema is not in sync with your migration history.
 npx prisma migrate diff \
   --from-migrations prisma/migrations \
   --to-url "$DATABASE_URL" \
+  --shadow-database-url "$SHADOW_DATABASE_URL" \
   --script
 
 # Option A: Create a migration to capture the changes
-npx prisma migrate dev --name reconcile_drift
+# (`migrate dev` would ask to reset the drifted database; generate the SQL instead)
+mkdir -p prisma/migrations/<timestamp>_reconcile_drift
+npx prisma migrate diff \
+  --from-migrations prisma/migrations \
+  --to-url "$DATABASE_URL" \
+  --shadow-database-url "$SHADOW_DATABASE_URL" \
+  --script > prisma/migrations/<timestamp>_reconcile_drift/migration.sql
+npx prisma migrate resolve --applied <timestamp>_reconcile_drift
 
 # Option B: Reset database to match migrations (DEVELOPMENT ONLY)
 npx prisma migrate reset
@@ -382,13 +390,14 @@ npx prisma migrate status
 
 # Compare schema to database
 npx prisma migrate diff \
-  --from-schema-datasource prisma/schema.prisma \
+  --from-schema-datamodel prisma/schema.prisma \
   --to-url "$DATABASE_URL"
 
 # Compare migrations to database
 npx prisma migrate diff \
   --from-migrations prisma/migrations \
   --to-url "$DATABASE_URL" \
+  --shadow-database-url "$SHADOW_DATABASE_URL" \
   --script
 
 # View migration history in database

@@ -63,8 +63,8 @@ repo's tracked tree (never into the repo). Replace the sample: header
 (repo name, active-run count, the model's `generated` timestamp as the
 snapshot line), one lane per run **in the model's order**, glyph per
 ladder state, progress count under an in-progress implement mark,
-attention strip only when non-empty, legend kept. Update `viewBox`,
-the ground rect, and the `<title>`/`<desc>` to match the real content.
+attention strip only when non-empty, legend kept. Update root `width`/`height`,
+`viewBox`, the ground rect, and the `<title>`/`<desc>` to match the real content.
 
 Done when: the file exists and contains every run from the model
 exactly once.

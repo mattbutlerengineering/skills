@@ -40,6 +40,7 @@ OVERLAP = ("intervals overlap: not distinguishable "
 SEPARATE = ("intervals do not overlap "
             "(descriptive, not a significance test)")
 DAY = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+PLUGIN_NAME = re.compile(r"^\d{4}-\d{2}-\d{2}(?:-(?:[2-9]|[1-9]\d+))?$")
 
 # A trend needs at least MIN_DAYS distinct days and MIN_CASES cases in every
 # record of the group. A convention, chosen with the Wilson arithmetic in
@@ -258,7 +259,8 @@ def _output_row(rel, data):
     if summary.get("total") != len(expectations) \
             or summary.get("passed") != hits:
         raise RecordError("summary disagrees with its results")
-    return {"surface": "output", "file": rel.parent.name, "day": parsed[2],
+    return {"surface": "output", "file": rel.parent.name,
+            "day": _day(parsed[2], "name"),
             "suite": (parsed[4],),
             "case_set": tuple(sorted((e["text"],) for e in expectations)),
             "n": len(expectations), "hits": hits, "cost": None}
@@ -281,6 +283,8 @@ def _plugin_row(rel, data):
     estimated."""
     if data.get("partial") is True:
         raise RecordError("is partial")
+    if not PLUGIN_NAME.match(rel.stem):
+        raise RecordError("name fits no results grammar")
     day = _named_day(_need(data, "startedAt", str), "startedAt",
                      rel.stem[:10])  # plugin records are named <date>[-N]
     suite = _need(data, "suite", dict)
@@ -482,8 +486,9 @@ def _cost_line(surface, members, first, last):
         return (f"{LABEL}: {surface} cost per pass: {first[0]['day']} "
                 f"${before:.4f} -> {last[0]['day']} ${after:.4f} "
                 f"({_files(members)})")
-    absent = sum(1 for r in members if r["cost"] is None)
-    why = (f"cost field absent from {absent} of {len(members)} record(s)"
+    read = first + last  # cost_per_pass reads only the end days
+    absent = sum(1 for r in read if r["cost"] is None)
+    why = (f"cost field absent from {absent} of {len(read)} record(s)"
            if absent else "no passed case to divide by")
     return f"{LABEL}: {surface} cost: REFUSED {why}; no trend claim"
 

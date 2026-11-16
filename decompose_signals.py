@@ -57,8 +57,10 @@ RULE = ("a boundary is observed when its commit subject reads"
         " adds breakdown.md, implement at the first later commit that checks"
         " every row (ADR-0109, ADR-0111)")
 USAGE = "python3 decompose_signals.py [--record]"
-# A NUL opens each commit record; unit separators split its header.
-_FORMAT = "--format=%x00%H%x1f%at%x1f%s"
+# -z lists each path raw and NUL-ended (never C-quoted, so a non-ASCII run
+# name matches), which leaves NUL no commit-record opener: SOH opens each
+# record; unit separators split its header, a NUL ends it.
+_FORMAT = "--format=%x01%H%x1f%at%x1f%s"
 
 
 def _git(run, root, args, input=None):
@@ -80,12 +82,13 @@ def _namespace(refname):
 def _commits(out):
     """The walk's commit records, in walk order."""
     commits = []
-    for record in out.split("\0")[1:]:
-        header, _, rest = record.partition("\n")
+    for record in out.split("\x01")[1:]:
+        header, _, rest = record.partition("\0")
         sha, author_time, subject = header.split("\x1f", 2)
         commits.append({"sha": sha, "author_time": int(author_time),
                          "subject": subject,
-                         "files": [f for f in rest.splitlines() if f]})
+                         "files": [f for f in rest.lstrip("\n").split("\0")
+                                   if f]})
     return commits
 
 
@@ -117,7 +120,7 @@ def read_history(root, run):
         out, problems = _git(
             run, root, ["log", "--stdin", "--full-history",
                         "--author-date-order", "--reverse", "--name-only",
-                        _FORMAT, "--", *PATHSPECS],
+                        "-z", _FORMAT, "--", *PATHSPECS],
             input="".join(f"{name}\n" for name in names))
         if out is None:
             return None, problems

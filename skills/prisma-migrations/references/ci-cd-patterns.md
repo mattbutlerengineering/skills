@@ -346,7 +346,7 @@ Create a new migration that reverses the changes:
 
 ```bash
 # After failed deployment
-npx prisma migrate dev --name rollback_add_feature
+npx prisma migrate dev --create-only --name rollback_add_feature
 # Edit the SQL to reverse the original migration
 npx prisma migrate deploy
 ```

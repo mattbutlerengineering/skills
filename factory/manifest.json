@@ -27,7 +27,7 @@
     "templates/tools/factory/budget_guard.py": "9679ee4a6f28e3c1faa77014310df97ee1f05018583d7f441223865448f59280",
     "templates/tools/factory/cli.py": "286633654d30b82b8ca175b3de1f65a72e73ecd3998c791f4ad96b96168b0ecf",
     "templates/tools/factory/conductor.py": "0e540a079a4bfed6a4bfc9b85d4dc78ed1e803276b5f32e099ffab2f10fd1a0a",
-    "templates/tools/factory/conductor_calibrate.py": "b3a65a66e122bf059e5f210970203a90223b3e9ed27db2e70393d851fcfbccb4",
+    "templates/tools/factory/conductor_calibrate.py": "2da55fa7df8f43593e2a945a6750001a3a2c0e4c33a4b726c64c4f4d20ffc314",
     "templates/tools/factory/conductor_close.py": "a1c769e197892cde1665f8940790bb2c5379f334547a348939d237b4bcaa214b",
     "templates/tools/factory/conductor_consent.py": "8d04c24706369136a4d0aa1946ec70a194f1edf839a0ac8e1cf09b302cc31c2d",
     "templates/tools/factory/conductor_flow.py": "c6c1d0aa248773068e6b4ad85c63f8daa2428307d24d5eeabd607d01fdc21c34",
