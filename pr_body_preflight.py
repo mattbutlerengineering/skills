@@ -638,10 +638,18 @@ def _runs(word):
     return bool(UNSAFE_ARGUMENT.search(word) or PLACEHOLDER_WORD.search(word))
 
 
+def _unwrapped(words):
+    """WORDS past a leading `builtin` or `command`: `builtin cd d` is cd."""
+    while words and words[0] in ("builtin", "command"):
+        words = words[1:]
+    return words
+
+
 def _directory_change(record):
-    """True when record is a bare cd, pushd or popd whose arguments run
-    nothing and assign nothing."""
-    return bool(record.words and record.words[0] in DIRECTORY_CHANGERS
+    """True when record is a bare cd, pushd or popd (also behind `builtin`
+    or `command`) whose arguments run nothing and assign nothing."""
+    words = _unwrapped(record.words)
+    return bool(words and words[0] in DIRECTORY_CHANGERS
                 and not record.redirects
                 and not any(_runs(word) for word in record.words))
 
@@ -988,7 +996,8 @@ def _working_directory(earlier, cwd):
     cd/pushd/popd, or None when one of them cannot be placed."""
     here = Path(cwd) if isinstance(cwd, str) else None
     for words in earlier:
-        if words[0] not in DIRECTORY_CHANGERS:
+        words = _unwrapped(words)
+        if not words or words[0] not in DIRECTORY_CHANGERS:
             continue
         args = words[1:]
         if words[0] == "popd" or len(args) != 1 or here is None:
@@ -1019,7 +1028,8 @@ def _check_target(repos, context):
             if _slug(value) not in slugs:
                 raise _Unreadable(
                     f"the PR targets {value}, not this repository")
-    if not any(words[0] in DIRECTORY_CHANGERS for words in earlier):
+    if not any(_unwrapped(words)[:1] and _unwrapped(words)[0]
+               in DIRECTORY_CHANGERS for words in earlier):
         return
     here = _working_directory(earlier, context["cwd"])
     home = _git_config(Path(context["cwd"])) if here else None

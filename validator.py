@@ -360,10 +360,12 @@ def run_review(root, findings, status, env, run=gh_runner):
     # (None, None). The file is another job's output handed over as
     # untrusted data (ADR-0098): read only as many bytes as the rendered
     # cap can use (four per UTF-8 character at worst), and replace what
-    # does not decode rather than let the text refuse its own review.
+    # does not decode rather than let the text refuse its own review. One
+    # byte more than the cap can use, so a file past it always decodes to
+    # more than MAX_FINDINGS_CHARS characters and gets the truncation note.
     try:
         with open(findings, "rb") as handle:
-            raw = handle.read(4 * MAX_FINDINGS_CHARS)
+            raw = handle.read(4 * MAX_FINDINGS_CHARS + 1)
     except OSError as err:
         return [f"V: cannot read findings file {findings}: {err}"]
     output = raw.decode("utf-8", errors="replace")
