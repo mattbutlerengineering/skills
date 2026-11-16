@@ -153,6 +153,23 @@ class TestMetricsCli(unittest.TestCase):
             self.run_main(["--metrics", "x.json", "--kind", "nearmiss"])
         self.assertEqual(ctx.exception.code, 2)
 
+    def test_only_selects_an_integer_case_id(self):
+        # #1981: --only is a string, an id may be an int
+        cases = [{"id": 3, "expected": "a"}, {"id": 4, "expected": "b"}]
+        seen = []
+
+        def run_eval(chosen, *rest):
+            seen.append([c["id"] for c in chosen])
+            return {"summary": {"failed": 0}}
+        with mock.patch("trigger_eval.eval_schema.load",
+                        return_value=(cases, [])), \
+                mock.patch("trigger_eval.load_descriptions"), \
+                mock.patch("trigger_eval.cli.version", return_value="v"), \
+                mock.patch("trigger_eval.run_eval", run_eval), \
+                mock.patch("trigger_eval.print_report"):
+            self.run_main(["--only", "3"])
+        self.assertEqual(seen, [[3]])
+
 
 if __name__ == "__main__":
     unittest.main()

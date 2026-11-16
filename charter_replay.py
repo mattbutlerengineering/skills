@@ -449,9 +449,10 @@ def control_verdict(case, intact, degraded):
             f"{where} passed with its Must never section removed, so it"
             " cannot detect that regression"]
     elif not tripped:
+        missed = ', '.join(map(str, degraded_result['failed']))
         verdict, problems = "insensitive", [
             f"{where} never took its trap with its Must never section"
-            f" removed (it missed only {', '.join(degraded_result['failed'])}),"
+            f" removed (it missed only {missed}),"
             " so it cannot detect that regression"]
     else:
         verdict, problems = "sensitive", []
@@ -634,8 +635,8 @@ def print_control_report(output):
         print(f"  [{result['verdict'].upper()}] {result['id']}"
               f" ({result['role']})", file=sys.stderr)
         if result["tripped"]:
-            print(f"      stripped run tripped: {', '.join(result['tripped'])}",
-                  file=sys.stderr)
+            tripped = ', '.join(map(str, result['tripped']))
+            print(f"      stripped run tripped: {tripped}", file=sys.stderr)
         for problem in result["problems"]:
             print(f"      {problem}", file=sys.stderr)
     summary = output["summary"]
@@ -691,7 +692,7 @@ def main(argv=None):
         return 1
     if args.only:
         cases = [c for c in cases
-                 if args.only in (c["id"], c["role"])]
+                 if args.only in (str(c["id"]), c["role"])]
         if not cases:
             print(f"error: no cases match --only {args.only!r}",
                   file=sys.stderr)

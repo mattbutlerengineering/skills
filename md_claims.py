@@ -85,6 +85,7 @@ def doc_set(root, paths=None):
         return docs, problems
     docs = [p.name for p in sorted(root.glob("*.md"))
             if p.name not in AGENT_FILES]
+    docs = [name for name in docs if not SNAPSHOT.match(name)]
     if (root / "docs").is_dir():
         docs += _walk_md(root, root / "docs")
     return docs, []
@@ -309,7 +310,7 @@ def _verify_segment(root, cwd, doc_dir, segment):
     if program == "make":
         return _verify_make(root, cwd, args)
     if program in PACKAGE_RUNNERS:
-        return _verify_package(root, cwd, args)
+        return _verify_package(root, cwd, program, args)
     if program in INTERPRETERS:
         skip = False
         for at, arg in enumerate(args):
@@ -391,10 +392,13 @@ def _verify_make(root, cwd, args):
             if target not in rules and not PLACEHOLDER.search(target)]
 
 
-def _verify_package(root, cwd, args):
-    if len(args) < 2 or args[0] not in ("run", "run-script"):
+def _verify_package(root, cwd, program, args):
+    if not args or args[0] not in ("run", "run-script"):
         return []
-    name = args[1]
+    rest = [arg for arg in args[1:] if not arg.startswith("-")]
+    if not rest:
+        return []
+    name = rest[0]
     if PLACEHOLDER.search(name):
         return []
     package = cwd / "package.json"
@@ -402,7 +406,7 @@ def _verify_package(root, cwd, args):
     data, problem = cli.read_file(package, shown, dict)
     if data is None and problem is None:
         where = cwd.relative_to(root).as_posix()
-        return [f"command runs {args[0]} {name}, but no package.json exists"
+        return [f"command runs {program} {name}, but no package.json exists"
                 f" in {where}"]
     if problem:
         return [problem]

@@ -257,13 +257,17 @@ def _metrics(root, entries, month, problems):
     problems.extend(config_problems)
     waits = [wait[1] for wait in map(cost_ledger.gate_wait, entries)
              if wait is not None]
+    # ADR-0084: an issue-keyed group is not a work order, so neither its
+    # spend nor its key counts toward the per-WO mean.
+    wo_costs = [cost for key, cost in lifetime["by_wo"].items()
+                if not cost_ledger.ISSUE_KEY.fullmatch(key)]
+    cost_per_wo = (round(sum(wo_costs) / len(wo_costs), 2)
+                   if wo_costs else None)
     return {
         "month_spend": cost_report.aggregate(entries,
                                              month)["total_cost"],
         "cap": cap,
-        "cost_per_wo": (round(lifetime["total_cost"]
-                              / len(lifetime["by_wo"]), 2)
-                        if lifetime["by_wo"] else None),
+        "cost_per_wo": cost_per_wo,
         "gate_wait_median": (round(statistics.median(waits))
                              if waits else None),
         "acceptance": None,
@@ -557,6 +561,9 @@ def respond_post(target, body, repos_fn):
     return 204, None
 
 
+MAX_BODY = 1 << 20  # 1 MiB; a save is `{i, hash, order}`, ~8 bytes a seed
+
+
 def content_length(declared):
     """(byte count, problems) for a Content-Length header value.
 
@@ -578,7 +585,11 @@ def content_length(declared):
     if not (declared.isascii() and declared.isdigit()):
         return None, [f"dashboard: Content-Length {declared!r} is not a"
                       " non-negative integer"]
-    return int(declared), []
+    digits = declared.lstrip("0")
+    if len(digits) > len(str(MAX_BODY)):
+        # Too long to be worth int(): CPython refuses >4300 digits.
+        return MAX_BODY + 1, []
+    return int(digits or "0"), []
 
 
 class _Handler(BaseHTTPRequestHandler):
@@ -607,6 +618,9 @@ class _Handler(BaseHTTPRequestHandler):
             self.headers.get("Content-Length"))
         if problems:
             status, payload = 400, {"problems": problems}
+        elif length > MAX_BODY:
+            status, payload = 413, {"problems": [
+                f"dashboard: body exceeds {MAX_BODY} bytes"]}
         else:
             body = self.rfile.read(length).decode("utf-8", "replace")
             status, payload = respond_post(self.path, body,

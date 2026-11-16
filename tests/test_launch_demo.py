@@ -1252,6 +1252,15 @@ class TestReachable(unittest.TestCase):
             launch_demo.reachable("http://h/my page", head),
             (False, "URL can't contain control chars"))
 
+    def test_a_non_http_reply_is_unreachable_not_a_crash(self):
+        import http.client
+
+        def head(url, timeout):
+            raise http.client.BadStatusLine("SSH-2.0-OpenSSH_9.6")
+        self.assertEqual(
+            launch_demo.reachable("http://h", head),
+            (False, "SSH-2.0-OpenSSH_9.6"))
+
     def test_the_head_is_asked_with_the_timeout(self):
         seen = []
         launch_demo.reachable("http://h", lambda url, t: seen.append((url, t)))

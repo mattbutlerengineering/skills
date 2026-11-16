@@ -495,8 +495,9 @@ def reachable(against, head=None):
         if isinstance(err.reason, TimeoutError):
             return False, f"timed out after {HEAD_TIMEOUT} s"
         return False, str(err.reason)
-    except (OSError, http.client.InvalidURL) as err:
-        # InvalidURL: a URL urlopen cannot send (an HTTPException).
+    except (OSError, http.client.HTTPException) as err:
+        # HTTPException: InvalidURL (a URL urlopen cannot send) or a
+        # BadStatusLine/LineTooLong from a server that is not speaking HTTP.
         return False, str(err)
     return True, None
 

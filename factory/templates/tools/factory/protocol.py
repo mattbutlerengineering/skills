@@ -236,16 +236,19 @@ def skill_frontmatter_problems(root, slug):
     if fields is None:
         return [f"{label} has no frontmatter block"]
     description = fields.get("description")
+    name = fields.get("name")
+    if isinstance(name, str):
+        name = _unquote(name)
     if isinstance(description, dict):
-        return ([f"{label} frontmatter name is {fields.get('name')!r}, "
+        return ([f"{label} frontmatter name is {name!r}, "
                  f"expected {slug!r}"]
-                if fields.get("name") != slug else []) + [
+                if name != slug else []) + [
             f"{label} description is not a bare YAML scalar: it is a "
             "nested map"]
     return (
-        ([f"{label} frontmatter name is {fields.get('name')!r}, "
+        ([f"{label} frontmatter name is {name!r}, "
           f"expected {slug!r}"]
-         if fields.get("name") != slug else [])
+         if name != slug else [])
         + ([f"{label} frontmatter has no description"]
            if not description else [])
         + ([f"{label} description exceeds Pi's "

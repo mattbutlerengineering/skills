@@ -253,13 +253,27 @@ def _has_text(e):
                 or any((c.tail or "").strip() for c in e))
 
 
+def _text_runs(root, parents):
+    """The elements whose own text is a run: text and tspan, plus the
+    textPath and a that sit under a text element."""
+    def under_text(e):
+        while e is not None:
+            e = parents.get(e)
+            if e is not None and _local(e.tag) == "text":
+                return True
+        return False
+    return [e for e in root.iter()
+            if (_local(e.tag) in ("text", "tspan")
+                or (_local(e.tag) in ("textPath", "a") and under_text(e)))
+            and _has_text(e)]
+
+
 def _reading(root, report):
     """Fill the text fields of report: the smallest text size at the embed
     width, or the reason it was not read."""
     rules, report.skipped_rules = _font_rules(root)
     parents = {c: p for p in root.iter() for c in p}
-    texts = [e for e in root.iter()
-             if _local(e.tag) in ("text", "tspan") and _has_text(e)]
+    texts = _text_runs(root, parents)
     sizes = [_font_size(e, parents, rules) for e in texts]
     report.unread = sizes.count(None)
     scale, why = _scale(root, report.embed_px)

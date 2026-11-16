@@ -34,6 +34,7 @@ import json
 import os
 import re
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 from cli import CLI_FAILURES, detail, gh_read, read_file, report, runner
@@ -254,7 +255,24 @@ def resolve(root, key, runs, state, run):
 
 # --- events -----------------------------------------------------------
 
+def _utc(stamp):
+    """An ISO timestamp as a UTC instant `YYYY-MM-DDTHH:MM:SSZ`, the shape
+    GitHub reports. git's %aI keeps the author's offset, and comparing
+    that text with GitHub's UTC text mis-orders events and mixes local
+    and UTC days. A day-only or unparseable value is returned as given."""
+    try:
+        moment = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return stamp
+    if moment.tzinfo is None:
+        return stamp
+    return moment.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def event(sort, date, text, commit=None, ref=None):
+    sort = _utc(sort)
+    if "T" in sort:
+        date = sort[:10]
     return {"sort": sort, "date": date, "text": text, "commit": commit,
             "ref": ref}
 
@@ -363,7 +381,13 @@ def ticket_events(tickets, state, run):
 def citing_events(record, tickets, state, run):
     """Issues whose text cites the run ref or its PRD id — feedback the
     citation rule (ADR-0092 clause 7) ties to the run."""
-    terms = [t for t in (record["ref"], record["prd"]) if t]
+    # The product run's ref is the bare word `product`; searching it lists
+    # every issue that merely mentions the word (resolve_issue and
+    # resolve_kb exclude it for the same reason).
+    terms = [t for t in (record["ref"], record["prd"])
+             if t and t != "product"]
+    if not terms:
+        return []
     found = _gh(state, ["issue", "list", "--state", "all", "--search",
                         " OR ".join(f'"{t}"' for t in terms), "--json",
                         LIST_FIELDS], "gh issue list", run,

@@ -189,6 +189,11 @@ class TestBuild(FixtureTest):
         self.assertEqual(self.build(), [
             f"npx-bundle: output directory {self.out} is not empty"])
 
+    def test_an_output_path_that_is_a_file_is_refused(self):
+        write(self.out, "x")
+        self.assertEqual(self.build(), [
+            f"npx-bundle: output path {self.out} is not a directory"])
+
     def test_a_skill_already_named_like_the_runtime_is_refused(self):
         write(self.root / "skills" / RUNTIME / "SKILL.md",
               skill(RUNTIME, "x"))

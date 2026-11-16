@@ -693,7 +693,7 @@ def main(argv=None):
         return 1
     if args.only:
         cases = [c for c in cases
-                 if c["id"] == args.only or c["expected"] == args.only]
+                 if str(c["id"]) == args.only or c["expected"] == args.only]
         if not cases:
             print(f"error: no cases match --only {args.only!r}",
                   file=sys.stderr)

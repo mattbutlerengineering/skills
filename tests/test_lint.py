@@ -251,6 +251,16 @@ class TestManifest(CheckerTreeTest):
                          ["plugin.json missing field: description"])
 
 
+    def test_a_non_string_description_is_a_problem_not_a_crash(self):
+        # #1976: check_plugin_skills raised TypeError on `"description": 5`
+        path = self.root / ".claude-plugin" / "plugin.json"
+        path.write_text(json.dumps(
+            {"name": "t", "version": "0", "description": 5}),
+            encoding="utf-8")
+        self.assertEqual(lint.check_manifest(self.root),
+                         ["plugin.json description is not a string"])
+        self.assertEqual(lint.check_plugin_skills(self.root), [])
+
     def test_a_manifest_that_is_not_an_object_names_its_shape(self):
         # A JSON top level is legally any of these; none of them has .get
         path = self.root / ".claude-plugin" / "plugin.json"
@@ -1728,6 +1738,17 @@ class TestOutputEvals(CheckerTreeTest):
             ["evals/output/idea.json skill_name is 'prd', expected 'idea'",
              "evals/output/idea.json eval 1 run_fixture "
              "'evals/fixtures/absent' does not exist"])
+
+    def test_json_too_large_or_too_deep_is_a_problem_not_a_crash(self):
+        # #1975: ValueError (4300-digit int) and RecursionError escaped
+        path = self.root / "evals" / "output" / "idea.json"
+        path.write_text("9" * 5000, encoding="utf-8")
+        self.assertEqual(len(lint.check_output_evals(self.root)), 1)
+        self.assertTrue(lint.check_output_evals(self.root)[0].startswith(
+            "evals/output/idea.json is not valid JSON:"))
+        path.write_text("[" * 200000, encoding="utf-8")
+        self.assertTrue(lint.check_output_evals(self.root)[0].startswith(
+            "evals/output/idea.json is not valid JSON:"))
 
     def test_record_missing_documented_fields_is_flagged(self):
         # the previously silent gap (issue #25): docs promise six fields,

@@ -1090,6 +1090,26 @@ class TestUpdate(TempFile):
         self.assertEqual(problems, [OLD_SHAPE])
         self.assertEqual(self.file.read_bytes(), before)
 
+    def test_a_non_ascii_run_is_skipped_and_the_file_still_loads(self):
+        cafe = record("feature:café", hit_replan(), GAP)
+        lines, problems = self.update([HIT, CLEAN, cafe])
+        self.assertEqual(problems, [])
+        self.assertIn(
+            "decompose-lessons: skipped run 'feature:café': not a run ref"
+            " the lessons file can hold", lines)
+        self.assertEqual(self.file.read_text(encoding="utf-8"),
+                         jsonl(SEEN_HC, *BOTH))
+        lessons, seen, problems = dl.load(self.file, dl.LESSONS_PATH)
+        self.assertEqual(problems, [])
+        self.assertEqual(self.update([HIT, CLEAN, cafe])[1], [])
+
+    def test_dump_refuses_an_invalid_seen_header(self):
+        problems = dl.dump(self.file, [], ["design_gaps:feature:café"])
+        self.assertEqual(problems, [
+            f"decompose-lessons: {self.file.name} line 1: seen entry"
+            " 'design_gaps:feature:café' is not <signal>:<run ref>"])
+        self.assertFalse(self.file.exists())
+
     def test_a_measurement_with_problems_writes_nothing(self):
         lines, problems = self.update([HIT, CLEAN],
                                       problems=["decompose-signals: boom"])

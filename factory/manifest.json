@@ -48,10 +48,10 @@
     "templates/tools/factory/knowledge_plane.py": "2b8b5c4bd1061eaf9f136bff2bfb882897ae126b5ca3566d47b884be7ea9a597",
     "templates/tools/factory/label_sync.py": "301b047146a81a2580b1987efda5808bf75ea56b8729e503da9cd9cd22051b8c",
     "templates/tools/factory/orientation_pack.py": "8e20b1f409840176347b605c0525b797727fce7ba12efe8f631f7281faaf339f",
-    "templates/tools/factory/protocol.py": "35b4cd39dd5dc4a9ae7f64bd57c9a043e13ede2273539714ff619af641814825",
+    "templates/tools/factory/protocol.py": "f942d0449853914db01e729aa255461984ef93875d8c8397231bec5273f57141",
     "templates/tools/factory/rejection_mining.py": "bee357b8119aba05fcad777b0180543b7bdc041eba560b7d186608d8b84d9d41",
     "templates/tools/factory/standards_index.py": "6bf9c39e2e73441c788937559dad02f832f82fc338211439967d5b631b9b9e10",
-    "templates/tools/factory/trace.py": "36d14f9709ddad126bb629e24ad4e1f405ce6b918e43e29993b95d7c2e6a864d",
+    "templates/tools/factory/trace.py": "a8e50e4b8b841adb239c5c2acb11923b0f8f0d899f9d7c3d084db88f190e9a9f",
     "templates/tools/factory/validator.py": "6dc0abc9d858ee4d5052dd365d03cda99f104026608b51f09ef57f9280a63065",
     "templates/tools/factory/work_queue.py": "c605f87acd36decd57918bd7a8ebac9db4a7cfff2a06aee3e482338f1efa923e"
   }

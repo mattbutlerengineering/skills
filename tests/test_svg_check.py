@@ -299,6 +299,15 @@ class TestSmallestText(unittest.TestCase):
             f"svg-check: {path}: pass — smallest text 8.3px at 830px "
             "embed width"])
 
+    def test_text_inside_a_textpath_or_a_link_is_read(self):
+        # #1974: a text whose words sit in <textPath>/<a> has no direct text
+        for inner in ('<textPath href="#p">Label</textPath>',
+                      '<a href="#x">Label</a>'):
+            with self.subTest(inner=inner):
+                r = reading(f'<text font-size="4">{inner}</text>')
+                self.assertAlmostEqual(r.smallest_px, 4.0)
+                self.assertIsNone(r.note)
+
     def test_embed_width_option_scales_in_proportion(self):
         # 440 / 500 = 0.88; 5 x 0.88 = 4.4
         path = str(FIX / "clean.svg")

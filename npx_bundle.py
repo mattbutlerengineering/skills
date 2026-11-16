@@ -179,6 +179,8 @@ def build(root, out, tracked):
     """Write the branch tree for ROOT's TRACKED files into OUT, then
     return check's problems for it ([] when clean)."""
     root, out = Path(root), Path(out)
+    if out.exists() and not out.is_dir():
+        return [f"{LABEL}: output path {out} is not a directory"]
     if out.exists() and any(out.iterdir()):
         return [f"{LABEL}: output directory {out} is not empty"]
     slugs = _skill_slugs(tracked)

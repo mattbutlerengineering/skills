@@ -32,9 +32,12 @@ def check_manifest(root):
         return [problem]
     if data is None:
         return ["missing .claude-plugin/plugin.json"]
-    return [f"plugin.json missing field: {field}"
-            for field in ("name", "description", "version")
-            if not data.get(field)]
+    return ([f"plugin.json missing field: {field}"
+             for field in ("name", "description", "version")
+             if not data.get(field)]
+            + (["plugin.json description is not a string"]
+               if data.get("description")
+               and not isinstance(data["description"], str) else []))
 
 
 def check_plugin_skills(root):
@@ -71,6 +74,8 @@ def check_plugin_skills(root):
     if data is None:
         return []
     text = data.get("description") or ""
+    if not isinstance(text, str):
+        return []
     return [f"plugin.json's description never names utility skill {slug!r}"
             for slug in UTILITY_SKILLS if not names_slug(text, slug)]
 
@@ -986,7 +991,7 @@ def check_output_evals(root):
             data = json.loads(path.read_text(encoding="utf-8"))
         except OSError as err:
             return [f"cannot read {label}: {err}"]
-        except (json.JSONDecodeError, UnicodeDecodeError) as err:
+        except (ValueError, RecursionError, UnicodeDecodeError) as err:
             return [f"{label} is not valid JSON: {err}"]
         return (
             ([f"{label} stem is not a skill slug"]

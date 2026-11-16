@@ -207,6 +207,12 @@ class TestSkillFrontmatterProblems(unittest.TestCase):
              "expected 'idea'",
              "skills/idea/SKILL.md frontmatter has no description"])
 
+    def test_a_quoted_name_is_compared_unquoted(self):
+        # #1977: `name: "idea"` is YAML for idea
+        self.seed("idea",
+                  '---\nname: "idea"\ndescription: d\n---\n\nbody\n')
+        self.assertEqual(skill_frontmatter_problems(self.root, "idea"), [])
+
     def test_description_over_the_pi_limit(self):
         self.assertEqual(SKILL_DESCRIPTION_LIMIT, 1024)
         overlong = "x" * (SKILL_DESCRIPTION_LIMIT + 1)

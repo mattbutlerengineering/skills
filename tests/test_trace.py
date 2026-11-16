@@ -327,6 +327,36 @@ class TestIssueHistory(Repo):
                        "number,title,state,createdAt,closedAt",
                        "--limit", "100"], gh.calls)
 
+    def test_the_product_run_never_searches_for_the_bare_word(self):
+        gh = FakeGh()
+        found = trace_view.citing_events({"ref": "product", "prd": None},
+                                         {}, {"skipped": None, "notes": []},
+                                         gh)
+        self.assertEqual(found, [])
+        self.assertEqual(gh.calls, [])
+
+    def test_the_product_run_still_searches_for_its_prd_id(self):
+        gh = FakeGh({("issue", "list"): "[]"})
+        trace_view.citing_events({"ref": "product", "prd": "PRD-0009"},
+                                 {}, {"skipped": None, "notes": []}, gh)
+        self.assertEqual([c[4:7] for c in gh.calls],
+                         [["--search", '"PRD-0009"', "--json"]])
+
+    def test_events_order_by_utc_instant_across_offsets(self):
+        """20:00+09:00 is 11:00Z, before 12:00Z, and on the same UTC day;
+        02:00+09:00 on the 6th is still the 5th in UTC."""
+        events = [
+            trace_view.event("2026-01-01T12:00:00Z", "2026-01-01", "gh"),
+            trace_view.event("2026-01-01T20:00:00+09:00", "2026-01-01",
+                             "git"),
+            trace_view.event("2026-01-06T02:00:00+09:00", "2026-01-06",
+                             "late"),
+        ]
+        ordered = trace_view._ordered(events)
+        self.assertEqual([(e["text"], e["date"]) for e in ordered], [
+            ("git", "2026-01-01"), ("gh", "2026-01-01"),
+            ("late", "2026-01-05")])
+
     def test_an_unreachable_gh_is_one_stated_line_and_exit_zero(self):
         gh = FakeGh(failing=["issue"])
         code, out = self.trace("feature:demo", run=gh, environ={})
