@@ -345,7 +345,8 @@ def is_maintenance_run(run_dir):
     capture seed defect.md. Either signal suffices, so an empty fixes
     directory orients to capture before any artifact exists."""
     run_dir = Path(run_dir)
-    return (run_dir.parent.name == "fixes"
+    return ((run_dir.parent.name == "fixes"
+             and run_dir.parent.parent.name == "docs")
             or (run_dir / "defect.md").is_file())
 
 
