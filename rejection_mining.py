@@ -54,8 +54,8 @@ from datetime import datetime, timezone
 import conductor_close
 from conductor_flow import CHANGES_AGAIN, review_change
 
-from cli import (gh_read, gh_runner, marked_issue, report,
-                 upsert_pinned_issue, write_outputs)
+from cli import gh_read, gh_runner, report, write_outputs
+from gate_digest import upsert_marked_issue
 from human_gates import gate_rejections, read_gate_issues
 from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 
@@ -301,10 +301,7 @@ def run_mine(root, run=gh_runner, clock=None):
                                           requests, truncated,
                                           ledgers),
                          rework_by_wo=rework_by_wo)
-    open_issues = [entry for entry in listing
-                   if (entry.get("state") or "").upper() == "OPEN"]
-    problems += upsert_pinned_issue(marked_issue(open_issues, MARKER),
-                                    QUEUE_TITLE, body, "rm", run)
+    problems += upsert_marked_issue(QUEUE_TITLE, MARKER, body, "rm", run)
 
     candidates = set(rejections_by_wo) | set(requests_by_wo) | \
         set(rework_by_wo)

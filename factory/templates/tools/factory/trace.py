@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-from cli import CLI_FAILURES, detail, gh_read, gh_runner, report, runner
+from cli import CLI_FAILURES, detail, gh_read, read_file, report, runner
 from cost_ledger import ISSUE_KEY
 from human_gates import read_timelines
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
@@ -92,17 +92,21 @@ def _tokens(lines):
     return found
 
 
-def read_runs(root):
+def read_runs(root, notes):
     """One record per run_dirs run, from parse_run: its run ref, PRD id,
-    breakdown lines, and each present artifact's lines and cited ids."""
+    breakdown lines, and each present artifact's lines and cited ids. An
+    artifact the guarded read refuses is skipped and named in notes."""
     runs = []
     for entry in parse_run(root)["runs"]:
         path = entry["path"]
         artifacts = {}
         for name, _ in artifact_sections():
-            file = path / name
-            if file.is_file():
-                lines = file.read_text(encoding="utf-8").splitlines()
+            text, problem = read_file(
+                path / name, (path / name).relative_to(root).as_posix(), str)
+            if problem:
+                notes.append(problem)
+            elif text is not None:
+                lines = text.splitlines()
                 artifacts[name] = {"lines": lines, "ids": _tokens(lines)}
         runs.append({"path": path, "ref": run_ref(root, path),
                      "prd": entry["prd_id"], "breakdown": entry["breakdown"],
@@ -450,14 +454,22 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
-def main(argv, run=gh_runner, environ=os.environ, git=_git):
+def root_gh(root):
+    """The gh port scoped to root: gh resolves its repo from the working
+    directory, which must be the checkout being traced (#1875)."""
+    run = runner("gh")
+    return lambda args: run(args, cwd=root).stdout
+
+
+def main(argv, run=None, environ=os.environ, git=_git):
     args = parse_args(argv)
     if args.since is not None and not DAY.fullmatch(args.since):
         return report(LABEL, [f"{LABEL}: --since takes YYYY-MM-DD, not"
                               f" {args.since!r}"])
     root = Path(args.root).resolve()
+    run = run or root_gh(root)
     state = gh_state(environ)
-    runs = read_runs(root)
+    runs = read_runs(root, state["notes"])
     record, notes, problems = resolve(root, args.key, runs, state, run)
     if problems:
         return report(LABEL, problems)

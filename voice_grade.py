@@ -64,7 +64,7 @@ _COMPILED = tuple(
     (name, re.compile(pattern, sum(_FLAGS[f] for f in flags)))
     for name, pattern, flags in SLOP_PATTERNS)
 _TOKEN = re.compile(r"\w+|[^\w\s]")
-_FENCE = re.compile(r"^[ \t]*(?:```|~~~)")
+_FENCE = re.compile(r"^[ \t]*(`{3,}|~{3,})(.*)$")
 # lean: a single-backtick span only; a double-backtick span holding a
 # backtick is graded as prose. Upgrade if a fixture ever needs one.
 _INLINE = re.compile(r"`[^`\n]*`")
@@ -84,12 +84,18 @@ def _blank(text):
 def _mask_code(text):
     """text with fenced code blocks and inline code spans blanked. An
     unclosed fence blanks to the end, as a renderer shows it."""
-    lines, inside = [], False
+    lines, opening = [], None
     for line in text.splitlines(keepends=True):
-        if _FENCE.match(line):
-            inside = not inside
+        fence = _FENCE.match(line.rstrip("\r\n"))
+        if opening is None and fence:
+            opening = fence.group(1)
             lines.append(_blank(line))
-        elif inside:
+        elif opening and fence and not fence.group(2).strip() \
+                and fence.group(1)[0] == opening[0] \
+                and len(fence.group(1)) >= len(opening):
+            opening = None
+            lines.append(_blank(line))
+        elif opening:
             lines.append(_blank(line))
         else:
             lines.append(_INLINE.sub(lambda m: _blank(m.group(0)), line))

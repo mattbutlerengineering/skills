@@ -408,6 +408,8 @@ def file_issues(root, intakes, run=gh_runner, notify=print):
     already on the board, dedupe would drop all of them, and nothing behind
     them would ever be filed. Over the cap, the remainder is deferred to the
     next sweep and said out loud — never silently dropped."""
+    if not intakes:
+        return [], []
     fileable, problems = screen(root, intakes)
     if not fileable:
         return [], problems

@@ -99,6 +99,17 @@ class TestMissingMakeTargets(unittest.TestCase):
                 "factory-init: workflows call `make lint` but the Makefile"
                 " has no lint target (add it, or re-stamp the Makefile)"])
 
+    def test_a_multi_target_rule_defines_every_name(self):
+        # #1896: `wo-merged wo-failed:` defines both
+        with tempfile.TemporaryDirectory() as tmp:
+            root = self.target(tmp, (
+                "jobs:\n  x:\n    steps:\n"
+                "      - run: make wo-failed && make wo-merged\n"))
+            (root / "Makefile").write_text(
+                "check:\n\ttrue\nwo-merged wo-failed: check\n\ttrue\n"
+                "VAR := wo-other:\n")
+            self.assertEqual(factory_init.missing_make_targets(root), [])
+
 
 if __name__ == "__main__":
     unittest.main()

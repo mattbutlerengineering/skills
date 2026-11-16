@@ -386,6 +386,7 @@ class TestRunDaily(unittest.TestCase):
             run = gh(issues=[
                 issue(10_000 + n, f"noise {n}", state="CLOSED")
                 for n in range(gate_digest.LIST_WINDOW)])
+            run.answers[("issue", "list", "--state", "open", "--search")] = "[]"
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
@@ -393,6 +394,38 @@ class TestRunDaily(unittest.TestCase):
                 f" {gate_digest.LIST_WINDOW}-entry window — older entries"
                 " are invisible; raise the window or narrow the query"])
             self.assertEqual(len(run.called("issue", "create")), 1)
+
+    def test_a_digest_older_than_the_window_is_edited_not_duplicated(self):
+        # Issue #1892: the digest was found inside the 1000-issue listing,
+        # so one older than the window was invisible and a second was
+        # created and pinned beside it. Its own narrow search finds it.
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[
+                issue(10_000 + n, f"noise {n}", state="CLOSED")
+                for n in range(gate_digest.LIST_WINDOW)])
+            digest = issue(50, "Factory gate queue",
+                           body=gate_digest.DIGEST_MARKER + "\nold")
+            run.answers[("issue", "list", "--state", "open", "--search")] = json.dumps([digest])
+            _, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [
+                "gd: gh issue list returned a full"
+                f" {gate_digest.LIST_WINDOW}-entry window — older entries"
+                " are invisible; raise the window or narrow the query"])
+            self.assertEqual(run.called("issue", "create"), [])
+            (edit,) = run.called("issue", "edit")
+            self.assertEqual(edit[2], "50")
+
+    def test_an_unreadable_digest_lookup_posts_nothing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[])
+            run.answers[("issue", "list", "--state", "open", "--search")] = "gh: banner text"
+            _, problems = gate_digest.run_daily(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith("gd: "))
+            self.assertEqual(run.called("issue", "create"), [])
+            self.assertEqual(run.called("issue", "edit"), [])
 
     def test_a_failing_timeline_still_posts_the_digest(self):
         with tempfile.TemporaryDirectory() as tmp:

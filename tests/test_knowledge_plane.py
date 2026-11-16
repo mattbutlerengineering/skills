@@ -174,6 +174,21 @@ class TestRunDirs(unittest.TestCase):
                 [root / "docs", root / "docs/features/a",
                  root / "docs/features/b", root / "docs/fixes/z"])
 
+    def test_a_non_utf8_breakdown_is_skipped_and_reported(self):
+        # Issue #1879: a bare read_text raised UnicodeDecodeError into
+        # the dashboard, sweeps and decompose_signals.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs/features/x").mkdir(parents=True)
+            (root / "docs/features/x/breakdown.md").write_bytes(
+                b"- [ ] **S1** caf\xe9\n")
+            problems = []
+            self.assertEqual(list(breakdown_files(root, problems)), [])
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "cannot read docs/features/x/breakdown.md:"), problems)
+            self.assertEqual(list(breakdown_files(root)), [])
+
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])
@@ -293,6 +308,20 @@ class TestParseRun(unittest.TestCase):
             self.assertEqual(adr_names, {"0001-real.md"})
             _, lines = parsed["adr_files"][0]
             self.assertEqual(lines, ["# Real"])
+
+    def test_a_quoted_frontmatter_prd_id_is_unquoted(self):
+        # Issue #1905: `id: "PRD-0001"` was declared with its quotes, so
+        # every citation of PRD-0001 dangled.
+        for raw in ('"PRD-0001"', "'PRD-0001'", '  "PRD-0001" '):
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                run = root / "docs/features/demo"
+                run.mkdir(parents=True)
+                (run / "prd.md").write_text(
+                    f"---\nid: {raw}\n---\n# PRD\n", encoding="utf-8")
+                entry = self.run_entry(root, parse_run(root),
+                                       "docs/features/demo")
+                self.assertEqual(entry["prd_id"], "PRD-0001")
 
     def test_verification_text_captured_per_run_and_unreadable_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -802,6 +831,29 @@ class TestDeclaredStatusFallback(unittest.TestCase):
                             if "status: ok" in block else (0, None))
                 self.assertEqual(knowledge_plane._declared_status(lines),
                                  expected)
+
+
+class TestFencedStatusAndTitle(unittest.TestCase):
+    """Fenced lines are quoted, not asserted (issue #1902)."""
+
+    def test_a_fenced_status_line_does_not_override_frontmatter(self):
+        lines = ["---", "status: superseded by ADR-0002", "---",
+                 "# Real title", "", "```", "- Status: accepted", "```"]
+        record = knowledge_plane.adr_record(Path("0001-x.md"), lines)
+        self.assertEqual(record["status"], "superseded by ADR-0002")
+        self.assertEqual(record["lineno"], 2)
+        self.assertEqual(record["standing"], "retired")
+
+    def test_a_fenced_example_before_the_real_status_is_skipped(self):
+        lines = ["# T", "```", "- Status: accepted", "```",
+                 "- Status: superseded by ADR-0003"]
+        self.assertEqual(knowledge_plane._declared_status(lines),
+                         (5, "superseded by ADR-0003"))
+
+    def test_a_fenced_heading_is_not_the_title(self):
+        lines = ["```sh", "# a shell comment", "```", "# Real title"]
+        record = knowledge_plane.adr_record(Path("0001-x.md"), lines)
+        self.assertEqual(record["title"], "Real title")
 
 
 class TestGuardedAdrRead(unittest.TestCase):

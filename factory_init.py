@@ -558,8 +558,9 @@ def missing_make_targets(target):
     if not makefile.is_file():
         return ["factory-init: target has no Makefile — the refreshed"
                 " workflows have nothing to call"]
-    defined = set(re.findall(r"(?m)^([a-z][a-z0-9-]*):",
-                             makefile.read_text(encoding="utf-8")))
+    defined = {name for head in re.findall(
+        r"(?m)^([a-z][a-z0-9 -]*?)[ \t]*(?::(?![=:])|::(?!=))",
+        makefile.read_text(encoding="utf-8")) for name in head.split()}
     workflows = target / ".github" / "workflows"
     called = set()
     for path in sorted(workflows.glob("*.yml")) if workflows.is_dir() else []:
@@ -602,6 +603,38 @@ def update_kind(target, tools_only):
     return marked, []
 
 
+def retired_files(source, target):
+    """Paths (relative to target) the last release's manifest listed and
+    this source's no longer does, and that are still on disk (#1891).
+
+    Only files the target's own OLD manifest names are candidates, so a
+    file the repo wrote itself is never touched. A retired key loses its
+    pristine mirror under factory/ and, if its install destination is
+    factory-owned (the tools and workflows), that copy too; a retired
+    seed is the repo's by now and stays. Without this a dropped or renamed
+    payload file stays in factory/templates/, which detector E reports as
+    "not in the manifest", and in tools/factory/ as dead code.
+    """
+    old, problem = read_file(target / "factory" / "manifest.json",
+                             "factory/manifest.json", dict)
+    files = (old or {}).get("files")
+    if problem or not isinstance(files, dict):
+        return []
+    new = json.loads((source / "factory" / "manifest.json"
+                      ).read_text(encoding="utf-8"))["files"]
+    retired = []
+    for rel in sorted(set(files) - set(new)):
+        dest, problem = install_path(rel)
+        if problem:
+            continue
+        paths = [Path("factory") / rel]
+        if is_factory_owned(Path(dest)):
+            paths.append(Path(dest))
+        retired += [path.as_posix() for path in paths
+                    if (target / path).is_file()]
+    return retired
+
+
 def update(source, target, tools_only=False):
     """Refresh an already-stamped repo: (written, kept, problems).
 
@@ -617,6 +650,9 @@ def update(source, target, tools_only=False):
     that does is the repo's — and any kept file that differs from the
     payload is reported so the user can reconcile it deliberately.
 
+    A payload file the release dropped is deleted from the target
+    (retired_files); main reports it.
+
     Refuses a tree that was never stamped rather than silently becoming a
     first stamp, which would land a payload nobody asked for. What it
     refreshes is update_kind's reading of the target: a tools-only target
@@ -630,6 +666,8 @@ def update(source, target, tools_only=False):
     copies, problems = payload_copies(source, target, tools_only)
     if problems:
         return [], [], problems
+    for rel in retired_files(source, target):
+        (target / rel).unlink()
     written, kept = [], []
     for src, dest in copies:
         path = target / dest
@@ -651,7 +689,9 @@ def _target(argv, command):
         return None
     tools_only = argv[1:2] == ["--tools-only"]
     rest = argv[2:] if tools_only else argv[1:]
-    return (Path(rest[0]), tools_only) if len(rest) == 1 else None
+    if len(rest) != 1 or rest[0].startswith("-"):
+        return None
+    return Path(rest[0]), tools_only
 
 
 def main(argv):
@@ -667,7 +707,12 @@ def main(argv):
             print(f"factory-init: kept {rel} (yours — the stamp did not"
                   " write it)")
     elif updating:
+        retired = retired_files(root, updating[0])
         written, kept, problems = update(root, *updating)
+        for rel in retired:
+            if not (updating[0] / rel).exists():
+                print(f"factory-init: removed {rel} (retired — this"
+                      " release no longer ships it)")
         for rel in kept:
             print(f"factory-init: kept {rel} (yours — differs from the"
                   " payload, reconcile by hand if you want the change)")
