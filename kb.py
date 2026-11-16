@@ -71,7 +71,10 @@ NO_KB = (f"{LABEL}: no docs/kb/ directory — the knowledge-base skill's"
 
 
 def _items(value):
-    """A frontmatter list — `a, b` or `[a, b]` — as its non-empty items."""
+    """A frontmatter list — `a, b` or `[a, b]` — as its non-empty items;
+    [] for a nested map, which _field_problems reports."""
+    if not isinstance(value, str):
+        return []
     return [item.strip() for item in value.strip().strip("[]").split(",")
             if item.strip()]
 
@@ -127,6 +130,10 @@ def _field_problems(page):
                 if field not in page["fields"]
                 or (not page["fields"][field]
                     and field not in OPTIONAL_VALUE)]
+    problems += [f"{LABEL}: {page['path']} field {field!r} is a nested"
+                 " map, not a comma-separated list"
+                 for field in ("sources", "related")
+                 if isinstance(page["fields"].get(field), dict)]
     size = len(page["fields"].get("summary", "").encode("utf-8"))
     if size > SUMMARY_CAP:
         problems.append(f"{LABEL}: {page['path']} summary is {size} bytes,"

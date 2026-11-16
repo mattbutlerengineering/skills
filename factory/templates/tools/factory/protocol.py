@@ -226,6 +226,12 @@ def skill_frontmatter_problems(root, slug):
     if fields is None:
         return [f"{label} has no frontmatter block"]
     description = fields.get("description")
+    if isinstance(description, dict):
+        return ([f"{label} frontmatter name is {fields.get('name')!r}, "
+                 f"expected {slug!r}"]
+                if fields.get("name") != slug else []) + [
+            f"{label} description is not a bare YAML scalar: it is a "
+            "nested map"]
     return (
         ([f"{label} frontmatter name is {fields.get('name')!r}, "
           f"expected {slug!r}"]
@@ -318,8 +324,8 @@ def _retro_populated(run_dir):
     source = fields.get("signal-source")
     if count is None and source is None:
         return True
-    return (count is not None and _COUNT.fullmatch(count) is not None
-            and bool(source))
+    return (isinstance(count, str) and _COUNT.fullmatch(count) is not None
+            and isinstance(source, str) and bool(source))
 
 
 def run_ref(root, run_dir):
