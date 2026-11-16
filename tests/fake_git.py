@@ -101,3 +101,11 @@ class FakeGit:
     def called(self, *prefix):
         """Every recorded call starting with `prefix`."""
         return [c for c in self.calls if c[:len(prefix)] == list(prefix)]
+
+
+def raw_diff(paths, blobs=None):
+    """What `git diff --raw -z --no-renames --no-abbrev` prints for
+    PATHS, each added with the blob id `blobs` gives it ("b1" else)."""
+    blobs = blobs or {}
+    return "".join(f":000000 100644 {'0' * 40} {blobs.get(path, 'b1')} A\0"
+                   f"{path}\0" for path in paths)

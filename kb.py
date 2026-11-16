@@ -71,7 +71,10 @@ NO_KB = (f"{LABEL}: no docs/kb/ directory — the knowledge-base skill's"
 
 
 def _items(value):
-    """A frontmatter list — `a, b` or `[a, b]` — as its non-empty items."""
+    """A frontmatter list — `a, b` or `[a, b]` — as its non-empty items;
+    [] for a nested map, which _field_problems reports."""
+    if not isinstance(value, str):
+        return []
     return [item.strip() for item in value.strip().strip("[]").split(",")
             if item.strip()]
 
@@ -127,6 +130,10 @@ def _field_problems(page):
                 if field not in page["fields"]
                 or (not page["fields"][field]
                     and field not in OPTIONAL_VALUE)]
+    problems += [f"{LABEL}: {page['path']} field {field!r} is a nested"
+                 " map, not a comma-separated list"
+                 for field in ("sources", "related")
+                 if isinstance(page["fields"].get(field), dict)]
     size = len(page["fields"].get("summary", "").encode("utf-8"))
     if size > SUMMARY_CAP:
         problems.append(f"{LABEL}: {page['path']} summary is {size} bytes,"
@@ -273,8 +280,9 @@ def _stale_problems(root, page, git):
             raise
         return [f"{label} verified {sha!r} is not a commit in this"
                 " repository"]
-    changed = git(base + ["diff", "--name-only", sha, "HEAD", "--",
-                          *sources]).split()
+    changed = [path for path in git(base + [
+        "diff", "-z", "--name-only", sha, "HEAD", "--", *sources]
+    ).split("\0") if path]
     if not changed:
         return []
     renamed = _renames(root, sha, git) if any(
@@ -290,10 +298,19 @@ def _renames(root, sha, git):
     HEAD, so a moved source reads as an UPDATE to `sources:`, not a
     deletion. Whole-tree: a pathspec on the old path would hide the new
     one from rename detection."""
-    out = git(["-C", str(root), "diff", "--name-status", "-M", sha, "HEAD"])
-    rows = [line.split("\t") for line in out.splitlines()]
-    return {row[1]: row[2] for row in rows
-            if len(row) == 3 and row[0].startswith("R")}
+    out = git(["-C", str(root), "diff", "-z", "--name-status", "-M", sha,
+               "HEAD"])
+    fields, renames, at = out.split("\0"), {}, 0
+    while at < len(fields) and fields[at]:
+        # -z: a rename is three fields (R<score>, old, new), anything
+        # else two (status, path).
+        if fields[at].startswith(("R", "C")):
+            if fields[at].startswith("R"):
+                renames[fields[at + 1]] = fields[at + 2]
+            at += 3
+        else:
+            at += 2
+    return renames
 
 
 def _git(args):

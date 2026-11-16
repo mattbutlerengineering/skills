@@ -18,7 +18,7 @@ import conductor_merge as merge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import test_conductor_merge_reservations as reservation_tests  # noqa: E402
-from fake_git import FakeGit  # noqa: E402
+from fake_git import FakeGit, raw_diff  # noqa: E402
 from test_conductor_flow import AT  # noqa: E402
 from test_conductor_merge import TurnCase  # noqa: E402
 from test_conductor_merge_reservations import adr_rows  # noqa: E402
@@ -78,10 +78,11 @@ class TestConsumerWidth(unittest.TestCase):
         (self.wt / "docs/adr/README.md").write_text(
             CONSUMER_INDEX + "- [ADR-027](ADR-027-redis.md) Use Redis\n")
         self.git = FakeGit({
-            ("ls-tree", "--name-only", "origin/main", "--", "docs/adr/"):
-                "".join(f"docs/adr/{name}\n"
+            ("ls-tree", "--name-only", "-z", "origin/main", "--",
+             "docs/adr/"):
+                "".join(f"docs/adr/{name}\0"
                         for name in CONSUMER_MAIN + ["README.md"]),
-            ("diff", "--name-only"): f"{ITEM_ADR}\ndocs/adr/README.md\n",
+            ("diff", "--raw"): raw_diff([ITEM_ADR, "docs/adr/README.md"]),
             ("show", "origin/main:docs/adr/README.md"): CONSUMER_INDEX})
         rows = [{"at": AT, "kind": "reserve", "item": "#12",
                  "what": "adr", "values": [27, 28, 29]}]

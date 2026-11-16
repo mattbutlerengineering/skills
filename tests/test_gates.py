@@ -620,8 +620,8 @@ class TestCostLedger(unittest.TestCase):
                 " string",
                 "G: docs/factory/costs.jsonl:1 tokens must be a non-negative"
                 " integer",
-                "G: docs/factory/costs.jsonl:1 cost must be a non-negative"
-                " number",
+                "G: docs/factory/costs.jsonl:1 cost must be a finite"
+                " non-negative number",
                 "G: docs/factory/costs.jsonl:1 wo WO-0009 has no breakdown"
                 " row",
                 "G: docs/features/demo/breakdown.md:1 merged work order"
@@ -1974,6 +1974,18 @@ class TestPrdCoverage(unittest.TestCase):
         rows = ["- [ ] **WO-0001** build it (PRD-0001 §Solution,"
                 " §Out of scope)"]
         self.assertEqual(self.check(breakdown=rows), [])
+
+    def test_a_setext_section_is_owed_coverage_like_an_atx_one(self):
+        """`Title` over `---` is a `##` heading; the frontmatter's closing
+        fence under `date:` is not a title's underline."""
+        prd = self.PRD[:7] + ["Risks", "-----", "", "Some risk."] + self.PRD[7:]
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solution, §Out of scope)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [
+            "O: docs/features/demo/prd.md:8 PRD-0001 §Risks is cited by no"
+            " breakdown row and carries no coverage waiver"])
+        rows = ["- [ ] **WO-0001** (PRD-0001 §Solution, §Out of scope,"
+                " §Risks)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [])
 
     def test_a_waiver_owes_a_reason(self):
         prd = [line.replace("coverage-waiver: actors are context",
