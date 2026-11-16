@@ -623,6 +623,20 @@ class TestReviewedTree(TurnCase):
             f"#12 changed src.txt after the review of {reviewed_at[:12]};"
             " merged code must be reviewed code, so it needs a re-review"))
 
+    def test_a_path_with_a_space_is_named_whole_in_the_drift_stall(self):
+        # --name-only without -z splits on the space (and C-quotes a
+        # non-ASCII name), so the stall named two paths that do not exist.
+        self.item(VERIFIED)
+        reviewed_at = self.head()
+        self.item({"docs/my notes.txt": "x\n", "docs/d\u00e9cision.txt": "y\n",
+                   "docs/features/x/release.md": "notes\n"})
+        summary, problems = self.turn(SHIPPED, reviewed_at=reviewed_at)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["stall"], (
+            f"#12 changed docs/d\u00e9cision.txt, docs/my notes.txt after the"
+            f" review of {reviewed_at[:12]}; merged code must be reviewed"
+            " code, so it needs a re-review"))
+
     def test_a_code_change_after_the_review_stalls_the_merge(self):
         self.item(VERIFIED)
         reviewed_at = self.head()
