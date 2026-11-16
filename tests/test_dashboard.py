@@ -1224,6 +1224,23 @@ class TestRespondPost(unittest.TestCase):
                 "- seed two (from: feature:alpha) "
                 "(claimed: feature:beta)\n"))
 
+    def test_save_keeps_crlf_and_unicode_line_breaks_byte_for_byte(self):
+        raw = ("# Backlog\r\n\r\nNotes: see\u2028below\r\n"
+               "- alpha (from: product)\r\n"
+               "- beta (from: product)\r\n").encode("utf-8")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.backlog(tmp)
+            path.write_bytes(raw)
+            text = path.read_text(encoding="utf-8")
+            body = json.dumps({"i": 0, "hash": dashboard.backlog_hash(text),
+                               "order": [6, 5]})
+            status, payload = self.post(tmp, body)
+            self.assertEqual((status, payload), (204, None))
+            self.assertEqual(path.read_bytes(), (
+                "# Backlog\r\n\r\nNotes: see\u2028below\r\n"
+                "- beta (from: product)\r\n"
+                "- alpha (from: product)\r\n").encode("utf-8"))
+
     def test_a_stale_hash_is_409_and_leaves_the_file_alone(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = self.backlog(tmp)
@@ -1293,7 +1310,7 @@ class TestRespondPost(unittest.TestCase):
             body = json.dumps({"i": 0,
                                "hash": dashboard.backlog_hash(self.TEXT),
                                "order": [5, 3, 4]})
-            with mock.patch.object(Path, "write_text",
+            with mock.patch.object(Path, "write_bytes",
                                     side_effect=OSError("Permission denied")):
                 status, payload = self.post(tmp, body)
             self.assertEqual(status, 500)
