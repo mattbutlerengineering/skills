@@ -520,14 +520,15 @@ class TestLoad(unittest.TestCase):
                        "2026-08-01")
             self.ledger(tmp, json.dumps(e1) + "\n")
             self.assertEqual(cost_ledger.load(tmp, "ledger"),
-                             ([(1, e1, [])], []))
+                             ([(1, e1, [], "docs/factory/costs.jsonl")], []))
 
     def test_rows_carry_located_problems_under_the_callers_label(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.ledger(tmp, "[1, 2]\n")
             self.assertEqual(cost_ledger.load(tmp, "G"), ([
                 (1, None,
-                 ["G: docs/factory/costs.jsonl:1 is not a JSON object"]),
+                 ["G: docs/factory/costs.jsonl:1 is not a JSON object"],
+                 "docs/factory/costs.jsonl"),
             ], []))
 
     def test_an_unreadable_ledger_is_the_callers_problem_string(self):
@@ -562,7 +563,7 @@ class TestLoad(unittest.TestCase):
             self.assertEqual(
                 cost_ledger.load("/does/not/exist", "ledger",
                                  ledger_path=custom),
-                ([(1, e1, [])], []))
+                ([(1, e1, [], "docs/factory/costs.jsonl")], []))
 
 
 class TestRead(unittest.TestCase):

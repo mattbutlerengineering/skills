@@ -757,14 +757,14 @@ def check_cost_ledger(root, parsed=None):
         return problems
     wo_rows = collect_wo_rows(parsed)
     recorded = set()
-    for lineno, entry, located in rows:
+    for lineno, entry, located, shown in rows:
         problems.extend(located)
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
             if cost_ledger.gate_wait(entry) is None:
                 recorded.add(wo)
             if wo not in wo_rows:
-                problems.append(f"G: {COST_LEDGER}:{lineno} wo {wo}"
+                problems.append(f"G: {shown}:{lineno} wo {wo}"
                                 " has no breakdown row")
     for rel, lineno, wo in merged_wo_rows(root, parsed):
         if wo not in recorded:
@@ -1680,9 +1680,10 @@ CAPTURE_REQUIRED_SECTIONS = (
     "Ruled out",
 )
 
-# TEMPLATE.md's own placeholder shape: a whole line (an optional leading
+# TEMPLATE.md's own placeholder shape: a whole SECTION (an optional leading
 # list marker, for "## Ruled out"'s `- <...>` bullet form) that is
-# nothing but a single bracketed span of instructional prose, e.g.
+# nothing but a single bracketed span of instructional prose (which may
+# wrap over several lines, as TEMPLATE.md's own do), e.g.
 # `<What is broken — observed vs expected behavior...>`. Deliberately a
 # looser shape rule than H's PLACEHOLDER_LINE (which matches by FILLER
 # TEXT, not by shape alone — H's own comment explains why: `<html>`-shaped
@@ -1691,7 +1692,10 @@ CAPTURE_REQUIRED_SECTIONS = (
 # prose, not short filler tokens, and a capture brief's prose is never
 # expected to be a single line wrapped end-to-end in angle brackets, so
 # the shape alone is the safe, sufficient signal here.
-CAPTURE_PLACEHOLDER = re.compile(r"^\s*[-*+]?\s*<[^>]*>\s*$")
+CAPTURE_PLACEHOLDER = re.compile(r"\s*[-*+]?\s*<[^>]*>\s*")
+# An autolink (`<https://…>`, `<a@b.c>`) is real content, not filler.
+CAPTURE_AUTOLINK = re.compile(
+    r"\s*[-*+]?\s*<(?:[A-Za-z][A-Za-z0-9+.-]*:[^\s<>]*|[^\s<>@]+@[^\s<>]+)>\s*")
 
 # M's grandfather cutoff (ADR-0073): CAPTURE_REQUIRED_SECTIONS is a NEW
 # rule, and a new rule cannot retroactively apply to briefs written
@@ -1753,8 +1757,11 @@ def capture_sections(text):
 def _section_has_content(section):
     """Does this capture section carry anything beyond blank lines and
     TEMPLATE.md's own unfilled placeholder?"""
-    return any(line.strip() and not CAPTURE_PLACEHOLDER.match(line)
-              for line in section["lines"])
+    text = "\n".join(section["lines"])
+    if not text.strip():
+        return False
+    return (CAPTURE_AUTOLINK.fullmatch(text) is not None
+            or CAPTURE_PLACEHOLDER.fullmatch(text) is None)
 
 
 def capture_completeness_problems(text):

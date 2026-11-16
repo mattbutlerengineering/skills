@@ -373,17 +373,6 @@ def _prior_work(git, rows, item, step, branch):
                              branch=branch, commits="\n".join(commits)), []
 
 
-def _verdict(git, worktree, branch):
-    """The review.md verdict on the item branch, or None."""
-    changed, problems = flow.changed_files(git, branch)
-    for path in [] if problems else changed:
-        if path.endswith("/review.md") and (worktree / path).is_file():
-            fields = read_frontmatter(worktree / path) or {}
-            verdict = (fields.get("verdict") or "").strip()
-            return verdict if verdict in flow.VERDICTS else None
-    return None
-
-
 def _stall_cause(stall, ended, failed):
     """The class of a run's stall (conductor.CAUSES, #819): a wall-clock
     kill, a budget stop, a failed spend commit, push or PR (`failed`),
@@ -612,7 +601,9 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     if not problems:
         problems = _launch(root, batch, now, {
             "item": item, "step": step, "ceiling": ceiling,
-            "fields": {"run_id": run_id, "pid": pid}}, spent, cap)
+            "fields": {"run_id": run_id, "pid": pid,
+                   **({"reviewed_head": ctx["head"]} if step == "review"
+                      else {})}}, spent, cap)
     if problems:
         return None, problems
     # pr-body.md is this step's output only (review minor 7): one left by
@@ -624,7 +615,8 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
         recommended, why = flow.worker_advice(ctx["rows"], entry, step,
                                               band, stall)
         _, problems = flow.queue_stall(root, batch, clock(), item, stall,
-                                       "setup-failed", recommended, why)
+                                       "setup-failed", recommended, why,
+                                       run_id)
         return {"run_id": run_id, "outcome": "setup-failed",
                 "stall": stall}, problems
     tools = allowed_tools(gate)
@@ -662,7 +654,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     if problems:
         return None, problems
     if stall is None and step == "review":
-        verdict = _verdict(git, worktree, branch)
+        verdict = flow.review_verdict(git, worktree, branch)
         if verdict is None:
             stall = "review.md carries no verdict: pass|changes line"
         else:
@@ -673,7 +665,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
         recommended, why = flow.worker_advice(ctx["rows"], entry, step,
                                               band, stall, event, cause)
         _, problems = flow.queue_stall(root, batch, done, item, stall,
-                                       cause, recommended, why)
+                                       cause, recommended, why, run_id)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
 
 

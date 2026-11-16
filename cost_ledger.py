@@ -401,7 +401,8 @@ def _load_one(path, shown, label):
         return None, []
     rows = [(lineno, record,
              [f"{label}: {shown}:{lineno} {suffix}"
-              for suffix in suffixes])
+              for suffix in suffixes],
+             shown)
             for lineno, record, suffixes in parse(text)]
     return rows, []
 
@@ -410,8 +411,9 @@ def load(root, label, ledger_path=None):
     """(rows, problems): the labelled ledger read every reader is built
     on — one existence check, one guarded read (cli.read_file), one
     located problem grammar. rows is parse()'s [(lineno, entry, problems)]
-    with each problem located and prefixed for the caller
-    ("<label>: <path>:<lineno> <suffix>"), or None when the ledger does
+    plus the displayed path of the file the line came from —
+    [(lineno, entry, problems, shown)] — with each problem located and
+    prefixed for the caller ("<label>: <path>:<lineno> <suffix>"), or None when the ledger does
     not exist — None, not [], so a caller whose rules bite only once the
     ledger exists (detector G's merged-row cross-check) can tell an
     absent ledger from an empty one. problems carries only the file-level
@@ -462,7 +464,7 @@ def read(root, ledger_path=None):
     gate_wait (gate rows), wo_token (typed token)."""
     rows, problems = load(root, "ledger", ledger_path=ledger_path)
     entries = []
-    for _, record, located in rows or ():
+    for _, record, located, _shown in rows or ():
         problems.extend(located)
         if record is not None and not located:
             entries.append(record)

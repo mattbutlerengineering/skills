@@ -927,6 +927,22 @@ class TestClosingMerge(unittest.TestCase):
             " merge"]))
         self.assertEqual(self.gh.calls, [])
 
+    def test_a_re_ask_after_hold_is_honoured(self):
+        # #1961: the latest closing merge ask is the one read.
+        rows = CLOSED + [answer("ask-5", "hold", at(17)),
+                         ask("ask-6", None, "merge", at(18),
+                             ("merge", "hold")),
+                         answer("ask-6", "merge", at(19))]
+        self.assertEqual(self.merge(rows), (
+            {"batch": "b1", "pr": 6, "sha": "m3r6ed"}, []))
+
+    def test_a_re_ask_after_hold_unanswered_is_refused(self):
+        rows = CLOSED + [answer("ask-5", "hold", at(17)),
+                         ask("ask-6", None, "merge", at(18),
+                             ("merge", "hold"))]
+        self.assertEqual(self.merge(rows), (None, [
+            "cd: closing merge refused: ask-6 is unanswered"]))
+
     def test_an_open_batch_is_refused(self):
         self.assertEqual(self.merge(ROWS), (None, [
             "cd: closing merge refused: batch b1 is not closed"]))

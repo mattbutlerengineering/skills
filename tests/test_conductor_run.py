@@ -690,6 +690,34 @@ class TestFailedRun(RunCase):
         self.assertEqual(self.rows[-2]["cause"], "agent-failed")
         self.assertEqual(len(self.harness.calls), 1)
 
+    def after_launch(self, *later):
+        """A Harness whose run leaves no pr-body.md while `next` writes
+        `later` onto the ledger behind the launch (#1958)."""
+        def act(cwd):
+            with (self.root / LEDGER).open("a") as ledger:
+                ledger.writelines(json.dumps(r) + "\n" for r in later)
+        return Harness(act=act)
+
+    IDLE = [moved("#12", "spec", "stalled", cause="runner-lost"),
+            stall_ask("ask-2", "#12")]
+
+    def test_a_failed_run_never_stalls_an_item_stalled_behind_it(self):
+        _, problems = self.run_step("#12", "spec",
+                                    self.after_launch(*self.IDLE))
+        self.assertEqual(problems,
+                         ["cd: #12 cannot move from stalled to stalled"])
+        self.assertEqual([r["id"] for r in self.rows
+                          if r["kind"] == "ask"], ["ask-1", "ask-2"])
+        self.assertEqual(self.rows[-1]["kind"], "run")
+
+    def test_a_failed_run_never_revives_a_blocked_item(self):
+        _, problems = self.run_step("#12", "spec", self.after_launch(
+            *self.IDLE, answered("ask-2", "block", "#12"),
+            moved("#12", "stalled", "blocked", cause="runner-lost")))
+        self.assertEqual(problems,
+                         ["cd: #12 is blocked, and blocked is terminal"])
+        self.assertEqual(self.rows[-1]["kind"], "run")
+
     def test_a_wall_clock_kill_records_the_ceiling_and_stalls(self):
         self.run_step("#12", "spec", Harness(events=[], timed_out=True))
         self.assertEqual(self.spend("#12")[0]["cost"], 3.0)

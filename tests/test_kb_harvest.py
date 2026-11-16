@@ -745,6 +745,14 @@ class TestMain(Tree):
             "harvest: --days must be a positive whole number, got 'zero'",
             "harvest: 1 problem(s)"])
 
+    def test_unicode_digit_days_is_a_problem_not_a_traceback(self):
+        code, out = self.run_main(["harvest", REPO, "--days", "\u00b2",
+                                   "--projects-dir", str(self.projects)])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            "harvest: --days must be a positive whole number, got '\u00b2'",
+            "harvest: 1 problem(s)"])
+
 
 if __name__ == "__main__":
     unittest.main()
