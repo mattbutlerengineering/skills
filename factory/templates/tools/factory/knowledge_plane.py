@@ -472,8 +472,13 @@ def active_runs(root):
     return found
 
 
-def breakdown_files(root):
+def breakdown_files(root, problems=None):
     """(breakdown path, its lines) per run that has a breakdown.md.
+
+    The read is guarded (ADR-0075, issue #1879): a breakdown.md that
+    cannot be read (non-UTF-8 bytes) is skipped rather than raised, and
+    its unlabelled `cannot read <path>: <err>` problem is appended to
+    PROBLEMS when the caller passes a list.
 
     The layout walk in one place: every dispatch-plane reader of
     work-order rows — the assembler, the validator and gates'
@@ -483,9 +488,13 @@ def breakdown_files(root):
     """
     for run in run_dirs(root):
         breakdown = run / "breakdown.md"
-        if breakdown.is_file():
-            yield breakdown, breakdown.read_text(
-                encoding="utf-8").splitlines()
+        text, problem = read_file(
+            breakdown, breakdown.relative_to(root).as_posix(), str)
+        if problem:
+            if problems is not None:
+                problems.append(problem)
+        elif text is not None:
+            yield breakdown, text.splitlines()
 
 
 def work_orders(root, files=None):
@@ -641,10 +650,11 @@ def standing(text):
 
 
 def _declared_status(lines):
-    """(lineno, raw status text) from the `- Status:` line, else from a
+    """(lineno, raw status text) from the `- Status:` line outside any
+    fence (fenced lines are quoted, issue #1902), else from a
     frontmatter `status:` field, else (0, None). The block is the one
     protocol.frontmatter_end bounds (ADR-0118)."""
-    for lineno, line in enumerate(lines, 1):
+    for lineno, line in unfenced(lines):
         match = ADR_STATUS_LINE.match(line)
         if match:
             return lineno, match.group(1)
@@ -655,6 +665,17 @@ def _declared_status(lines):
             if match and match.group(1):
                 return lineno, match.group(1)
     return 0, None
+
+
+def _unquoted(value):
+    """VALUE with surrounding whitespace and one matching pair of quotes
+    stripped (`"PRD-0001"` is PRD-0001); a non-string passes through."""
+    if not isinstance(value, str):
+        return value
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    return value
 
 
 def adr_record(path, lines):
@@ -676,7 +697,7 @@ def adr_record(path, lines):
             "standing": standing(text),
             "superseded_by": (match.group("by")
                               if match and match.group("retired") else None),
-            "title": next((line[2:].strip() for line in lines
+            "title": next((line[2:].strip() for _, line in unfenced(lines)
                            if line.startswith("# ")), None),
             "lines": lines}
 
@@ -821,7 +842,7 @@ def parse_run(root, scannable=()):
         runs.append({
             "path": run,
             "breakdown": breakdown,
-            "prd_id": prd_fields.get("id"),
+            "prd_id": _unquoted(prd_fields.get("id")),
             "prd": None if prd_text is None else prd_text.splitlines(),
             "prd_date": prd_fields.get("date"),
             "architecture": guarded_lines(run / "architecture.md"),
