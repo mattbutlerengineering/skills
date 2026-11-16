@@ -108,6 +108,11 @@ def _successors(item_type, state, rows, item):
     return list(SEQUENCE[following:following + 1])
 
 
+# States that are not steps resume at their next step (#1870): the gate
+# answer is already in at awaiting-gate, and a reviewed item ships.
+RESUMES = {"awaiting-gate": "build", "reviewed": "ship"}
+
+
 def _stalled_problems(rows, found, to, fields):
     stalled, resumed = found["last"], found["resumed"]
     if to == landed.MERGED:
@@ -116,9 +121,10 @@ def _stalled_problems(rows, found, to, fields):
             return []
         return [f"cd: {found['item']} leaves stalled for merged only after"
                 " a merged answer to its stall ask"]
-    if to != stalled["from"] or not found["retry"]:
+    resume = RESUMES.get(stalled["from"], stalled["from"])
+    if to != resume or not found["retry"]:
         return [f"cd: {found['item']} leaves stalled only for"
-                f" {stalled['from']}, after a retry answer"]
+                f" {resume}, after a retry answer"]
     # A launch carries a fresh run id; `next`'s bookkeeping resume
     # carries the completed run's own (#939).
     run = delivered_run(rows, found)
@@ -626,7 +632,7 @@ def _step(rows, now, entry, alive, facts, policy):
         # A finished run's bookkeeping is `next`'s own turn (#939), and
         # a merge turn that stalled resumes as a merge, not a step.
         if found["retry"] and delivered_run(rows, found) is None:
-            resume = launched["from"]
+            resume = RESUMES.get(launched["from"], launched["from"])
             return ("merge" if resume == "merging" else resume), False, []
         return None, False, []
     if found["pending"] is not None:

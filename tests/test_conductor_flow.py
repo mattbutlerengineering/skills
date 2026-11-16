@@ -192,6 +192,19 @@ class TestTransitions(unittest.TestCase):
             rows + [answered("ask-2", "retry", "#12")], "#12", "build"),
             ["cd: #12 leaves stalled only for spec, after a retry answer"])
 
+    def test_a_retry_resumes_a_state_that_is_not_a_step_at_its_next_step(self):
+        # #1870: awaiting-gate and reviewed are states, so a retry of a
+        # stall from them continues at build and ship.
+        for frm, step in (("awaiting-gate", "build"), ("reviewed", "ship")):
+            rows = [moved("#12", "spec", frm), moved("#12", frm, "stalled"),
+                    stall_ask("ask-2", "#12"),
+                    answered("ask-2", "retry", "#12")]
+            self.assertEqual(self.problems(rows, "#12", step), [], frm)
+            self.assertEqual(
+                self.problems(rows, "#12", frm),
+                [f"cd: #12 leaves stalled only for {step}, after a retry"
+                 " answer"], frm)
+
     def test_the_first_request_for_changes_returns_to_build_once(self):
         rows = [moved("#12", "x", "review")]
         self.assertEqual(self.problems(rows, "#12", "build"), [])
@@ -234,6 +247,17 @@ class TestTransitions(unittest.TestCase):
     def test_an_item_outside_the_plan_is_refused(self):
         self.assertEqual(self.problems([], "#99", "spec"),
                          ["cd: #99 is not an item of this batch's plan"])
+
+
+class TestRetryOfAnOutsideMergeFromReviewed(unittest.TestCase):
+    def test_next_offers_ship_not_the_reviewed_state(self):
+        rows = START + [moved("#12", "review", "reviewed", verdict="pass",
+                              author_runs=["a"], reviewer_run="r")]
+        _, writes, _ = flow.survey(rows, NOW, 3, alive,
+                                   {"#12": {"merged_pr": LANDED}})
+        rows += writes + [answered(writes[1]["id"], "retry", "#12")]
+        ready, _, _ = flow.survey(rows, NOW, 3, alive, {})
+        self.assertIn({"item": "#12", "step": "ship"}, ready)
 
 
 class TestMove(unittest.TestCase):
