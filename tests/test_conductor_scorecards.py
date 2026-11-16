@@ -117,6 +117,17 @@ class TestHistory(unittest.TestCase):
             self.assertEqual(close.append_scorecard(tmp, CURRENT), [])
             self.assertEqual(close.history(tmp), ([OLDER, CURRENT], []))
 
+    def test_a_failed_write_is_a_problem_not_a_traceback(self):
+        # docs/factory a regular file: the directory cannot be made, for
+        # a root user too
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "docs").mkdir()
+            (Path(tmp) / "docs" / "factory").write_text("", encoding="utf-8")
+            problems = close.append_scorecard(tmp, CURRENT)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            f"cd: not appended to {close.SCORECARDS}: "), problems)
+
     def test_a_row_of_the_wrong_shape_is_never_appended(self):
         # #814: the writer checks the shape the reader checks.
         with tempfile.TemporaryDirectory() as tmp:

@@ -94,6 +94,48 @@ class TestAppend(unittest.TestCase):
                 json.dumps(first) + "\n" + json.dumps(second) + "\n")
 
 
+class TestAWriteThatFailsIsAProblemNotATraceback(unittest.TestCase):
+    """The guarded writers return problem strings; a full disk or an
+    unwritable tree used to escape them as an OSError, crashing the
+    caller (the conductor's spend step, after the Worker had already
+    spent) instead of refusing with a reason. docs/factory is made a
+    regular file so every directory under it fails the same way for a
+    root user too."""
+
+    def blocked_root(self, tmp):
+        (Path(tmp) / "docs").mkdir()
+        (Path(tmp) / "docs" / "factory").write_text("", encoding="utf-8")
+        return tmp
+
+    def test_record_refuses_with_the_path_and_the_cause(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            problems = cost_ledger.record(
+                self.blocked_root(tmp), entry(
+                    "WO-0001", "r-1", "m", 100, 1.0, "merged", "2026-08-01"))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            f"cannot write {cost_ledger.COST_LEDGER}: "), problems)
+
+    def test_record_isolated_refuses_with_the_path_and_the_cause(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            problems = cost_ledger.record_isolated(
+                self.blocked_root(tmp), entry(
+                    "WO-0001", "r-1", "m", 100, 1.0, "merged", "2026-08-01"))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            f"cannot write {cost_ledger.RUNS_DIR}/r-1.jsonl: "), problems)
+
+    def test_record_new_lands_nothing_and_says_why(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            landed, problems = cost_ledger.record_new(
+                self.blocked_root(tmp), [entry(
+                    "WO-0001", "r-1", "m", 100, 1.0, "merged", "2026-08-01")])
+        self.assertEqual(landed, [])
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            f"ledger: cannot write {cost_ledger.COST_LEDGER}: "), problems)
+
+
 class TestRecord(unittest.TestCase):
     """cost_ledger.record — the one guarded write every ledger writer goes
     through (#736): shape check, fail closed on a read problem, dedup on
