@@ -462,6 +462,13 @@ class TestSurveyWrites(unittest.TestCase):
         ready, _, _ = flow.survey(START + resumed, NOW, 3, dead, {})
         self.assertIn({"item": "#14", "step": "merge"}, ready)
 
+    def test_a_dead_merge_turn_offers_no_retry_up(self):
+        # #1874: a merge has no band, so retry-up would only mean retry.
+        rows = START + [moved("#12", "ship", "merging", pid=4242)]
+        _, writes, _ = flow.survey(rows, NOW, 3, dead, {})
+        self.assertEqual(writes[1]["options"], ["retry", "block"])
+        self.assertTrue(writes[1]["question"].endswith("Retry, or block?"))
+
     def test_an_idle_step_stalls_after_twice_its_wall_clock_limit(self):
         # #14 is size M: a 90-minute limit, so 180 minutes idle stalls.
         rows = [launch("#14", "planned", "build")]

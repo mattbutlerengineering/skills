@@ -218,13 +218,14 @@ def stall_rows(rows, now, entry, reason, cause, recommended, why,
     item = entry["item"]
     found = item_view(rows, item)
     state, finishing = found["state"], found["finishing"]
+    band = (finishing["band"] if finishing is not None
+            else found["steps"].get(state, {}).get("band"))
     if options is None:
-        options = stall_options(finishing["band"] if finishing is not None
-                                else found["steps"].get(state, {})
-                                .get("band"))
-    if cause == "delivery-failed":
+        options = stall_options(band)
+    if cause == "delivery-failed" or band is None:
         # The Worker finished; a retry redoes its bookkeeping (#939),
-        # and no band is involved.
+        # and no band is involved. A state with no step (`merging`)
+        # has no band to move up from either (#1874).
         options = [option for option in options if option != "retry-up"]
     moved = state_row(now, item, state, "stalled", reason, cause=cause,
                       **fields)
