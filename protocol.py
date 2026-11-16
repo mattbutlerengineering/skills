@@ -486,6 +486,8 @@ _BACKLOG_RUN_REF = re.compile(
 _BACKLOG_ENTRY = re.compile(
     r"- (?P<text>.+?) \(from: (?P<origin>[^()]+)\)"
     r"(?: \(claimed: (?P<claimed>[^()]+)\))?")
+# A (claimed: ...) inside the seed text: the marker came before (from:).
+_MISORDERED_CLAIM = re.compile(r"\(claimed: [^()]+\)")
 
 
 def _backlog_refs(match):
@@ -504,8 +506,9 @@ def parse_backlog(text):
     entries = []
     for number, line in enumerate(text.splitlines(), 1):
         match = _BACKLOG_ENTRY.fullmatch(line)
-        if not match or not all(_BACKLOG_RUN_REF.fullmatch(ref)
-                                for _, ref in _backlog_refs(match)):
+        if (not match or _MISORDERED_CLAIM.search(match["text"])
+                or not all(_BACKLOG_RUN_REF.fullmatch(ref)
+                           for _, ref in _backlog_refs(match))):
             continue
         entries.append({"line": number,
                         "text": match.group("text"),
@@ -528,7 +531,7 @@ def check_backlog(text):
             problems.append(f"backlog: line {number}: entry does not "
                             "match '- <seed text> (from: <run-ref>)'")
             continue
-        if re.search(r"\(claimed: [^()]+\)", match["text"]):
+        if _MISORDERED_CLAIM.search(match["text"]):
             problems.append(f"backlog: line {number}: '(claimed: ...)' "
                             "must follow '(from: <run-ref>)'")
             continue
