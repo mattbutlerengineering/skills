@@ -51,6 +51,13 @@ class TestExistingContract(unittest.TestCase):
     def test_fieldless_block_returns_empty_dict(self):
         self.assertEqual(read_frontmatter(write("---\n\n---\n\nbody\n")), {})
 
+    def test_an_empty_quoted_value_reads_as_empty(self):
+        # _unquote's two-character floor: a bare pair of quotes is the
+        # shortest value with a pair to strip, and a lone quote has none.
+        self.assertEqual(
+            parse_frontmatter('---\na: ""\nb: \'\'\nc: "\n---\n'),
+            {"a": "", "b": "", "c": '"'})
+
 
 class TestBlockScalars(unittest.TestCase):
     def test_literal_block_scalar_joins_indented_lines(self):
