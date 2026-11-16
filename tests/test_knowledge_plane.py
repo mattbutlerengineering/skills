@@ -143,6 +143,15 @@ class TestParseRow(unittest.TestCase):
             [(row["lineno"], row["wo"]) for row in breakdown_rows(lines)],
             [(2, "WO-0001"), (4, None), (5, "WO-0002")])
 
+    def test_an_indented_row_ends_the_row_above_it(self):
+        # A nested checkbox is its own row: the dependency it names must
+        # not be read as the parent's (_row_block stops at any row).
+        lines = ["- [ ] WO-0001 one", "  - [ ] WO-0002 two (blocked by: WO-0001)"]
+        rows = breakdown_rows(lines)
+        self.assertEqual([r["wo"] for r in rows], ["WO-0001", "WO-0002"])
+        self.assertEqual(rows[0]["blockers"], [])
+        self.assertEqual(rows[0]["block"], "- [ ] WO-0001 one")
+
     def test_alignment_with_the_completion_grammar(self):
         # protocol._CHECKBOX is a separate owner by design — it captures
         # the box contents and protocol.py stays factory-agnostic — but
