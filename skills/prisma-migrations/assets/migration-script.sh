@@ -59,6 +59,15 @@ if grep -q "Database schema is up to date" <<<"$STATUS"; then
   exit 0
 fi
 
+# Neither up to date nor pending is an error (unreachable database, bad
+# credentials), never a guess: stop before a dry run reports success or a
+# deploy starts. Mirrors check-pending.sh's exit 2.
+if ! grep -q "not yet been applied" <<<"$STATUS"; then
+  echo -e "${RED}Error checking migration status:${NC}"
+  echo "$STATUS"
+  exit 2
+fi
+
 echo "$STATUS"
 echo ""
 
