@@ -420,6 +420,16 @@ class TestPageWriter(unittest.TestCase):
             {"three-core": b"AAAA"})
         self.assertEqual(page, '<m>' + json.dumps(model) + '</m><c>QUFBQQ==</c>')
 
+    def test_no_model_string_can_open_or_close_script_escape_states(self):
+        # An HTML comment opener then a script open tag inside script data
+        # enters the double-escaped state, where the template's own close
+        # tag does not end the element. Every `<` in the model is escaped.
+        model = {"title": "Strip `" + "<" + "!--" + "<script>` </script>"}
+        page = assembly_line.render(model, "<m>__MODEL__</m>", {})
+        body = page[len("<m>"):-len("</m>")]
+        self.assertNotIn("<", body)
+        self.assertEqual(json.loads(body), model)
+
     def test_the_vendored_files_are_inlined_as_base64(self):
         target = Path(self.tmp.name) / "page.out.html"
         self.run_main(self.root, "--out", target)
