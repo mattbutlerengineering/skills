@@ -45,7 +45,7 @@ import conductor_spend
 import cost_ledger
 import factory_config
 import label_sync
-from cli import CLI_FAILURES, append_line, detail, json_lines
+from cli import CLI_FAILURES, append_line, detail, json_lines, read_file
 from conductor import LEDGER, TERMINAL, answers, append, ask_row, \
     batch_branch, batch_dir, current_state, is_text, item_view, load, \
     numbered, parse, parsed_at, read_text, run_item, stamp, view
@@ -434,11 +434,13 @@ def history(root):
     no history. A line that does not parse or breaks scorecard_problems
     fails the read naming its line: never a partial history. A row reads
     as written, every key in one meaning (_by_meaning)."""
-    path = Path(root) / SCORECARDS
-    if not path.is_file():
+    text, problem = read_file(Path(root) / SCORECARDS, SCORECARDS, str)
+    if problem:
+        return None, [f"cd: {problem}"]
+    if text is None:
         return [], []
     rows = []
-    for lineno, row, err in json_lines(path.read_text(encoding="utf-8")):
+    for lineno, row, err in json_lines(text):
         if err is not None:
             return None, [f"cd: {SCORECARDS}:{lineno} is not valid JSON:"
                           f" {err}"]

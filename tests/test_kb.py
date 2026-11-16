@@ -280,6 +280,35 @@ def aged(extra, **fields):
     return f"{head}\n{extra}\n---\n{rest}"
 
 
+class TestAnUndecodablePage(Tree):
+    """A page saved in another encoding is a problem naming it, not a
+    UnicodeDecodeError out of lint, and out of stats (which read it a
+    second time without a guard)."""
+
+    def bad_page(self):
+        path = self.root / "docs" / "kb" / "latin.md"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"---\nsummary: caf\xe9\n---\n")
+        return path
+
+    def test_lint_names_the_unreadable_page_once(self):
+        self.kb_page("good")
+        self.bad_page()
+        problems = [p for p in self.lint() if "latin.md" in p]
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "kb: docs/kb/latin.md cannot be read: "), problems)
+
+    def test_stats_refuses_with_the_same_problem(self):
+        self.kb_page("good")
+        self.bad_page()
+        stats, problems = kb.stats(self.root)
+        self.assertIsNone(stats)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "kb: docs/kb/latin.md cannot be read: "), problems)
+
+
 class TestAge(Tree):
     """ADR-0125: a page declares what it was checked against, when, and
     for how long; lint ages that declaration against an injected today
