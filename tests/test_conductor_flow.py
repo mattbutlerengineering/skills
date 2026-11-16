@@ -17,7 +17,7 @@ import conductor_landed as landed
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
-from fake_git import FakeGit  # noqa: E402
+from fake_git import FakeGit, raw_diff  # noqa: E402
 
 LEDGER = "docs/factory/batches/b1/ledger.jsonl"
 AT = "2026-10-10T12:00:00Z"
@@ -617,16 +617,15 @@ class TestVerdict(unittest.TestCase):
 
 
 class TestGitFacts(unittest.TestCase):
-    def git(self, changed, tree="", shows=None):
-        return FakeGit({("diff",): changed, ("ls-tree",): tree,
+    def git(self, changed, blobs=None, shows=None):
+        return FakeGit({("diff",): raw_diff(changed.split(), blobs),
                         **{("show", spec): text
                            for spec, text in (shows or {}).items()}})
 
     def test_gate_blobs_are_the_changed_gate_files_blob_ids(self):
         git = self.git(
             "docs/features/x/prd.md\nconductor.py\ndocs/adr/0090-y.md\n",
-            "100644 blob aaa\tdocs/adr/0090-y.md\n"
-            "100644 blob bbb\tdocs/features/x/prd.md\n")
+            {"docs/adr/0090-y.md": "aaa", "docs/features/x/prd.md": "bbb"})
         self.assertEqual(flow.gate_blobs(git, "conductor/b1-12"), (
             {"docs/adr/0090-y.md": "aaa", "docs/features/x/prd.md": "bbb"},
             []))

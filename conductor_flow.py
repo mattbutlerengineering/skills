@@ -692,31 +692,37 @@ def _git(git, args, what):
         return None, [f"cd: git {what} failed: {detail(err)}"]
 
 
-def changed_files(git, branch):
-    out, problems = _git(git, ["diff", "--name-only",
-                               f"origin/main...{branch}"],
+def _diff_entries(git, branch):
+    """([(path, blob id on the branch)], problems) for what the item
+    branch changes against origin/main. NUL-separated and rename-free,
+    so a path with spaces or non-ASCII characters is read whole and the
+    old side of a rename is a deletion; a deleted file's blob id is
+    all zeros (#1871)."""
+    out, problems = _git(git, ["diff", "--raw", "-z", "--no-renames",
+                               "--no-abbrev", f"origin/main...{branch}"],
                          f"diff for {branch}")
-    return (None, problems) if problems else (out.split(), [])
+    if problems:
+        return None, problems
+    tokens = [token for token in out.split("\0") if token]
+    return [(path, meta.split()[3]) for meta, path
+            in zip(tokens[0::2], tokens[1::2])], []
+
+
+def changed_files(git, branch):
+    entries, problems = _diff_entries(git, branch)
+    return (None, problems) if problems else (
+        [path for path, _ in entries], [])
 
 
 def gate_blobs(git, branch):
     """({gate path: blob id}, problems) for the gate files the item
-    branch changes against origin/main."""
-    changed, problems = changed_files(git, branch)
+    branch changes against origin/main. A deleted gate file carries the
+    all-zero id, which no approval ever equals."""
+    entries, problems = _diff_entries(git, branch)
     if problems:
         return None, problems
-    gates = [path for path in changed if GATE_PATH.fullmatch(path)]
-    if not gates:
-        return {}, []
-    out, problems = _git(git, ["ls-tree", branch, "--", *gates],
-                         f"ls-tree for {branch}")
-    if problems:
-        return None, problems
-    blobs = {}
-    for line in out.splitlines():
-        meta, _, path = line.partition("\t")
-        blobs[path] = meta.split()[2]
-    return blobs, []
+    return {path: blob for path, blob in entries
+            if GATE_PATH.fullmatch(path)}, []
 
 
 def unchecked_rows(git, branch):
