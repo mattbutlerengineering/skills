@@ -10,6 +10,7 @@ exact problem strings through its public interface.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -2069,6 +2070,19 @@ class TestMainSummary(cli_contract.ReportContract, unittest.TestCase):
 
     def clean_cli(self):
         return cli_contract.capture(lint.main)
+
+
+class TestEntryPointRefusesArguments(unittest.TestCase):
+    def test_an_argument_is_refused_not_ignored(self):
+        """lint takes nothing (factory.py refuses extras for the same
+        reason): `python3 lint.py --fast` used to run the full lint and
+        exit 0, so the flag looked as if it applied."""
+        result = subprocess.run(
+            [sys.executable, str(ROOT / "lint.py"), "--fast"],
+            cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 2, result.stdout)
+        self.assertNotIn("problem(s)", result.stdout)
+        self.assertIn("takes no arguments", result.stderr)
 
 
 if __name__ == "__main__":

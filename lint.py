@@ -1140,4 +1140,9 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[1:]:
+        # Same refusal factory.py makes for the routed verb: an argument
+        # silently dropped would look as if it applied.
+        print("lint: takes no arguments", file=sys.stderr)
+        sys.exit(2)
     sys.exit(main())
