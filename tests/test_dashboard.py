@@ -1011,7 +1011,8 @@ console.log(JSON.stringify({
                 path = Path(tmp) / "render_check.js"
                 path.write_text(harness, encoding="utf-8")
                 run = subprocess.run(["node", str(path)],
-                                     capture_output=True, text=True)
+                                     capture_output=True, text=True,
+                                     encoding="utf-8")
             if run.returncode != 0:
                 raise AssertionError(
                     f"render harness failed under node: {run.stderr}")

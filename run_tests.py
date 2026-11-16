@@ -97,7 +97,7 @@ def spawn_child(cmd, cwd):
     stderr merged because unittest writes its report there."""
     process = subprocess.run(cmd, cwd=cwd, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT, text=True,
-                             errors="replace")
+                             encoding="utf-8", errors="replace")
     return process.returncode, process.stdout
 
 

@@ -123,7 +123,7 @@ def version(binary):
     """
     try:
         proc = subprocess.run([binary, "--version"], capture_output=True,
-                              text=True, timeout=15)
+                              text=True, encoding="utf-8", timeout=15)
         return proc.stdout.strip() or None
     except (OSError, subprocess.TimeoutExpired):
         return None
@@ -529,6 +529,7 @@ def runner(binary, timeout=None):
     def run(args, input=None, cwd=None):
         return subprocess.run([binary, *args], check=True,
                               capture_output=True, text=True,
+                              encoding="utf-8",
                               timeout=timeout, input=input, cwd=cwd)
     return run
 
