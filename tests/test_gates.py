@@ -593,8 +593,8 @@ class TestCostLedger(unittest.TestCase):
                 " string",
                 "G: docs/factory/costs.jsonl:1 tokens must be a non-negative"
                 " integer",
-                "G: docs/factory/costs.jsonl:1 cost must be a non-negative"
-                " number",
+                "G: docs/factory/costs.jsonl:1 cost must be a finite"
+                " non-negative number",
                 "G: docs/factory/costs.jsonl:1 wo WO-0009 has no breakdown"
                 " row",
                 "G: docs/features/demo/breakdown.md:1 merged work order"
