@@ -7,6 +7,7 @@ one, while still refusing any collision in the executable payload and
 never overwriting anything. Tests assert the exact strings callers print.
 """
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -121,6 +122,24 @@ class TestKeepCli(unittest.TestCase):
                 "factory-init: 0 problem(s)"])
             self.assertEqual((target / ".github/CODEOWNERS").read_text(),
                              MINE)
+
+    def test_a_flag_where_the_target_goes_prints_usage_and_stamps_nothing(
+            self):
+        # #1897: the one leftover argument was taken as the target
+        for argv in (["stamp", "--keep-existing"],
+                     ["stamp", "--tools-only", "--keep-existing"],
+                     ["stamp", "--anything"],
+                     ["update", "--keep-existing"]):
+            with self.subTest(argv=argv), tempfile.TemporaryDirectory() as t:
+                cwd = os.getcwd()
+                os.chdir(t)
+                try:
+                    code, out = cli_contract.capture(
+                        factory_init.main, argv)
+                    self.assertEqual(os.listdir(t), [])
+                finally:
+                    os.chdir(cwd)
+                self.assertEqual(code, 2, out)
 
 
 if __name__ == "__main__":

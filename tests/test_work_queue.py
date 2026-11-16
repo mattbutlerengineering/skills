@@ -416,6 +416,32 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         self.assertIn("refusing to plan a batch it cannot price", out)
         self.assertEqual(out.splitlines()[-1], "wq: 2 problem(s)")
 
+    def test_an_unreadable_ledger_plans_no_batch(self):
+        # Issue #1893: spend summed over the parsed rows was understated,
+        # yet the plan opened with "1 work order(s) ready".
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(
+                tmp, "- [ ] **WO-0002** ready — size:M, blocked by: —"
+                " (PRD-0001 §S) (tracker: #7)\n")
+            tree.write("docs/factory/costs.jsonl", "\n".join(
+                json.dumps({"wo": f"WO-000{n}", "run_id": f"r{n}",
+                            "model": model, "tokens": 1, "cost": cost,
+                            "outcome": "merged", "at": "2026-08-04"})
+                for n, (cost, model) in enumerate(
+                    [(10, "m"), (290, "")], start=1)) + "\n")
+            with mock.patch.object(
+                    work_queue, "_utcnow",
+                    lambda: datetime(2026, 8, 6, tzinfo=timezone.utc)):
+                code, out = self.planned(["plan"], run=listing(7),
+                                         root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            "ledger: docs/factory/costs.jsonl:2 model must be a non-empty"
+            " string",
+            "wq: month-to-date spend is unreadable — refusing to plan a"
+            " batch it cannot price",
+            "wq: 2 problem(s)"])
+
     def test_an_untrusted_listing_defers_no_row_for_a_reason_it_cannot_know(
             self):
         """The hazard the refusal closes. Past the 100-entry window an

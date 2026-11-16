@@ -67,6 +67,18 @@ class TreeCase(unittest.TestCase):
             cpu_count=cpu_count)
 
 
+class TestResultCount(unittest.TestCase):
+    def test_the_count_is_the_last_ran_line_not_a_quoted_one(self):
+        # Issue #1898: a failure report quoting a `Ran 3 tests` line was
+        # counted ahead of unittest's own summary.
+        out = ("F\n" + "=" * 70 + "\nFAIL: test_x (tests.test_run_tests.T."
+               "test_x)\n" + "-" * 70 + "\nAssertionError: 'a' != '...\n"
+               "Ran 3 tests in 0.010s\n\nOK\n'\n\n" + "-" * 70
+               + "\nRan 41 tests in 0.200s\n\nFAILED (failures=1)\n")
+        self.assertEqual(
+            run_tests.Result("tests.test_run_tests", 1, out, 0.2).count, 41)
+
+
 class TestDiscover(TreeCase):
     def test_every_test_module_directly_under_tests_in_module_form(self):
         self.assertEqual(run_tests.discover(self.root),

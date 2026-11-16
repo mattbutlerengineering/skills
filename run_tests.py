@@ -82,9 +82,10 @@ class Result:
     @property
     def count(self):
         """The child's test count, or None when it never printed one —
-        a crash before unittest's summary, which is a failure too."""
-        match = RAN.search(self.output)
-        return int(match.group(1)) if match else None
+        a crash before unittest's summary, which is a failure too. The summary
+        is the LAST `Ran N tests` line: a failure report may quote one."""
+        matches = RAN.findall(self.output)
+        return int(matches[-1]) if matches else None
 
     @property
     def failed(self):
