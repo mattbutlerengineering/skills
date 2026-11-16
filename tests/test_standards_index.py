@@ -256,6 +256,17 @@ class TestBuildIndexFromLines(unittest.TestCase):
         self.assertEqual([entry["source"] for entry in entries],
                          ["adr/0032#adr0032-one-way-mirror"])
 
+    def test_update_reports_a_failed_write_instead_of_raising(self):
+        # docs a regular file: docs/standards.json cannot be made, for a
+        # root user too
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "docs").write_text("", encoding="utf-8")
+            problems = standards_index.update(tmp)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "standards-index: cannot write "
+            f"{standards_index.STANDARDS_PATH}: "), problems)
+
     def test_update_reports_an_undecodable_adr_and_writes_nothing(self):
         data = "# Caf\xe9\n".encode("latin-1")
         try:

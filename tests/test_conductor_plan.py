@@ -463,6 +463,24 @@ class TestOpen(unittest.TestCase):
             self.assertFalse(
                 (Path(tmp) / ".claude/worktrees/conductor-b1").exists())
 
+    def test_a_ledger_that_cannot_be_written_is_a_problem_not_a_crash(self):
+        # a file named docs on main: the worktree is made, then
+        # docs/factory/batches/b1/ cannot be. The refusal says what is
+        # left behind, since a retry would meet "already exists".
+        result, _ = plan([issue(12)])
+        with tempfile.TemporaryDirectory() as tmp:
+            worktree, problems = conductor_plan.open_batch(
+                "b1", result, clock(),
+                fake_git(checkout=tmp, on_main=["docs"]))
+        self.assertIsNone(worktree)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "cd: cannot write docs/factory/batches/b1/ledger.jsonl: "),
+            problems)
+        self.assertTrue(problems[0].endswith(
+            "; .claude/worktrees/conductor-b1 was already created: remove"
+            " it before opening again"), problems)
+
     def test_a_bad_batch_name_is_refused_before_git(self):
         result, _ = plan([issue(12)])
         with tempfile.TemporaryDirectory() as tmp:
