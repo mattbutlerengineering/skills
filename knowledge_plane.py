@@ -658,6 +658,17 @@ def _declared_status(lines):
     return 0, None
 
 
+def _unquoted(value):
+    """VALUE with surrounding whitespace and one matching pair of quotes
+    stripped (`"PRD-0001"` is PRD-0001); a non-string passes through."""
+    if not isinstance(value, str):
+        return value
+    value = value.strip()
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        value = value[1:-1].strip()
+    return value
+
+
 def adr_record(path, lines):
     """One ADR, read once: {number, written, path, lineno, status, head,
     standing, superseded_by, title, lines}. PATH must be an adr_paths
@@ -822,7 +833,7 @@ def parse_run(root, scannable=()):
         runs.append({
             "path": run,
             "breakdown": breakdown,
-            "prd_id": prd_fields.get("id"),
+            "prd_id": _unquoted(prd_fields.get("id")),
             "prd": None if prd_text is None else prd_text.splitlines(),
             "prd_date": prd_fields.get("date"),
             "architecture": guarded_lines(run / "architecture.md"),

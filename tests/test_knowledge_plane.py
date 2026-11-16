@@ -294,6 +294,20 @@ class TestParseRun(unittest.TestCase):
             _, lines = parsed["adr_files"][0]
             self.assertEqual(lines, ["# Real"])
 
+    def test_a_quoted_frontmatter_prd_id_is_unquoted(self):
+        # Issue #1905: `id: "PRD-0001"` was declared with its quotes, so
+        # every citation of PRD-0001 dangled.
+        for raw in ('"PRD-0001"', "'PRD-0001'", '  "PRD-0001" '):
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                run = root / "docs/features/demo"
+                run.mkdir(parents=True)
+                (run / "prd.md").write_text(
+                    f"---\nid: {raw}\n---\n# PRD\n", encoding="utf-8")
+                entry = self.run_entry(root, parse_run(root),
+                                       "docs/features/demo")
+                self.assertEqual(entry["prd_id"], "PRD-0001")
+
     def test_verification_text_captured_per_run_and_unreadable_is_flagged(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
