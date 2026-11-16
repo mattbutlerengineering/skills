@@ -479,13 +479,21 @@ def _deferring(arg):
     return name if name in DEFERRING_FLAGS else None
 
 
-def _hidden_in_cluster(arg):
-    """True for a single-dash cluster holding b or F past second place
-    (`-db`): a body flag the hook will not unpick. A value flag's joined
-    value (`-Bfix/b`) is not a cluster."""
-    return (len(arg) > 2 and arg[0] == "-" and arg[1] not in "-bF"
-            and arg[:2] not in VALUE_FLAGS
-            and ("b" in arg[2:] or "F" in arg[2:]))
+def _cluster(arg):
+    """(hidden, letter, rest) for a single-dash cluster of boolean
+    letters (`-dR`), else None. Letters run until a value letter, which
+    takes the rest of the cluster as its value (`-dRocto/other`) or, with
+    nothing after it, the next argument. hidden is True when b or F
+    appears among the boolean letters (`-db`): a body flag the hook will
+    not unpick. A value flag first (`-Bfix/b`) is not a cluster."""
+    if len(arg) < 3 or arg[0] != "-" or arg[1] in "-bF" or arg[:2] in VALUE_FLAGS:
+        return None
+    for position, char in enumerate(arg[1:], 1):
+        if char in "bF":
+            return True, None, ""
+        if "-" + char in VALUE_FLAGS:
+            return False, char, arg[position + 1:]
+    return False, None, ""
 
 
 def _body_sources(args):
@@ -499,8 +507,23 @@ def _body_sources(args):
             break
         if _deferring(arg):
             raise _Unreadable(f"{_deferring(arg)} leaves the body to gh")
-        if _hidden_in_cluster(arg):
+        cluster = _cluster(arg)
+        if cluster and cluster[0]:
             raise _Unreadable(f"{arg} hides a body flag in a cluster")
+        if cluster and cluster[1] == "R":
+            value = cluster[2][1:] if cluster[2].startswith("=") else cluster[2]
+            if not value:
+                if index + 1 >= len(args):
+                    raise _Unreadable(f"{arg} has no value")
+                value, step = args[index + 1], 2
+            else:
+                step = 1
+            repos.append(value)
+            index += step
+            continue
+        if cluster and cluster[1]:
+            index += 1 if cluster[2] else 2
+            continue
         body = _flag_value(args, index, "--body", "-b")
         path = None if body else _flag_value(args, index, "--body-file", "-F")
         repo = (None if body or path

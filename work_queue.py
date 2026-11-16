@@ -257,7 +257,13 @@ def main(argv, run=None, clock=None):
     ready, problems = ready_issue_numbers(run)
     spent, ledger_problems = month_to_date(root, (clock or _utcnow)())
     problems += ledger_problems
-    trusted = ready is not None
+    if ledger_problems:
+        # Spend summed over the rows that parsed is understated, so a
+        # batch priced against it would be priced against a lie (#1893):
+        # fail closed like cost_report.guard and budget_guard.
+        problems.append("wq: month-to-date spend is unreadable — refusing"
+                        " to plan a batch it cannot price")
+    trusted = ready is not None and not ledger_problems
     if not trusted:
         # An untrusted listing plans nothing and explains nothing: every
         # per-row deferral would be a claim about a listing that does not

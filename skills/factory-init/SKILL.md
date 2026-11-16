@@ -97,6 +97,10 @@ It splits the payload where detector E does:
   `factory/` mirror. Never meant to be hand-edited; detector E fails the
   build if they are, so restoring them from the payload is the remedy, not
   a loss.
+  A file a release has dropped or renamed is deleted from these (and from
+  the `factory/` mirror) and reported, so detector E does not fail on a file
+  the manifest no longer lists; only files the repo's old manifest named are
+  ever removed.
 - **Created only when absent** — the `Makefile`, `.github/factory.json`,
   `.github/labels.json`, `.github/CODEOWNERS`, and the `docs/` seeds. A seed
   the repo does not have yet lands; one it has is the repo's. Each kept file

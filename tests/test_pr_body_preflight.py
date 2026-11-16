@@ -1886,6 +1886,14 @@ class TestOtherRepository(unittest.TestCase):
                     (0, [note(f"the PR targets {value}, "
                               "not this repository")]))
 
+    def test_repo_flag_inside_a_short_flag_cluster_targets_that_repo(self):
+        reason = note("the PR targets octo/other, not this repository")
+        for command in ('gh pr create -dR octo/other --title t --body "x"',
+                        'gh pr create -dRocto/other --title t --body "x"',
+                        'gh pr create -dR=octo/other --title t --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), (0, [reason]))
+
     def test_gh_repo_naming_another_repository_fails_open(self):
         reason = note("the PR targets other/repo, not this repository")
         for command in ('GH_REPO=other/repo gh pr create --body "x"',
