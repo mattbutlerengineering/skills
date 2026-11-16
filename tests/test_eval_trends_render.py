@@ -267,6 +267,19 @@ class TestRefusalStates(RenderCase):
         self.assertIn("eval-trends: plugin cost: REFUSED cost field absent"
                       " from 1 of 2 record(s); no trend claim", lines)
 
+    def test_the_cost_refusal_counts_only_the_days_the_comparison_reads(self):
+        self.plugin("2026-07-01.json", "2026-07-01T10:00:00Z", 30, 15, 3.0)
+        mid = fx.plugin_record(
+            "2026-07-03T10:00:00Z",
+            [(f"case{i}", "prompt", [("g", "md")]) for i in range(30)],
+            passed=0)
+        del mid["costUsd"]
+        fx.write_json(self.root, "plugin-evals/records/2026-07-03.json", mid)
+        self.plugin("2026-07-05.json", "2026-07-05T10:00:00Z", 30, 0, 3.0)
+        _, lines = self.run_main()
+        self.assertIn("eval-trends: plugin cost: REFUSED no passed case to"
+                      " divide by; no trend claim", lines)
+
     def test_refused_counts_sum_to_the_inventory_count(self):
         self.trigger("2026-07-01", 4, 1)
         self.trigger("2026-07-02", 4, 2)

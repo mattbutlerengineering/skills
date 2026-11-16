@@ -108,6 +108,14 @@ class TestSlop(unittest.TestCase):
         self.assertEqual(vg.slop("Run `git reset --soft HEAD~1`."), [])
         self.assertEqual(vg.slop(""), [])
 
+    def test_a_backtick_fence_inside_a_tilde_block_stays_code(self):
+        text = "Like this:\n\n~~~markdown\n```\nfoo \u2014 bar\n```\n~~~\n"
+        self.assertEqual(vg.slop(text), [])
+
+    def test_a_shorter_fence_does_not_close_a_longer_one(self):
+        text = "````\n```\nfoo \u2014 bar\n````\nafter\n"
+        self.assertEqual(vg.slop(text), [])
+
     def test_pattern_order_then_text_order(self):
         text = ("Feel free to ask. Great question. Hope this helps."
                 " Good question.")

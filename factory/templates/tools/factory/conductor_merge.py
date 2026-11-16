@@ -725,6 +725,21 @@ def _show(git, ref, path):
         return None
 
 
+def _merged_by_repo(git, gh, worktree, branch):
+    """{pr, sha, checks} when the repo already merged a shipped item's
+    PR (#807's reading, extended to item PRs by ADR-0105), else None.
+    Read before the turn touches the branch, so no commit is pushed onto
+    a merged one; an open PR on the head means an older merged PR is
+    not this item's merge (#1881)."""
+    if _read(gh, ["pr", "list", "--head", branch, "--state", "open",
+                  "--json", "number"], "gh pr list", expect=list):
+        return None
+    landed = landed_by_repo(git, gh, worktree, branch)
+    if landed is None:
+        return None
+    return {"pr": landed[0], "sha": landed[1], "checks": {}}
+
+
 def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
                config=None):
     """(summary, problems): one merge turn. problems when the
@@ -765,10 +780,17 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
                             pid=os.getpid() if pid is None else pid)
     if problems:
         return None, problems
+    branch = flow.item_branch(batch, item)
+    reason = None
     try:
-        merged, problems = _turn(root, batch, item,
-                                 (git, gh, tool, clock, sleep), worktree,
-                                 gate, policy)
+        merged = _merged_by_repo(git, gh, worktree, branch)
+        if merged is None:
+            merged, problems = _turn(root, batch, item,
+                                     (git, gh, tool, clock, sleep),
+                                     worktree, gate, policy)
+        else:
+            problems = []
+            reason = f"merged by the repo as PR #{merged['pr']}"
     except Stall as stall:
         _, problems = flow.queue_stall(
             root, batch, clock(), item, stall.reason, "merge-failed",
@@ -778,7 +800,7 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
     if problems:
         return None, problems
     _, problems = flow.move(root, batch, clock(), item, "merged",
-                            f"merged as {merged['sha']}", **merged)
+                            reason or f"merged as {merged['sha']}", **merged)
     return {"item": item, "stall": None, **merged}, problems
 
 

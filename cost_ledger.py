@@ -17,6 +17,7 @@ prefix their own label and location (detector G keeps its G: strings
 byte-for-byte).
 """
 import json
+import math
 import re
 from datetime import date
 from pathlib import Path
@@ -343,8 +344,8 @@ def line_problems(entry):
                 problems.append("tokens must be a non-negative integer")
         elif field == "cost":
             if isinstance(value, bool) or not isinstance(value, (int, float)) \
-                    or value < 0:
-                problems.append("cost must be a non-negative number")
+                    or not math.isfinite(value) or value < 0:
+                problems.append("cost must be a finite non-negative number")
             elif value != 0 and owner_session(entry):
                 # dispatched() drops markers from spend on the grounds
                 # that they are $0 (ADR-0069); a paid row mislabelled as

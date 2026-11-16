@@ -197,7 +197,7 @@ If Prisma detects drift after baselining:
 ```bash
 # Check what's different
 npx prisma migrate diff \
-  --from-schema-datasource prisma/schema.prisma \
+  --from-schema-datamodel prisma/schema.prisma \
   --to-url "$DATABASE_URL"
 ```
 
@@ -234,8 +234,9 @@ jobs:
       - name: Check if baseline needed
         id: check
         run: |
-          STATUS=$(npx prisma migrate status 2>&1) || true
-          if echo "$STATUS" | grep -q "No migration has been applied yet"; then
+          # Baseline is needed when the database has no _prisma_migrations table
+          HAS_HISTORY=$(psql "$DATABASE_URL" -Atc "select to_regclass('_prisma_migrations')")
+          if [ -z "$HAS_HISTORY" ]; then
             echo "needs_baseline=true" >> $GITHUB_OUTPUT
           else
             echo "needs_baseline=false" >> $GITHUB_OUTPUT

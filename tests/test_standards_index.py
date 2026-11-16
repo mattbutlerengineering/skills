@@ -389,6 +389,38 @@ class TestUpdate(unittest.TestCase):
             self.assertIn(hand, written)
             self.assertEqual(len(written), 2)
 
+    def test_a_hand_curated_entry_without_a_slug_refuses_to_write(self):
+        # #1895: update sorted by slug and crashed on these
+        for label, extra in (("missing", {}), ("null", {"slug": None}),
+                             ("empty", {"slug": ""}), ("int", {"slug": 3})):
+            with self.subTest(label), tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / standards_index.STANDARDS_PATH
+                path.parent.mkdir(parents=True)
+                hand = {"statement": "x", "level": "MUST",
+                        "source": "CLAUDE.md#x", **extra}
+                text = json.dumps([hand])
+                path.write_text(text, encoding="utf-8")
+                self.assertEqual(standards_index.update(tmp), [
+                    "standards-index: docs/standards.json: hand-curated"
+                    " entry 'CLAUDE.md#x' has no slug (a non-empty string)"])
+                self.assertEqual(path.read_text(encoding="utf-8"), text)
+
+    def test_a_hand_curated_slug_colliding_with_an_adr_one_refuses(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adr_file(tmp, "0032",
+                     "# One-way mirror\n\n## Normative statements\n\n"
+                     + VALID_BULLET + "\n")
+            path = Path(tmp) / standards_index.STANDARDS_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps([{
+                "slug": "adr0032-one-way-mirror", "statement": "x",
+                "level": "MUST", "source": "CLAUDE.md#x"}]),
+                encoding="utf-8")
+            self.assertEqual(standards_index.update(tmp), [
+                "standards-index: docs/standards.json: hand-curated entry"
+                " 'CLAUDE.md#x' reuses ADR-derived slug"
+                " 'adr0032-one-way-mirror'"])
+
     def test_regen_replaces_the_previous_adr_derived_subset(self):
         # A second update, after an ADR-derived statement's text changed,
         # must not leave the STALE entry sitting beside the fresh one.

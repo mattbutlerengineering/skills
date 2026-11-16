@@ -51,9 +51,10 @@ ID_GREP = ["grep", "-h", "-o", "-E", "(PRD|WO)-[0-9]{4}", "origin/main",
 # An ADR is taken by its file, never by a citation (#821): a consumer's
 # docs cite this plugin's ADRs, and its own files may be 3-digit
 # (`ADR-020-*.md`), which ADR_TOKEN deliberately does not read (#774).
-ADR_LIST = ["ls-tree", "--name-only", "origin/main", "--", "docs/adr/"]
+ADR_LIST = ["ls-tree", "--name-only", "-z", "origin/main", "--",
+            "docs/adr/"]
 BATCHES = str(PurePosixPath(batch_dir("b")).parent) + "/"
-BATCH_LIST = ["ls-tree", "--name-only", "origin/main", "--", BATCHES]
+BATCH_LIST = ["ls-tree", "--name-only", "-z", "origin/main", "--", BATCHES]
 ISSUE_FIELDS = "number,state,author,labels"
 SPEND_OPTIONS = ["approve", "decline"]
 # Workflows on origin/main that merge pull requests on their own (#938):
@@ -65,12 +66,13 @@ AUTO_MERGE_GREP = ["grep", "-l", "-i", "-E",
 
 
 def _listed(git, args):
-    """(the names `git ls-tree --name-only` prints for ARGS, problems)."""
+    """(the names `git ls-tree --name-only -z` prints for ARGS, problems).
+    NUL-separated, since git C-quotes a non-ASCII name otherwise (#1880)."""
     try:
         out = git(args).stdout
     except CLI_FAILURES as err:
         return None, [f"cd: git ls-tree origin/main failed: {detail(err)}"]
-    return [PurePosixPath(line).name for line in out.splitlines()], []
+    return [PurePosixPath(line).name for line in out.split("\0") if line], []
 
 
 def ids_on_main(git):

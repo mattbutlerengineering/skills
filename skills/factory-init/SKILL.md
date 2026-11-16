@@ -56,8 +56,10 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
 4. Commit the stamped files in the product repo, then run `make check`
    there and confirm it exits clean. Two things to fix first, or the
    first run is confusing:
-   - the target needs a `tests/` directory — `make check` runs
-     `unittest discover -q tests` and errors without one;
+   - the target needs a `tests/` directory holding at least one test —
+     `make check` runs `unittest discover -q tests`, which errors without
+     the directory and, since Python 3.12, exits 5 (NO TESTS RAN) when it
+     finds no test, so a `tests/` with only `__init__.py` still fails;
    - `.github/CODEOWNERS` ships a placeholder owner handle. If it is not
      a collaborator on the target, GitHub ignores the entry and the
      code-owner gate goes inert.
@@ -95,6 +97,10 @@ It splits the payload where detector E does:
   `factory/` mirror. Never meant to be hand-edited; detector E fails the
   build if they are, so restoring them from the payload is the remedy, not
   a loss.
+  A file a release has dropped or renamed is deleted from these (and from
+  the `factory/` mirror) and reported, so detector E does not fail on a file
+  the manifest no longer lists; only files the repo's old manifest named are
+  ever removed.
 - **Created only when absent** — the `Makefile`, `.github/factory.json`,
   `.github/labels.json`, `.github/CODEOWNERS`, and the `docs/` seeds. A seed
   the repo does not have yet lands; one it has is the repo's. Each kept file

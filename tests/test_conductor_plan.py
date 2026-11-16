@@ -75,7 +75,7 @@ def fake_git(grep="PRD-0013\nADR-0083\nWO-0152\nWO-0007\n", on_main=(),
                     child = spec + path[len(spec):].split("/")[0]
                     if child not in listed:
                         listed.append(child)
-        return "".join(f"{path}\n" for path in listed)
+        return "".join(f"{path}\0" for path in listed)
 
     answers = {("grep",): grep, ("worktree", "add"): check_out,
                ("ls-tree",): ls_tree}
@@ -157,9 +157,10 @@ class TestIdsInUse(unittest.TestCase):
         self.assertEqual(calls, [
             ["grep", "-h", "-o", "-E", "(PRD|WO)-[0-9]{4}", "origin/main",
              "--", "docs"],
-            ["ls-tree", "--name-only", "origin/main", "--", "docs/adr/"],
+            ["ls-tree", "--name-only", "-z", "origin/main", "--",
+             "docs/adr/"],
             ["rev-parse", "--path-format=absolute", "--git-common-dir"],
-            ["ls-tree", "--name-only", "origin/main", "--",
+            ["ls-tree", "--name-only", "-z", "origin/main", "--",
              "docs/factory/batches/"]])
 
     def test_no_ids_at_all_is_zero(self):

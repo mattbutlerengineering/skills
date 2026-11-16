@@ -203,8 +203,11 @@ def _budgets(rows, floor):
     budgets = {}
     for size, spent in totals.items():
         spread = _spread(spent)
+        # ceil of the unrounded spend (to PLACES, which absorbs float
+        # noise): the cents figure in `spread` would round $3.004 down to 3
         budgets[size] = {**spread, "budget_usd": (
-            math.ceil(spread["max_usd"]) if spread["n"] >= floor else None)}
+            math.ceil(round(max(spent), PLACES))
+            if spread["n"] >= floor else None)}
     return budgets
 
 

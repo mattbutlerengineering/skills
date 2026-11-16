@@ -442,6 +442,13 @@ class TestEnsureLabels(unittest.TestCase):
 
 
 class TestFileIssues(unittest.TestCase):
+    def test_no_intakes_is_a_no_op_that_never_reads_the_taxonomy(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = gh()
+            self.assertEqual(
+                sweeps.file_issues(Path(tmp), [], run=runner), ([], []))
+            self.assertEqual(runner.calls, [])
+
     def test_files_one_labelled_issue_per_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)

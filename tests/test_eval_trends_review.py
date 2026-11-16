@@ -68,6 +68,28 @@ class TestDateFields(Tree):
         self.assertEqual(len(problems), 1)
 
 
+    def test_an_impossible_output_directory_date_is_a_problem(self):
+        fx.write_json(self.root,
+                      "evals/results/output/foo-2026-13-45/grading.json",
+                      fx.output_record([("a", True)]))
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/output/foo-2026-13-45/grading.json "
+            "malformed field name"]))
+
+
+class TestPluginNames(Tree):
+    def test_a_backup_copy_next_to_a_record_is_a_problem_not_a_rerun(self):
+        for name in ("2026-10-10 copy.json", "2026-10-10.bak.json"):
+            fx.write_json(self.root, f"plugin-evals/records/{name}",
+                          fx.plugin_record("2026-10-10T01:00:00Z",
+                                           [("a", "p", [])]))
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: plugin-evals/records/2026-10-10 copy.json "
+            "name fits no results grammar",
+            "eval-trends: plugin-evals/records/2026-10-10.bak.json "
+            "name fits no results grammar"]))
+
+
 class TestUnhashableValues(Tree):
     def test_an_object_model_is_a_problem_not_a_traceback(self):
         self.trigger("trigger-2026-10-05.json", "2026-10-05",

@@ -258,6 +258,21 @@ class TestRunMine(unittest.TestCase):
             self.assertNotIn(["issue", "create"],
                              [c[:2] for c in run.calls])
 
+    def test_a_queue_older_than_the_window_is_edited_not_duplicated(self):
+        # Issue #1892's sibling: the miner shares the digest's lookup.
+        with tempfile.TemporaryDirectory() as tmp:
+            queue = issue(60, "Toolsmith queue",
+                          body=rejection_mining.MARKER + "\nold")
+            run = gh(issues=[issue(7, "WO-0101: first")],
+                     timelines={7: CONFIRMED_STAY})
+            run.answers[("issue", "list", "--state", "open", "--search")] = json.dumps([queue])
+            _, problems = rejection_mining.run_mine(
+                tree(tmp).root, run=run, clock=clock)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "create"), [])
+            (edit,) = run.called("issue", "edit")
+            self.assertEqual(edit[2], "60")
+
     def test_change_requests_join_the_harvest(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=[issue(8, "WO-0102: second")],
@@ -399,6 +414,7 @@ class TestRunMine(unittest.TestCase):
             for n in range(rejection_mining.LIST_WINDOW - 1)]
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=[])
+            run.answers[("issue", "list", "--state", "open", "--search")] = "[]"
             _, problems = rejection_mining.run_mine(tree(tmp).root, run=run,
                                                     clock=clock)
             body = self._posted_body(run)

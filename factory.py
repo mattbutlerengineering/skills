@@ -21,7 +21,7 @@ that stopped being testable where it lives now.
                                         --selftest`)
   python3 factory.py help               the verb index
 
-Verbs whose main() takes no arguments (lint, trigger-eval) refuse extras
+Verbs whose main() takes no arguments (lint) refuse extras
 rather than dropping them silently.
 `cli.py` is the external-CLI/harness-IO seam (ADR-0037/0040/0042), which
 is why this file is not called that.
@@ -71,7 +71,7 @@ VERBS = {
     "svg-check": ("svg_check", "argv"),
     "sweeps": ("sweeps", "argv"),
     "trace": ("trace", "argv"),
-    "trigger-eval": ("trigger_eval", "bare"),
+    "trigger-eval": ("trigger_eval", "argv"),
     "validator": ("validator", "argv"),
     "voice-grade": ("voice_grade", "argv"),
     "work-queue": ("work_queue", "argv"),

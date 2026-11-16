@@ -9,6 +9,7 @@ import importlib
 import inspect
 import io
 import re
+import sys
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -170,7 +171,7 @@ class TestDispatch(unittest.TestCase):
         fake.assert_called_once_with(["--selftest"])
 
     def test_a_bare_main_refuses_extra_arguments(self):
-        """lint/trigger-eval mains take nothing; dropping the caller's
+        """the lint main takes nothing; dropping the caller's
         arguments silently would look like they applied."""
         with mock.patch("lint.main") as fake:
             out = io.StringIO()
@@ -179,6 +180,18 @@ class TestDispatch(unittest.TestCase):
         self.assertEqual(code, 2)
         fake.assert_not_called()
         self.assertIn("factory: lint takes no arguments", out.getvalue())
+
+    def test_trigger_eval_gets_its_arguments_not_the_process_argv(self):
+        """#1894: routed bare, its main read sys.argv (holding the verb)
+        and argparse rejected `trigger-eval`; extras were refused too."""
+        self.assertEqual(factory.VERBS["trigger-eval"],
+                         ("trigger_eval", "argv"))
+        with mock.patch.object(sys, "argv", ["factory.py", "trigger-eval"]):
+            with mock.patch("trigger_eval.print_metrics",
+                            return_value=0) as fake:
+                self.assertEqual(
+                    factory.main(["trigger-eval", "--metrics", "r.json"]), 0)
+        fake.assert_called_once_with(Path("r.json"), None)
 
     def test_the_delegates_exit_code_comes_back_unchanged(self):
         with mock.patch("validator.main", return_value=1) as fake:
