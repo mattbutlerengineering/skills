@@ -823,6 +823,21 @@ class TestStandardsDrift(unittest.TestCase):
                 " regeneration (run `python3 standards_index.py"
                 " update`)"])
 
+    def test_an_entry_missing_a_field_is_drift_not_a_crash(self):
+        # Issue #1860: sorting fingerprint tuples put None beside a str
+        # and raised TypeError out of run_all.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"statement": "no slug"},
+                {"slug": "a", "statement": "x"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json has drifted from a fresh ADR"
+                " regeneration (run `python3 standards_index.py"
+                " update`)"])
+
     def test_a_removed_bullet_is_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)

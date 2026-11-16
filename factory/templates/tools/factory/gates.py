@@ -1602,13 +1602,18 @@ def check_standards_drift(root, parsed=None):
         root, parsed["adr_files"])
     problems = [f"K: {p}" for p in build_problems]
 
+    # key=repr: a hand-edited entry missing a field puts None beside a str,
+    # which a plain tuple sort cannot order (issue #1860). Equal tuples
+    # have equal reprs, so the comparison below stays exact.
     committed_adr = sorted(
-        _drift_fingerprint(entry) for entry in committed
-        if isinstance(entry, dict)
-        and not (isinstance(entry.get("source"), str)
-                 and entry["source"].startswith(
-                     standards_index.HAND_CURATED_PREFIX)))
-    fresh_fingerprint = sorted(_drift_fingerprint(entry) for entry in fresh)
+        (_drift_fingerprint(entry) for entry in committed
+         if isinstance(entry, dict)
+         and not (isinstance(entry.get("source"), str)
+                  and entry["source"].startswith(
+                      standards_index.HAND_CURATED_PREFIX))),
+        key=repr)
+    fresh_fingerprint = sorted(
+        (_drift_fingerprint(entry) for entry in fresh), key=repr)
     if committed_adr != fresh_fingerprint:
         problems.append(
             f"K: {standards_index.STANDARDS_PATH} has drifted from a"
