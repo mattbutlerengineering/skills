@@ -559,7 +559,8 @@ def build_scratch(root, case):
     if not seed.is_dir():
         return scratch
     try:
-        shutil.copytree(seed, scratch, dirs_exist_ok=True)
+        shutil.copytree(seed, scratch, dirs_exist_ok=True,
+                        ignore=shutil.ignore_patterns("__pycache__"))
         seed_git(scratch, fixture_dir)
     except (OSError, subprocess.CalledProcessError):
         shutil.rmtree(scratch, ignore_errors=True)

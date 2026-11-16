@@ -42,7 +42,8 @@ def visible_files(fixture):
     for part in ("repo", "branch"):
         if (fixture / part).is_dir():
             yield from sorted(p for p in (fixture / part).rglob("*")
-                              if p.is_file())
+                              if p.is_file()
+                              and "__pycache__" not in p.parts)
 
 
 def git(scratch, *args):
@@ -92,6 +93,18 @@ class TestTheScratchRepoMatchesTheStory(unittest.TestCase):
                                      "HEAD"), self.expected_branch(case))
                 self.assertEqual(git(scratch, "rev-parse", "HEAD"),
                                  git(scratch, "rev-parse", "@{u}"))
+
+    def test_a_stray_bytecode_cache_in_the_seed_never_reaches_the_scratch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            seed = root / "fx" / "repo" / "src"
+            (seed / "__pycache__").mkdir(parents=True)
+            (seed / "a.py").write_text("x = 1\n", encoding="utf-8")
+            (seed / "__pycache__" / "a.cpython-314.pyc").write_bytes(b"\xff\x00")
+            scratch = charter_replay.build_scratch(root, {"fixture": "fx"})
+            self.addCleanup(shutil.rmtree, scratch, ignore_errors=True)
+            self.assertTrue((scratch / "src" / "a.py").is_file())
+            self.assertEqual(list(scratch.rglob("__pycache__")), [])
 
     def test_origin_never_points_at_a_real_host(self):
         scratch = self.build(golden_cases()[0])
