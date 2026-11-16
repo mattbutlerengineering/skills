@@ -87,6 +87,10 @@ def _mask_code(text):
     lines, opening = [], None
     for line in text.splitlines(keepends=True):
         fence = _FENCE.match(line.rstrip("\r\n"))
+        # CommonMark: a backtick fence's info string holds no backtick
+        if fence and fence.group(1)[0] == "`" and "`" in fence.group(2) \
+                and opening is None:
+            fence = None
         if opening is None and fence:
             opening = fence.group(1)
             lines.append(_blank(line))

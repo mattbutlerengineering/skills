@@ -228,22 +228,27 @@ def _trigger_row(rel, data):
 
 
 def _charter_row(rel, data):
-    """The row for one charter replay: the metric is the count of
-    `sensitive` verdicts, a charter's guard noticing its own removal,
-    never a pass rate."""
+    """The row for one charter record: a control run's metric is the
+    count of `sensitive` verdicts, a charter's guard noticing its own
+    removal, never a pass rate; a plain replay's is its passing cases."""
     parsed = parse_results_stem(rel.stem)
     if parsed is None or parsed[0] != "charter":
         raise RecordError("name fits no results grammar")
     day = _named_day(_need(data, "date", str), "date", parsed[2])
-    arm = _need(data, "arm", str)
+    # a plain replay (run_suite output) carries no arm and no verdicts;
+    # its hits are the cases that passed
+    arm = _need(data, "arm", str) if "arm" in data else "replay"
     charters = _need(data, "charters", dict)
-    results = _entries(data, "results", ("id", "role", "verdict"))
+    metric = "verdict" if "arm" in data else "pass"
+    results = _entries(data, "results", ("id", "role", metric))
     suite = (arm, data.get("model"), tuple(sorted(charters.items())))
     return {"surface": "charter", "file": rel.name, "day": day,
             "suite": suite,
             "case_set": tuple(sorted((r["id"], r["role"]) for r in results)),
             "n": len(results),
-            "hits": sum(1 for r in results if r["verdict"] == "sensitive"),
+            "hits": sum(1 for r in results
+                        if (r["verdict"] == "sensitive" if "arm" in data
+                            else r["pass"])),
             "cost": None}
 
 

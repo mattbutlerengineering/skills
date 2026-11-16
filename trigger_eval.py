@@ -677,6 +677,7 @@ def main(argv=None):
                              "F1 derived from an already-recorded results "
                              "file (read-only)")
     parser.add_argument("--kind", default=None,
+                        choices=eval_schema.KINDS,
                         help="with --metrics, only cases of this kind "
                              "(e.g. near-miss)")
     args = parser.parse_args(argv)

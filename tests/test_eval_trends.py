@@ -316,14 +316,41 @@ class TestLoadCharter(TempRoot):
             "case_set": (("x", "swe"), ("y", "planner"), ("z", "swe")),
             "n": 3, "hits": 1, "cost": None})
 
+    def test_a_plain_replay_record_counts_passing_cases(self):
+        # run_suite's output: no arm, no verdicts (#1944)
+        import charter_replay
+        suite = charter_replay.run_suite(
+            [{"id": "a", "role": "swe", "expectations": []},
+             {"id": "b", "role": "planner", "expectations": []}],
+            lambda case: {"tool_calls": [], "text": "x" * (
+                1 if case["id"] == "a" else 0)})
+        data = {"date": "2026-09-28", "source": "live-model",
+                "model": "haiku", "charters": {"swe": "bb"}, **suite}
+        self.assertNotIn("arm", data)
+        fx.write_json(self.root, "evals/results/charter-2026-09-28.json",
+                      data)
+        self.assertEqual(self.load()[1], [])
+        (row,) = self.rows_of("charter")
+        self.assertEqual(row["suite"], ("replay", "haiku", (("swe", "bb"),)))
+        self.assertEqual((row["n"], row["hits"]), (2, 1))
+
     def test_a_missing_field_is_a_problem(self):
         data = fx.charter_record("2026-09-28", [("x", "swe", "sensitive")])
-        del data["arm"]
+        del data["charters"]
         fx.write_json(self.root, "evals/results/charter-2026-09-28.json",
                       data)
         self.assertEqual(self.load(), ([], [
             "eval-trends: evals/results/charter-2026-09-28.json missing "
-            "field arm"]))
+            "field charters"]))
+
+    def test_a_control_record_without_verdicts_is_a_problem(self):
+        data = fx.charter_record("2026-09-28", [("x", "swe", "sensitive")])
+        del data["results"][0]["verdict"]
+        fx.write_json(self.root, "evals/results/charter-2026-09-28.json",
+                      data)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/charter-2026-09-28.json malformed "
+            "field results"]))
 
 
 class TestLoadOutput(TempRoot):

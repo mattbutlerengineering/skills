@@ -142,6 +142,13 @@ class TestSlop(unittest.TestCase):
     def test_an_unclosed_fence_skips_to_the_end(self):
         self.assertEqual(vg.slop("Text.\n```\nIn summary\n"), [])
 
+    def test_inline_triple_backtick_code_does_not_open_a_fence(self):
+        # #1947: a backtick in the info string is not a CommonMark fence
+        text = "```npm ci``` is the fix.\nHope this helps, let me know if it fails."
+        self.assertEqual(vg.slop(text),
+                         [("closing-offer", "Hope this helps"),
+                          ("closing-offer", "let me know if")])
+
     def test_the_text_after_a_closed_fence_is_graded(self):
         text = "```\ncode\n```\nYou are asking for a reset."
         self.assertEqual(vg.slop(text),

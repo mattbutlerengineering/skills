@@ -325,6 +325,15 @@ class TestFixtureRefs(unittest.TestCase):
         self.assertEqual(eval_schema.fixture_refs(data),
                          [(1, "evals/fixtures/f"), (2, "evals/g")])
 
+    def test_a_non_string_fixture_is_missing_and_never_a_ref(self):
+        # #1945: a list run_fixture crashed the lint's root / ref
+        bad = valid_output_record(run_fixture=["a"])
+        self.assertEqual(eval_schema.fixture_refs({"evals": [bad]}), [])
+        self.assertEqual(
+            eval_schema.validate_output({"skill_name": "s", "evals": [bad]},
+                                        "s", "L"),
+            ["L eval 1 missing field: run_fixture"])
+
     def test_records_without_a_fixture_are_skipped(self):
         # absent and empty both mean "no fixture to check" — matching
         # _output_field_missing, where validate_output owns the complaint
