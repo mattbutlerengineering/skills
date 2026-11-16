@@ -2323,6 +2323,27 @@ class TestPrBodyProblems(unittest.TestCase):
     NO_WO = "B: PR body cites no work-order id"
     NO_CLOSES = "B: PR body has no Closes #N link"
 
+    def test_an_html_comment_never_satisfies_the_waiver(self):
+        # Issue #1907: the template's own comment text counted as the
+        # author's `No work order:` declaration.
+        body = "<!-- a `No work order:` line with a reason -->\nCloses #12\n"
+        self.assertEqual(gates.pr_body_problems(body),
+                         ["B: PR body cites no work-order id"])
+        multi = "<!--\nWO-0001\nCloses #9\n-->\nCloses #12\n"
+        self.assertEqual(gates.pr_body_problems(multi),
+                         ["B: PR body cites no work-order id"])
+
+    def test_the_unfilled_template_with_only_closes_filled_still_fails(self):
+        template = (Path(__file__).resolve().parents[1]
+                    / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(
+                        encoding="utf-8")
+        self.assertEqual(gates.pr_body_problems(template), [
+            "B: PR body cites no work-order id",
+            "B: PR body has no Closes #N link"])
+        filled = template.replace("Closes #\n", "Closes #12\n")
+        self.assertEqual(gates.pr_body_problems(filled),
+                         ["B: PR body cites no work-order id"])
+
     def test_work_order_token_and_closes_line_pass(self):
         self.assertEqual(
             gates.pr_body_problems("WO-0003 per breakdown\n\nCloses #108"),
