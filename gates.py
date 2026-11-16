@@ -100,7 +100,7 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
                              local_link_targets, parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
                              work_orders)
-from protocol import frontmatter_end, parse_frontmatter, read_frontmatter
+from protocol import frontmatter_end, parse_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -1771,13 +1771,19 @@ def check_capture_completeness(root):
     problems = []
     for run in run_dirs(root):
         defect = run / "defect.md"
-        if not defect.is_file():
+        rel = defect.relative_to(root)
+        # Guarded read (ADR-0075): a non-UTF-8 defect.md is this
+        # detector's finding, not a crash that loses every other
+        # detector's output (issue #1879).
+        text, problem = read_file(defect, rel.as_posix(), str)
+        if problem:
+            problems.append(f"M: {problem}")
             continue
-        frontmatter = read_frontmatter(defect) or {}
+        if text is None:
+            continue
+        frontmatter = parse_frontmatter(text) or {}
         if _grandfathered(frontmatter.get("date"), CAPTURE_ADOPTED):
             continue
-        rel = defect.relative_to(root)
-        text = defect.read_text(encoding="utf-8")
         problems.extend(f"M: {rel} {suffix}"
                         for suffix in capture_completeness_problems(text))
     return problems

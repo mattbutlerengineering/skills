@@ -174,6 +174,21 @@ class TestRunDirs(unittest.TestCase):
                 [root / "docs", root / "docs/features/a",
                  root / "docs/features/b", root / "docs/fixes/z"])
 
+    def test_a_non_utf8_breakdown_is_skipped_and_reported(self):
+        # Issue #1879: a bare read_text raised UnicodeDecodeError into
+        # the dashboard, sweeps and decompose_signals.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs/features/x").mkdir(parents=True)
+            (root / "docs/features/x/breakdown.md").write_bytes(
+                b"- [ ] **S1** caf\xe9\n")
+            problems = []
+            self.assertEqual(list(breakdown_files(root, problems)), [])
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "cannot read docs/features/x/breakdown.md:"), problems)
+            self.assertEqual(list(breakdown_files(root)), [])
+
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])

@@ -472,8 +472,13 @@ def active_runs(root):
     return found
 
 
-def breakdown_files(root):
+def breakdown_files(root, problems=None):
     """(breakdown path, its lines) per run that has a breakdown.md.
+
+    The read is guarded (ADR-0075, issue #1879): a breakdown.md that
+    cannot be read (non-UTF-8 bytes) is skipped rather than raised, and
+    its unlabelled `cannot read <path>: <err>` problem is appended to
+    PROBLEMS when the caller passes a list.
 
     The layout walk in one place: every dispatch-plane reader of
     work-order rows — the assembler, the validator and gates'
@@ -483,9 +488,13 @@ def breakdown_files(root):
     """
     for run in run_dirs(root):
         breakdown = run / "breakdown.md"
-        if breakdown.is_file():
-            yield breakdown, breakdown.read_text(
-                encoding="utf-8").splitlines()
+        text, problem = read_file(
+            breakdown, breakdown.relative_to(root).as_posix(), str)
+        if problem:
+            if problems is not None:
+                problems.append(problem)
+        elif text is not None:
+            yield breakdown, text.splitlines()
 
 
 def work_orders(root, files=None):

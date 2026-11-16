@@ -1131,6 +1131,22 @@ class TestCaptureCompleteness(unittest.TestCase):
             self.assertTrue(problems)
 
 
+class TestCaptureCompletenessUnreadable(unittest.TestCase):
+    def test_a_non_utf8_defect_is_an_m_problem_not_a_crash(self):
+        # Issue #1879: one Latin-1 byte raised out of run_all.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fix = root / "docs/fixes/x"
+            fix.mkdir(parents=True)
+            (fix / "defect.md").write_bytes(
+                b"---\ndate: 2026-11-01\n---\n# caf\xe9\n")
+            problems = gates.check_capture_completeness(root)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "M: cannot read docs/fixes/x/defect.md:"), problems)
+            gates.run_all(root, env={})  # no raise
+
+
 class TestOneFrontmatterAnswer(unittest.TestCase):
     """Where frontmatter ends has one owner, protocol.frontmatter_end
     (ADR-0118), so gates' section walk and its date read cannot disagree
