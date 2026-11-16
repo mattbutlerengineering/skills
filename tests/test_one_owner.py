@@ -224,6 +224,14 @@ class TestSameValue(unittest.TestCase):
                 self.assertEqual(problems, [])
                 self.assertEqual(groups(found), [])
 
+    def test_a_signed_numeric_literal_is_a_knob_like_its_unsigned_twin(self):
+        for literal in ("-1", "+1", "-0.5"):
+            with self.subTest(literal=literal):
+                found, problems = sites_of(sweeps=f"OFFSET = {literal}\n",
+                                           work_queue=f"SHIFT = {literal}\n")
+                self.assertEqual(problems, [])
+                self.assertEqual(groups(found), [])
+
     def test_a_shared_string_or_call_is_a_fact(self):
         """The other side of the same floor — a bare string IS a stated
         fact (`CONTINUE`, `wo:ready-for-agent`), and drops nothing."""

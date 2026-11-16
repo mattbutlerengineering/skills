@@ -19,7 +19,7 @@ renders verbatim (ADR-0062).
 | Lane rows | height 56; first band y=112..168; glyph center = band top + 24; slug baseline = top + 28; kind baseline = top + 42; hairline rule at each band bottom |
 | Attention strip | only when `attention` is non-empty: heading 24 below last rule, one mono row per entry at 18 spacing, closing hairline |
 | Legend | single row, 22 above the bottom edge |
-| Height | `112 + 56·runs + (attention ? 24 + 18·entries + 14 : 0) + 56`, rounded up to the 8px grid; adjust `viewBox` and the ground rect together |
+| Height | `112 + 56·runs + (attention ? 24 + 18·entries + 14 : 0) + 56`, rounded up to the 8px grid; adjust root `width`/`height`, `viewBox` and the ground rect together |
 
 ## Maintenance column mapping
 

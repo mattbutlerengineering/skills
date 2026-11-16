@@ -123,9 +123,13 @@ def _stated_value(node):
     without either owning anything. A knob has no principled length, so
     a length threshold would be a number nobody could ever argue about.
     """
-    if isinstance(node, ast.Constant) and (
-            node.value is None or isinstance(node.value, (bool, int, float,
-                                                          complex))):
+    literal = node
+    if isinstance(node, ast.UnaryOp) and isinstance(node.op,
+                                                    (ast.USub, ast.UAdd)):
+        literal = node.operand  # -1 is a knob exactly as 1 is
+    if isinstance(literal, ast.Constant) and (
+            literal.value is None or isinstance(literal.value,
+                                                (bool, int, float, complex))):
         return None
     return ast.unparse(node)
 

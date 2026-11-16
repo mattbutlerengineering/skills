@@ -260,6 +260,12 @@ class TestCalibrate(unittest.TestCase):
             "step_weights: no run of ship to scale its weight from",
             "step_weights: n=0 for build, below the floor of 1"])
 
+    def test_the_budget_is_never_below_the_dearest_item_it_came_from(self):
+        rows = [{"batch": "b1", "item": "#1", "size": "M", "cost_usd": 3.004}]
+        card = cal._budgets(rows, 1)
+        self.assertEqual(card["M"]["max_usd"], 3.0)
+        self.assertEqual(card["M"]["budget_usd"], 4)
+
     def test_steps_spending_their_ceilings_suggest_the_weights_in_force(self):
         card = cal.calibrate(actuals_of(CEILINGS), WEIGHTS)
         self.assertEqual(card["step_weights"], WEIGHTS)

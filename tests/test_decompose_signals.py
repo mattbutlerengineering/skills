@@ -138,6 +138,13 @@ class TestObservedDecompose(HistoryCase):
         self.assertEqual(self.bounds()["decompose"],
                          {"sha": sha, "label": "observed"})
 
+    def test_a_non_ascii_run_directory_is_measured_not_quoted(self):
+        run = "docs/features/café"
+        sha = self.repo.commit("docs(cafe): decompose — plan",
+                               **{at(f"{run}/breakdown.md"): PLAN})
+        self.assertEqual(self.bounds(run)["decompose"],
+                         {"sha": sha, "label": "observed"})
+
     def test_a_decompose_commit_for_another_run_is_not_observed_here(self):
         first = self.repo.commit("feat: draft the plan", **{BD: PLAN})
         self.repo.commit("docs(x): decompose the other run",
