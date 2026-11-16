@@ -113,10 +113,12 @@ def read_frontmatter(path):
     return parse_frontmatter(path.read_text(encoding="utf-8"))
 
 
-def parse_frontmatter(text):
+def parse_frontmatter(text, raw=False):
     """read_frontmatter's parse of text a caller already read (ADR-0094:
     parse_run reads prd.md once, guarded, and parses its frontmatter
-    from that text)."""
+    from that text). A plain scalar loses one matching pair of
+    surrounding quotes (#1954) unless `raw`, which the skill-description
+    check needs: a quoted description is the defect it reports."""
     lines = text.splitlines()
     end = frontmatter_end(lines)
     if end is None:
@@ -145,7 +147,7 @@ def parse_frontmatter(text):
         if value == "|":
             block_lines = []
         else:
-            fields[key] = value
+            fields[key] = value if raw else _unquote(value)
             if value == "":
                 nested_lines = []
     if key is not None and block_lines is not None:
@@ -153,6 +155,14 @@ def parse_frontmatter(text):
     if key is not None and nested_lines is not None:
         fields[key] = _nested_map(nested_lines)
     return fields
+
+
+def _unquote(value):
+    """VALUE without one matching pair of surrounding quotes
+    (`"not-applicable"` is not-applicable); anything else as it was."""
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in "\"'":
+        return value[1:-1].strip()
+    return value
 
 
 def _nested_map(lines):
@@ -222,7 +232,7 @@ def skill_frontmatter_problems(root, slug):
     label = f"skills/{slug}/SKILL.md"
     if not path.is_file():
         return [f"missing {label}"]
-    fields = read_frontmatter(path)
+    fields = parse_frontmatter(path.read_text(encoding="utf-8"), raw=True)
     if fields is None:
         return [f"{label} has no frontmatter block"]
     description = fields.get("description")

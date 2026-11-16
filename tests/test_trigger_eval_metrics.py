@@ -147,6 +147,12 @@ class TestMetricsCli(unittest.TestCase):
             "kind: near-miss (3 case(s))",
             "micro recall: 1/6 = 0.167"])
 
+    def test_a_mistyped_kind_is_refused_before_anything_is_read(self):
+        # #1950: argparse exits 2 on a kind outside eval_schema.KINDS
+        with self.assertRaises(SystemExit) as ctx:
+            self.run_main(["--metrics", "x.json", "--kind", "nearmiss"])
+        self.assertEqual(ctx.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()

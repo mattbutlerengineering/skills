@@ -661,6 +661,12 @@ class TestResolveLink(unittest.TestCase):
         self.assertEqual(resolve_link(Path("/r"), Path("/r/docs/a.md"),
                                       "/src/x.py"), Path("/r/src/x.py"))
 
+    def test_percent_encoding_is_decoded(self):
+        # Issue #1952: `my%20notes.md` names the file `my notes.md`.
+        self.assertEqual(resolve_link(Path("/r"), Path("/r/docs/a.md"),
+                                      "my%20notes.md#top"),
+                         Path("/r/docs/my notes.md"))
+
     def test_fragment_and_query_are_not_part_of_the_path(self):
         for target in ("b.md#top", "b.md?v=1", "b.md?v=1#top"):
             with self.subTest(target=target):

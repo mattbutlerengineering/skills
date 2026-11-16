@@ -246,6 +246,8 @@ def _output_field_missing(record, field):
     # are values, mirroring validate()'s is-None handling
     if field == "expectations":
         return not record.get(field)
+    if field == "run_fixture":
+        return not (isinstance(record.get(field), str) and record[field])
     return record.get(field) is None
 
 
@@ -264,7 +266,8 @@ def fixture_refs(data):
     if not isinstance(evals, list):
         return []
     return [(e.get("id"), e["run_fixture"]) for e in evals
-            if isinstance(e, dict) and e.get("run_fixture")]
+            if isinstance(e, dict) and isinstance(e.get("run_fixture"), str)
+            and e["run_fixture"]]
 
 
 def validate_output(data, slug, label):

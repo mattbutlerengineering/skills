@@ -224,6 +224,10 @@ def check_storyboard(storyboard, copy_text, recorder):
     for field in STORYBOARD_FIELDS:
         if field not in storyboard:
             problems.append(f"{label} has no {field}")
+        elif field in ("title", "tagline"):
+            if not _is_text(storyboard[field]):
+                problems.append(f"{label} {field} must be a non-empty"
+                                " string")
         elif field in ("intro", "outro"):
             if not _in_copy(storyboard[field], copy):
                 problems.append(f"{label} {field} is not a sentence of"
