@@ -207,6 +207,17 @@ class TestSelect(Tree):
         self.assertEqual(kb_harvest.select(
             [self.dir], days=None, session="abc", now=self.now), [wanted])
 
+    def test_session_is_found_in_a_worktree_dir(self):
+        # Issue #1995: --session only looked in the first dir.
+        wt = self.projects / (self.slug + "--claude-worktrees-feat")
+        wanted = self.save(Session("s-wt"), where=wt)
+        self.assertEqual(kb_harvest.select(
+            [self.dir, wt], days=None, session="s-wt", now=self.now),
+            [wanted])
+        result, problems = self.harvest(session="s-wt")
+        self.assertEqual(problems, [])
+        self.assertEqual(result["scanned"]["transcripts"], 1)
+
     def test_unknown_session_is_a_problem(self):
         self.save(Session("new"))
         result, problems = self.harvest(session="nope")
@@ -288,6 +299,17 @@ class TestMine(Tree):
                 " tool use.", error=True))
         result, _ = self.harvest(days=7)
         self.assertEqual(result["recurring_errors"], [])
+
+    def test_classifier_denials_are_not_errors(self):
+        # Issue #1989.
+        denied = ("Permission for this action was denied by the Claude Code"
+                  " auto mode classifier.")
+        for sid in ("s1", "s2"):
+            self.save(Session(sid).bash("rm -rf x", denied, error=True)
+                      .bash("rm -rf x", "ok"))
+        result, _ = self.harvest(days=7)
+        self.assertEqual(result["recurring_errors"], [])
+        self.assertEqual(result["arcs"], [])
 
     def test_malformed_lines_are_counted_not_fatal(self):
         path = self.save(Session().bash("ls", "a"))
@@ -377,6 +399,34 @@ class TestHumanTurns(Tree):
             "agent": "AskUserQuestion: Which branch?",
             "session": "s1", "at": talk.at(2)}])
 
+    def test_the_question_tool_human_text_is_the_answer(self):
+        # Issue #1990: the clipped wrapper hid the answer.
+        question = "Which branch should the release be cut from? " * 4
+        talk = (Talk().human("ship it")
+                .tool("AskUserQuestion", {"questions": [{"question": "Q"}]},
+                      f'Your questions have been answered: "{question}"='
+                      '"release/2.x". You can now continue.'))
+        turn, = self.turns(talk)
+        self.assertEqual(turn["human"], 'release/2.x". You can now continue.')
+
+    def test_compaction_summaries_are_not_answers(self):
+        # Issue #1988.
+        summary = "This session is being continued from a previous " \
+                  "conversation that ran out of context."
+        talk = (Talk().human("go").say("Shall I continue?")
+                .human(summary, isCompactSummary=True))
+        self.assertEqual(self.turns(talk), [])
+        talk = Talk().human("go").say("Shall I continue?")
+        talk.lines.append(json.dumps({
+            "type": "system", "subtype": "compact_boundary",
+            "sessionId": "s1"}))
+        talk.human(summary)
+        self.assertEqual(self.turns(talk), [])
+        talk = (Talk().human("go").say("Shall I continue?")
+                .human("<command-name>/compact</command-name>")
+                .human("Keep the old flag."))
+        self.assertEqual(self.turns(talk), [])
+
     def test_a_question_tool_error_is_no_answer(self):
         talk = (Talk().human("ship it")
                 .tool("AskUserQuestion",
@@ -463,6 +513,15 @@ class TestHumanTurns(Tree):
         self.assertEqual(result["recurring_errors"], [])
         self.assertEqual([a["check"] for a in result["arcs"]],
                          ["make check"])
+
+    def test_an_extra_positional_is_usage(self):
+        # Issue #1994: the second path silently replaced the root.
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = kb.main(["harvest", "a", "b", "--projects-dir",
+                            str(self.projects)])
+        self.assertEqual((code, out.getvalue()),
+                         (2, kb_harvest.USAGE + "\n"))
 
     def test_main_prints_the_key(self):
         self.save(Talk().human("go").say("Keep it?").human("Drop it."))

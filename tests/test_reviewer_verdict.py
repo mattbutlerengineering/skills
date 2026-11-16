@@ -6,6 +6,7 @@ unusable gives an `error` problem string. `main` is the queue profile's
 `verdict` hook: one line, exit 0 pass, 1 flag, 2 error.
 """
 import io
+from decimal import Decimal
 import sys
 import unittest
 from contextlib import redirect_stdout
@@ -31,7 +32,19 @@ class DeriveTest(unittest.TestCase):
             with self.subTest(score=score):
                 self.assertEqual(reviewer_verdict.derive(score)[0], "error")
         self.assertEqual(reviewer_verdict.derive("6.99999999999999999"),
-                         ("flag", 7.0))
+                         ("flag", Decimal("6.99999999999999999")))
+
+    def test_range_and_printed_score_use_the_exact_decimal(self):
+        # Issue #1993: the float rounded both; \d took Unicode digits.
+        self.assertEqual(run(["6.99999999999999999"]),
+                         (1, "reviewer-verdict: flag"
+                             " (score 6.99999999999999999/10)\n"))
+        self.assertEqual(run(["10.00000000000000001"]),
+                         (2, "reviewer-verdict: error (score outside 0 to"
+                             " 10 ('10.00000000000000001'))\n"))
+        self.assertEqual(run(["\u0667"]),
+                         (2, "reviewer-verdict: error (score is not a"
+                             " number ('\u0667'))\n"))
 
     def test_whole_scores(self):
         for score in range(0, 11):

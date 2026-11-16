@@ -916,7 +916,8 @@ def mirror_problems(root, expected):
         elif actual[rel] != digest:
             problems.append(
                 f"E: factory/{rel} does not match its manifest checksum"
-                " (re-run manifest update, never hand-edit)")
+                " (re-run `python3 factory_init.py update-manifest` in the"
+                " skills repo, never hand-edit)")
     return problems + [f"E: factory/{rel} is not in the manifest"
                        for rel in sorted(actual) if rel not in expected]
 
@@ -1643,8 +1644,8 @@ def check_standards_drift(root, parsed=None):
     if committed_adr != fresh_fingerprint:
         problems.append(
             f"K: {standards_index.STANDARDS_PATH} has drifted from a"
-            " fresh ADR regeneration (run"
-            " `python3 standards_index.py update`)")
+            " fresh ADR regeneration (run `python3 standards_index.py"
+            " update`, the script beside gates.py)")
 
     records = {record["number"]: record for record in
                (adr_record(path, lines)

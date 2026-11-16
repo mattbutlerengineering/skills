@@ -433,6 +433,29 @@ def payload_copies(source, target, tools_only=False):
     return (copies, []) if not escapes else ([], escapes)
 
 
+_ADR_NUMBER = re.compile(r"^(\d{4})-.*\.md$")
+
+
+def numbered_adr_skips(copies, target):
+    """{dest: the target's ADR holding its number} for each copy that is a
+    seed ADR (docs/adr/NNNN-*.md) the target lacks while a DIFFERENT ADR
+    of that number already stands there (#1998). Landing it would put two
+    ADRs under one number (gates C) and an unindexed one (gates D), so
+    stamp and update skip it; main reports each."""
+    held = {}
+    adr_dir = target / "docs" / "adr"
+    for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
+        held.setdefault(path.name[:4], path.name)
+    skips = {}
+    for _, dest in copies:
+        match = (_ADR_NUMBER.match(dest.name)
+                 if dest.parent.as_posix() == "docs/adr" else None)
+        holder = held.get(match.group(1)) if match else None
+        if holder and holder != dest.name and not (target / dest).exists():
+            skips[dest] = holder
+    return skips
+
+
 def _stamp(source, target, keepable, tools_only=False):
     """(kept, problems): stamp every copy whose destination is absent.
     An existing destination is kept when keepable(dest) says so and is a
@@ -441,6 +464,8 @@ def _stamp(source, target, keepable, tools_only=False):
     copies, problems = payload_copies(source, target, tools_only)
     if problems:
         return [], problems
+    skips = numbered_adr_skips(copies, target)
+    copies = [(src, dest) for src, dest in copies if dest not in skips]
     existing = [dest for _, dest in copies if (target / dest).exists()]
     clashes = [f"factory-init: target already has {dest.as_posix()}"
                for dest in existing if not keepable(dest)]
@@ -672,8 +697,11 @@ def update(source, target, tools_only=False):
         return [], [], problems
     for rel in retired_files(source, target):
         (target / rel).unlink()
+    skips = numbered_adr_skips(copies, target)
     written, kept = [], []
     for src, dest in copies:
+        if dest in skips:
+            continue
         path = target / dest
         if path.exists() and not is_factory_owned(dest):
             if path.read_bytes() != payload_bytes(src):
@@ -698,9 +726,25 @@ def _target(argv, command):
     return Path(rest[0]), tools_only
 
 
+def _report_adr_skips(source, target):
+    """Say which seed ADRs stamp/update will not land because the target's
+    own ADR holds the number (numbered_adr_skips)."""
+    copies, problems = payload_copies(source, target)
+    if problems:
+        return
+    for dest, holder in sorted(numbered_adr_skips(copies, target).items()):
+        print(f"factory-init: skipped {dest.as_posix()} (its number is"
+              f" already {holder} in this repo)")
+
+
 def main(argv):
     root = Path(__file__).resolve().parent
     stamping, updating = _target(argv, "stamp"), _target(argv, "update")
+    keeping = (Path(argv[2]) if argv[:2] == ["stamp", "--keep-existing"]
+               and len(argv) == 3 else None)
+    tgt = keeping or (stamping or updating or (None,))[0]
+    if tgt is not None:
+        _report_adr_skips(root, tgt)
     if argv == ["update-manifest"]:
         problems = update_manifest(root)
     elif stamping:

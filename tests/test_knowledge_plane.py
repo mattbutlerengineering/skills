@@ -88,6 +88,18 @@ class TestParseRow(unittest.TestCase):
         self.assertEqual(parse_row(line)["blockers"], [])
         self.assertIsNone(parse_row("- [ ] anonymous work")["wo"])
 
+    def test_blocked_by_reads_case_insensitively_and_from_sub_bullets(self):
+        # #1997
+        self.assertEqual(parse_row(
+            "- [ ] **WO-0002** polish — size:M, Blocked by: WO-0001")
+            ["blockers"], ["WO-0001"])
+        rows = breakdown_rows(["- [ ] **WO-0002** polish — size:M",
+                               "  - Accept: ok, mentions WO-0005",
+                               "  - Blocked by: WO-0001, WO-0003",
+                               "- [ ] **WO-0004** next"])
+        self.assertEqual(rows[0]["blockers"], ["WO-0001", "WO-0003"])
+        self.assertEqual(rows[1]["blockers"], [])
+
     def test_unreadable_blockers_are_named_not_dropped(self):
         def row(clause):
             return parse_row(f"- [ ] **WO-0002** t — size:S, blocked by:"

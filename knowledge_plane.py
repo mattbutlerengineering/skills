@@ -296,7 +296,11 @@ def row_pre_ledger(line):
 # as part of them.
 DONE_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
 SIZE = re.compile(r"\bsize:\s*([SML])\b")
-BLOCKED_BY = re.compile(r"\bblocked by:\s*([^(]*)")
+BLOCKED_BY = re.compile(r"\bblocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
+# The same edge written as the decompose template writes it: a sub-bullet
+# under the row (`  - Blocked by: WO-0001`).
+BLOCKED_BY_BULLET = re.compile(
+    r"(?m)^\s*[-*+]\s+blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
 
 
 def row_size(line):
@@ -331,6 +335,17 @@ def row_title(line):
     return title or None
 
 
+def _blocked_clauses(text):
+    """Every `blocked by:` clause a row declares: the inline one on the
+    row's own line, and any sub-bullet clause in the block under it
+    (`text` is the row line, or the row's block — _row_block). Matched
+    case-insensitively, because the template writes `Blocked by:`."""
+    first, _, rest = text.partition("\n")
+    clauses = [m.group(1) for m in BLOCKED_BY.finditer(first)][:1]
+    clauses += [m.group(1) for m in BLOCKED_BY_BULLET.finditer(rest)]
+    return clauses
+
+
 def row_blockers(line):
     """The work orders this row declares it is blocked by.
 
@@ -341,8 +356,8 @@ def row_blockers(line):
     """
     if not ROW.match(line):
         return []
-    match = BLOCKED_BY.search(line)
-    return WO_TOKEN.findall(match.group(1)) if match else []
+    return [wo for clause in _blocked_clauses(line)
+            for wo in WO_TOKEN.findall(clause)]
 
 
 # What a blocked-by clause may hold besides WO tokens: separators, and a
@@ -363,14 +378,15 @@ def row_unreadable_blockers(line):
     """
     if not ROW.match(line):
         return None
-    match = BLOCKED_BY.search(line)
-    if not match:
-        return None
-    rest = WO_TOKEN.sub(" ", match.group(1)).strip()
-    if rest in _NOTHING:
-        return None
-    residue = " ".join(_BLOCKER_SEPARATORS.sub(" ", rest).split())
-    return residue or None
+    residues = []
+    for clause in _blocked_clauses(line):
+        rest = WO_TOKEN.sub(" ", clause).strip()
+        if rest in _NOTHING:
+            continue
+        residue = " ".join(_BLOCKER_SEPARATORS.sub(" ", rest).split())
+        if residue:
+            residues.append(residue)
+    return "; ".join(residues) or None
 
 
 def row_done(line):
@@ -433,10 +449,18 @@ def breakdown_rows(lines):
     its 1-based `lineno` and its `block` (_row_block) — the walk A, C,
     G, O and the dispatch-plane tools share instead of each re-reading
     every line."""
-    return [{**row, "lineno": index + 1, "block": _row_block(lines, index)}
-            for index, row in ((n, parse_row(line))
-                               for n, line in enumerate(lines))
-            if row is not None]
+    out = []
+    for index, line in enumerate(lines):
+        row = parse_row(line)
+        if row is None:
+            continue
+        block = _row_block(lines, index)
+        # A dependency may sit in the row's sub-bullets (the decompose
+        # template's form), so blockers are read from the whole block.
+        out.append({**row, "lineno": index + 1, "block": block,
+                    "blockers": row_blockers(block),
+                    "unreadable": row_unreadable_blockers(block)})
+    return out
 
 
 def run_dirs(root):

@@ -122,7 +122,8 @@ TOOLS_ONLY_RELS = {rel for rel in EXPECTED_RELS
 
 TAMPER_PROBLEM = (
     "E: factory/templates/Makefile does not match its manifest checksum"
-    " (re-run manifest update, never hand-edit)")
+    " (re-run `python3 factory_init.py update-manifest` in the skills"
+    " repo, never hand-edit)")
 
 
 def make_factory_repo(root):
@@ -969,6 +970,32 @@ class TestUpdate(unittest.TestCase):
             self.assertIn("docs/adr/0001-seed.md", written)
             self.assertEqual(kept, [])
             self.assertTrue((target / "docs/adr/0001-seed.md").is_file())
+
+    def test_a_seed_adr_whose_number_another_adr_holds_is_not_landed(self):
+        # #1998: stamp and update both skip it; every other file refreshes.
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            adr = source / "factory/templates/docs/adr"
+            adr.mkdir(parents=True)
+            (adr / "0001-seed.md").write_text("seed\n", encoding="utf-8")
+            (adr / "0002-other-seed.md").write_text("seed2\n",
+                                                    encoding="utf-8")
+            self.assertEqual(factory_init.update_manifest(source), [])
+            (target / "docs/adr").mkdir(parents=True)
+            (target / "docs/adr/0001-use-postgres.md").write_text(
+                "mine\n", encoding="utf-8")
+            written, _, _ = factory_init.update(source, target)
+            self.assertNotIn("docs/adr/0001-seed.md", written)
+            self.assertFalse((target / "docs/adr/0001-seed.md").exists())
+            self.assertIn("docs/adr/0002-other-seed.md", written)
+            fresh = Path(tmp) / "fresh"
+            fresh.mkdir()
+            (fresh / "docs/adr").mkdir(parents=True)
+            (fresh / "docs/adr/0001-use-postgres.md").write_text(
+                "mine\n", encoding="utf-8")
+            self.assertEqual(factory_init.stamp(source, fresh), [])
+            self.assertFalse((fresh / "docs/adr/0001-seed.md").exists())
+            self.assertTrue((fresh / "docs/adr/0002-other-seed.md").is_file())
 
     def test_a_never_stamped_tree_is_refused(self):
         with tempfile.TemporaryDirectory() as tmp:

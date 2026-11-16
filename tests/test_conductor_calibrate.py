@@ -281,6 +281,14 @@ class TestCalibrate(unittest.TestCase):
         self.assertEqual(card["sizes"], {"M": {
             "n": 5, "mean_usd": 15.0, "max_usd": 15.0, "budget_usd": 15}})
 
+    def test_a_step_far_under_its_ceiling_never_suggests_a_zero_weight(self):
+        # #1991: factory.json rejects 0.0; the floor is one place's step.
+        costs = {**CEILINGS, "verify": 0.04, "ship": 0.04}
+        card = cal.calibrate(actuals_of(costs), WEIGHTS)
+        self.assertEqual(card["step_weights"]["verify"], 0.1)
+        self.assertEqual(card["step_weights"]["ship"], 0.1)
+        self.assertEqual(card["refused"], [])
+
     def test_a_build_sample_is_one_breakdown_rows_run(self):
         card = cal.calibrate(actuals_of(CEILINGS, build_rows=5), WEIGHTS)
         self.assertEqual(card["steps"]["build"], {

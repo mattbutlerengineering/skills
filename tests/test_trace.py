@@ -157,6 +157,13 @@ class TestRunReport(Repo):
         self.assertEqual(out, "trace: --since takes YYYY-MM-DD, not"
                               " 'last week'\ntrace: 1 problem(s)\n")
 
+    def test_an_impossible_since_date_is_a_problem_string(self):
+        for bad in ("2026-13-01", "2026-02-30"):
+            code, out = self.trace("feature:demo", "--since", bad)
+            self.assertEqual(code, 1)
+            self.assertEqual(out, "trace: --since takes YYYY-MM-DD, not"
+                                  f" {bad!r}\ntrace: 1 problem(s)\n")
+
     def test_the_budget_caps_the_report_in_bytes(self):
         code, out = self.trace("feature:demo", "--budget", "200")
         self.assertEqual(code, 0)

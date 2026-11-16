@@ -314,6 +314,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git worktree add "$RUNNER_TEMP/spend" refs/remotes/origin/main
+          mkdir -p "$RUNNER_TEMP/spend/docs/factory"
           tail -n 1 docs/factory/costs.jsonl >> "$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
           git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
           git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"
