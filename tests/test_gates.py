@@ -162,6 +162,33 @@ class TestLinkIntegrity(unittest.TestCase):
             "C: duplicate PRD id PRD-0001 in"
             " docs/features/demo/prd.md, docs/features/other/prd.md"])
 
+    def test_a_dangling_wo_token_inside_a_breakdown_is_flagged(self):
+        # Issue #1899: C skipped every WO token inside breakdown.md, so
+        # `blocked by: WO-0099` naming no row passed and the row was
+        # deferred forever by work_queue.eligible.
+        rows = ["- [ ] **WO-0001** first \u2014 size: S, blocked by: WO-0099"
+                " (PRD-0001 \u00a7S)",
+                "  - also waits on WO-0042"]
+        parsed = self.base_parsed(scannable=[
+            (self.ROOT / "docs/features/demo/breakdown.md", rows)])
+        parsed["runs"][0]["breakdown"] = rows
+        self.assertEqual(gates.check_link_integrity(self.ROOT, parsed), [
+            "C: docs/features/demo/breakdown.md:1 dangling WO-0099"
+            " (no breakdown row)",
+            "C: docs/features/demo/breakdown.md:2 dangling WO-0042"
+            " (no breakdown row)"])
+
+    def test_two_adr_files_sharing_a_number_are_flagged(self):
+        # Issue #1901: C and D collapse ADR files by number, so a merge
+        # collision resolved to either decision silently.
+        parsed = self.base_parsed()
+        parsed["adr_files"] = [
+            (self.ROOT / "docs/adr/0042-use-postgres.md", ["# Postgres"]),
+            (self.ROOT / "docs/adr/0042-use-sqlite.md", ["# SQLite"])]
+        self.assertEqual(gates.check_link_integrity(self.ROOT, parsed), [
+            "C: duplicate ADR number ADR-0042 in"
+            " docs/adr/0042-use-postgres.md, docs/adr/0042-use-sqlite.md"])
+
     def test_dangling_token_outside_docs_is_now_flagged(self):
         # Issue #456: _scannable_files used to be docs/**/*.md + CONTEXT.md
         # only, so a dangling ADR token in .github/, factory/, skills/ or a

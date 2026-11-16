@@ -472,12 +472,19 @@ def check_link_integrity(root, parsed=None):
         (entry["path"] / "breakdown.md", entry["breakdown"])
         for entry in parsed["runs"] if entry["breakdown"] is not None])
     problems.extend(f"C: {duplicate}" for duplicate in duplicates)
-    adr_numbers = {adr_record(path, lines)["number"]
-                   for path, lines in parsed["adr_files"]}
+    adr_by_number = {}
+    for path, lines in parsed["adr_files"]:
+        adr_by_number.setdefault(
+            adr_record(path, lines)["number"], []).append(path)
+    for number, paths in sorted(adr_by_number.items()):
+        if len(paths) > 1:
+            listed = ", ".join(str(p.relative_to(root)) for p in paths)
+            problems.append(
+                f"C: duplicate ADR number ADR-{number} in {listed}")
+    adr_numbers = set(adr_by_number)
     wo_rows = collect_wo_rows(parsed)
     for path, lines in parsed["scannable"]:
         rel = path.relative_to(root)
-        in_breakdown = path.name == "breakdown.md"
         for lineno, line in enumerate(lines, 1):
             for token in PRD_TOKEN.findall(line):
                 if token not in prd_ids:
@@ -489,12 +496,11 @@ def check_link_integrity(root, parsed=None):
                     problems.append(
                         f"C: {rel}:{lineno} dangling ADR-{number}"
                         " (no docs/adr file)")
-            if not in_breakdown:
-                for token in WO_TOKEN.findall(line):
-                    if token not in wo_rows:
-                        problems.append(
-                            f"C: {rel}:{lineno} dangling {token}"
-                            " (no breakdown row)")
+            for token in WO_TOKEN.findall(line):
+                if token not in wo_rows:
+                    problems.append(
+                        f"C: {rel}:{lineno} dangling {token}"
+                        " (no breakdown row)")
     return problems
 
 
