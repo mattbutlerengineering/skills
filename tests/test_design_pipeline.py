@@ -164,6 +164,7 @@ class TestWebQualityTarget(unittest.TestCase):
         for path in (self.ROOT_MAKEFILE, self.TEMPLATE_MAKEFILE):
             recipe = " ".join(self.recipe(path))
             self.assertIn("npm ci", recipe)
+            self.assertIn("elif [ -f package.json ]; then npm install", recipe)
             self.assertLess(recipe.index("npm ci"), recipe.index("npx"))
 
     def test_a_failed_browser_install_stops_the_test_step(self):
