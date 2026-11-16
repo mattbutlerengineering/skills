@@ -646,7 +646,13 @@ def _closing_answer(rows, batch):
               if row["kind"] == "close"]
     if not closed:
         return [f"cd: closing merge refused: batch {batch} is not closed"]
-    asked = next(row for row in rows[closed[0]:] if row["kind"] == "ask")
+    # The latest closing merge ask wins, so a re-ask after `hold` is read.
+    asks = [row for row in rows[closed[0]:] if row["kind"] == "ask"
+            and row["ask_kind"] == "merge" and row["item"] is None]
+    if not asks:
+        return [f"cd: closing merge refused: batch {batch} has no closing"
+                " merge ask"]
+    asked = asks[-1]
     answered = answers(rows).get(asked["id"])
     if answered is None:
         return [f"cd: closing merge refused: {asked['id']} is unanswered"]

@@ -188,6 +188,58 @@ class TestRowGrammar(unittest.TestCase):
         self.assertEqual(conductor.row_problems(row), [])
 
 
+class TestMalformedFieldsAreProblems(unittest.TestCase):
+    """#1962: a JSON list or other non-string in a key field was a
+    TypeError crash in loading, not a located problem."""
+
+    def test_a_list_kind_is_a_problem_not_a_crash(self):
+        self.assertEqual(
+            conductor.row_problems({"at": AT, "kind": ["state"],
+                                    "item": None}),
+            ["kind ['state'] is not a batch ledger row kind"])
+
+    def test_state_from_and_to_are_non_empty_strings(self):
+        row = dict(MINIMAL["state"], to=["merged"], **{"from": ""})
+        self.assertEqual(conductor.row_problems(row), [
+            "from must be a non-empty string",
+            "to must be a non-empty string"])
+
+    def test_an_ask_id_is_a_non_empty_string(self):
+        self.assertEqual(
+            conductor.row_problems(dict(ask_row("ask-1"), id=["ask-1"])),
+            ["id must be a non-empty string"])
+
+    def test_a_reserve_row_names_what_and_lists_integer_values(self):
+        base = MINIMAL["reserve"]
+        self.assertEqual(
+            conductor.row_problems(dict(base, what=["adr"])),
+            ["what must be a non-empty string"])
+        for values in ("90", ["90"], [True], None):
+            self.assertEqual(
+                conductor.row_problems(dict(base, values=values)),
+                ["values must be a list of integers"], values)
+        for values in ("0.7.6", [0], [""], None):
+            self.assertEqual(conductor.row_problems(
+                dict(base, what="plugin-version", values=values)),
+                ["values must be a list of non-empty strings for"
+                 " plugin-version"], values)
+        # The merge turn's plugin-version reserve holds version strings.
+        self.assertEqual(conductor.row_problems(
+            dict(base, what="plugin-version", values=["0.7.6"])), [])
+        self.assertEqual(
+            conductor.row_problems(dict(base, renumbered_from="90")),
+            ["renumbered_from must be a list of integers"])
+        self.assertEqual(
+            conductor.row_problems(dict(base, renumbered_from=[88])), [])
+
+    def test_such_a_ledger_fails_the_read_with_a_located_problem(self):
+        bad = dict(MINIMAL["reserve"], what=["adr"])
+        with tempfile.TemporaryDirectory() as tmp:
+            write_ledger(tmp, PLAN, bad)
+            self.assertEqual(conductor.load(tmp, "b1"), (None, [
+                f"cd: {LEDGER}:2 what must be a non-empty string"]))
+
+
 class TestOneOwner(unittest.TestCase):
     def test_block_spans_and_ledger_times_have_one_owner_each(self):
         # Review minor 10: byte-for-byte copies in sibling modules.

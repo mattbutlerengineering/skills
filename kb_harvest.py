@@ -580,7 +580,7 @@ def _options(argv):
             root = arg
     days = options.get("days")
     if days is not None:
-        if not (days.isdigit() and int(days) > 0):
+        if not (days.isascii() and days.isdigit() and int(days) > 0):
             problems.append(f"{LABEL}: --days must be a positive whole"
                             f" number, got {days!r}")
         else:

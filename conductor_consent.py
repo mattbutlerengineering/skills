@@ -76,6 +76,10 @@ def _train_cover(rows, item, train, blobs):
     covers = train["covers"]
     for earlier in covers[:covers.index(item)]:
         state = current_state(rows, earlier)
+        if state == "blocked":
+            return OWED, [f"{item} rides train {train['id']} behind"
+                          f" {earlier}, which is blocked; it needs its own"
+                          " merge ask"]
         if state != "merged":
             return WAITING, [f"{item} rides train {train['id']} behind"
                              f" {earlier}, which is {state}, not merged"]

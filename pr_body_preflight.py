@@ -883,7 +883,9 @@ def _bound_body(spelling, context):
         verb = _verb(between)
         if verb and not _inert(between):
             raise _Unreadable(_REWRITTEN.format(spelling, _removed_by(between)))
-        if verb in DIRECTORY_CHANGERS and not spelling.startswith("/"):
+        unwrapped = _unwrapped(between.words)
+        if (unwrapped and unwrapped[0] in DIRECTORY_CHANGERS
+                and not spelling.startswith("/")):
             raise _Unreadable("a cd between the heredoc and gh pr create "
                               f"may change what {spelling} names")
     return heredoc.text

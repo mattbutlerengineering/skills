@@ -144,6 +144,14 @@ class TestBuildIndex(unittest.TestCase):
                                   "## Decision\n\nSomething MUST happen.\n")
             self.assertEqual(standards_index.index_tree(tmp), ([], []))
 
+    def test_a_normative_heading_inside_a_fence_is_not_a_section(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            adr_file(tmp, "0001",
+                     "# Example\n\n- Status: accepted\n\n## Decision\n\n"
+                     "```markdown\n## Normative statements\n\n"
+                     "- not a real bullet\n```\n")
+            self.assertEqual(standards_index.index_tree(tmp), ([], []))
+
     def test_a_well_formed_bullet_becomes_an_entry(self):
         with tempfile.TemporaryDirectory() as tmp:
             adr_file(tmp, "0032",

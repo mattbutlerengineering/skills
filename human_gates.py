@@ -261,7 +261,7 @@ def completed_stays(events, gate):
         # (ADR-0074): a pass label ADDED beside the queue label leaves the
         # queue label on until some later flip strips it, and that gap is
         # automation's, not the human's wait.
-        completed.append((start, min([end, *inside]), bool(inside)))
+        completed.append((start, min([end, *inside], key=_parse_ts), bool(inside)))
     return completed
 
 

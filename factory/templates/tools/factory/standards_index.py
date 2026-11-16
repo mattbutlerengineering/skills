@@ -65,7 +65,7 @@ import sys
 from pathlib import Path
 
 from cli import read_file, report
-from knowledge_plane import adr_file_number, read_adrs, repo_root
+from knowledge_plane import adr_file_number, fenced, read_adrs, repo_root
 
 STANDARDS_PATH = "docs/standards.json"
 
@@ -113,6 +113,13 @@ def _normative_sections(lines):
     the line after the heading to the next heading of any level, or EOF.
     An ADR with no such heading yields nothing; one with several (not
     expected, not forbidden) yields each independently."""
+    # Fenced content is quoted, not asserted: a heading inside a fence
+    # neither opens nor closes a section, and a fenced line (or the fence
+    # marker itself) is blanked out of a real section's body.
+    outside = {lineno - 1 for lineno, _, fence in fenced(lines)
+               if fence is None}
+    lines = [line if number in outside else ""
+             for number, line in enumerate(lines)]
     sections = []
     index = 0
     total = len(lines)

@@ -256,6 +256,14 @@ class TestCover(unittest.TestCase):
             "waiting", ["#12 rides train ask-2 behind #13, which is"
                         " planned, not merged"]))
 
+    def test_a_train_behind_a_blocked_item_is_owed_its_own_ask(self):
+        # #1960: blocked is terminal, so waiting on it never ends.
+        blocked = tcm.moved("#13", "planned", "blocked")
+        rows = SHIPPED + [blocked] + tcm.train("ask-2", ["#13", "#12"])
+        self.assertEqual(self.cover(rows), (
+            "owed", ["#12 rides train ask-2 behind #13, which is blocked;"
+                     " it needs its own merge ask"]))
+
     def test_its_own_answer_beats_a_lapsed_standing_consent(self):
         rows = SHIPPED + [ROW] + tcm.own("ask-2", "#12")
         self.assertEqual(self.cover(rows), ("covered", []))

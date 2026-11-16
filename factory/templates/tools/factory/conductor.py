@@ -252,7 +252,8 @@ def _ask_problems(row):
         problems.append(f"recommended {row.get('recommended')!r} is not"
                         " among the options")
     problems += [f"{field} must be a non-empty string"
-                 for field in ("question", "why") if not is_text(row[field])]
+                 for field in ("id", "question", "why")
+                 if not is_text(row[field])]
     return problems + _consent_problems(row)
 
 
@@ -297,6 +298,47 @@ def _consent_row_problems(row):
     return problems
 
 
+def _int_list(value):
+    return isinstance(value, list) and all(
+        isinstance(number, int) and not isinstance(number, bool)
+        for number in value)
+
+
+VERSION_RESERVE = "plugin-version"
+
+
+def _reserve_problems(row):
+    problems = []
+    if not is_text(row["what"]):
+        problems.append("what must be a non-empty string")
+    elif row["what"] == VERSION_RESERVE:
+        if not (isinstance(row["values"], list) and all(
+                is_text(text) for text in row["values"])):
+            problems.append("values must be a list of non-empty strings"
+                            f" for {VERSION_RESERVE}")
+    elif not _int_list(row["values"]):
+        problems.append("values must be a list of integers")
+    if "renumbered_from" in row and not _int_list(row["renumbered_from"]):
+        problems.append("renumbered_from must be a list of integers")
+    return problems
+
+
+def _state_problems(row):
+    problems = [f"{field} must be a non-empty string"
+                for field in ("from", "to") if not is_text(row[field])]
+    if problems:
+        return problems
+    if row["to"] in STATE_FIELDS:
+        absent = [field for field in STATE_FIELDS[row["to"]]
+                  if field not in row]
+        if absent:
+            problems.append(f"state row to {row['to']} is missing"
+                            f" field(s): {', '.join(absent)}")
+    if "cause" in row:
+        problems += _cause_problems(row)
+    return problems
+
+
 def _cause_problems(row):
     if row["to"] not in ("stalled", "blocked"):
         return ["cause is only for a state row to stalled or blocked"]
@@ -322,7 +364,7 @@ def row_problems(row):
     set, then its kind's value rules. The one rule every reader and
     writer of the ledger applies."""
     kind = row.get("kind")
-    if kind not in ROW_FIELDS:
+    if not isinstance(kind, str) or kind not in ROW_FIELDS:
         return [f"kind {kind!r} is not a batch ledger row kind"]
     required, optional = ROW_FIELDS[kind]
     problems = []
@@ -341,14 +383,10 @@ def row_problems(row):
     if item is not None and not (isinstance(item, str)
                                  and ISSUE_KEY.fullmatch(item)):
         problems.append(f"item {item!r} is not an issue key (#<n>) or null")
-    if kind == "state" and row["to"] in STATE_FIELDS:
-        absent = [field for field in STATE_FIELDS[row["to"]]
-                  if field not in row]
-        if absent:
-            problems.append(f"state row to {row['to']} is missing"
-                            f" field(s): {', '.join(absent)}")
-    if kind == "state" and "cause" in row:
-        problems += _cause_problems(row)
+    if kind == "state":
+        problems += _state_problems(row)
+    if kind == "reserve":
+        problems += _reserve_problems(row)
     if kind == "ask":
         problems += _ask_problems(row)
     if kind == "answer":

@@ -238,6 +238,44 @@ class TestBookkeepingRetry(NextCase):
                          ["add", "commit", "push"])
         self.assertEqual(got["rows"][0]["to"], "spec")
 
+    def test_a_review_whose_push_failed_records_its_verdict_on_retry(self):
+        # #1959: the resume row alone left the item in review, with a
+        # completed run and no verdict, ask or stall, forever.
+        rid = "conductor-b1-14-review-1"
+        wt = self.root / ".claude/worktrees/conductor-b1-14"
+        (wt / "docs/fixes/x").mkdir(parents=True)
+        (wt / "docs/fixes/x/review.md").write_text(
+            "---\nstage: review\nverdict: pass\n---\n# Review\n")
+        (wt / "pr-body.md").write_text("Body\n")
+        ledger = wt / f"docs/factory/costs/runs/{rid}.jsonl"
+        ledger.parent.mkdir(parents=True)
+        ledger.write_text(SPENT)
+        reviewing = [
+            launch("#14", "planned", "build"), ran("#14", "build"),
+            launch("#14", "build", "verify"), ran("#14", "verify"),
+            dict(launch("#14", "verify", "review"), reviewed_head="h0"),
+            ran("#14", "review"),
+            moved("#14", "review", "stalled", reason=PUSH_FAILED,
+                  cause="delivery-failed"),
+            stall_ask("ask-2", "#14", options=("retry", "block")),
+            answered("ask-2", "retry", "#14")]
+        git = FakeGit({("rev-parse",): f"{self.root}/.git\n", ("log",): "",
+                       ("diff",): raw_diff(["docs/fixes/x/review.md"])})
+        got = self.next(START + reviewing, git=git)
+        self.assertEqual(got["code"], 0, got["out"])
+        self.assertEqual(got["rows"][0], {
+            "at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#14",
+            "from": "stalled", "to": "review",
+            "reason": RESUMED.replace("conductor-b1-13-spec-1", rid),
+            "run_id": rid})
+        self.assertEqual(got["rows"][1], {
+            "at": "2026-10-10T12:30:00Z", "kind": "state", "item": "#14",
+            "from": "review", "to": "reviewed",
+            "reason": "the reviewer passed it", "verdict": "pass",
+            "author_runs": ["conductor-b1-14-build-1",
+                            "conductor-b1-14-verify-1"],
+            "reviewer_run": rid, "reviewed_head": "h0"})
+
     def test_a_closed_issue_is_asked_about_before_any_bookkeeping(self):
         self.spent()
         self.body()

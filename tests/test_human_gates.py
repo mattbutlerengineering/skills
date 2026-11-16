@@ -532,6 +532,18 @@ class TestCompletedStays(unittest.TestCase):
         self.assertEqual(completed_stays(events, self.PRD), [
             ("2026-07-01T09:00:00Z", "2026-07-02T09:00:00Z", False)])
 
+    def test_a_stay_ends_at_the_earliest_instant_not_the_smallest_string(self):
+        # 11:30+02:00 is 09:30Z, before the 10:00Z unlabel, though the
+        # string "10:00:00Z" sorts first (#1968).
+        events = label_events([
+            labeled("2026-07-01T08:00:00Z", "wo:draft"),
+            labeled("2026-07-01T11:30:00+02:00", "wo:prd-approved"),
+            unlabeled("2026-07-01T10:00:00Z", "wo:draft"),
+        ])
+        self.assertEqual(completed_stays(events, self.PRD),
+                         [("2026-07-01T08:00:00Z",
+                           "2026-07-01T11:30:00+02:00", True)])
+
     def test_an_open_stay_is_absent_still_waiting(self):
         events = label_events([
             labeled("2026-07-01T09:00:00Z", "wo:draft")])

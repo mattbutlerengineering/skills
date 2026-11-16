@@ -627,6 +627,19 @@ class TestCostLedger(unittest.TestCase):
                 "G: docs/features/demo/breakdown.md:1 merged work order"
                 " WO-0001 has no line in docs/factory/costs.jsonl"])
 
+    def test_a_per_run_row_is_located_at_its_own_file(self):
+        """#1966: a row from docs/factory/costs/runs/<id>.jsonl names that
+        file, not the aggregate, in G's no-breakdown-row message."""
+        orphan = cost_ledger.entry("WO-0099", "run-1", "m", 1, 0.1,
+                                   "merged", "2026-08-01")
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp, self.LINE)
+            tree.write("docs/factory/costs/runs/run-1.jsonl",
+                       json.dumps(orphan) + "\n")
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs/runs/run-1.jsonl:1 wo WO-0099 has no"
+                " breakdown row"])
+
     def test_an_issue_keyed_row_passes(self):
         """ADR-0084: a run with no work order is keyed by its issue. It
         has no breakdown row to cross-check, and needs none."""
@@ -1059,6 +1072,34 @@ class TestCaptureCompleteness(unittest.TestCase):
                 "M: docs/fixes/demo/defect.md required section 'Blast"
                 " radius' is present but placeholder-only (template text"
                 " was never filled in)"])
+
+    def test_a_placeholder_wrapped_over_several_lines_is_flagged(self):
+        """TEMPLATE.md's own placeholders span 2-3 lines (#1964)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            body = self.REQUIRED_BODY.replace(
+                "Real defect prose.",
+                "<What is broken — observed vs expected\nbehavior.>"
+            ).replace(
+                "Real repro steps.",
+                "<Steps to reproduce,\na failing test,\nlogs.>")
+            self.defect(tree, "docs/fixes/demo/defect.md", body)
+            self.assertEqual(gates.check_capture_completeness(tree.root), [
+                "M: docs/fixes/demo/defect.md required section 'Defect (or"
+                " Condition)' is present but placeholder-only (template text"
+                " was never filled in)",
+                "M: docs/fixes/demo/defect.md required section 'Reproduction"
+                " / Evidence' is present but placeholder-only (template text"
+                " was never filled in)"])
+
+    def test_an_autolink_only_section_is_real_content(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.defect(tree, "docs/fixes/demo/defect.md",
+                        self.REQUIRED_BODY.replace(
+                            "Real defect prose.",
+                            "<https://example.com/issue/1>"))
+            self.assertEqual(gates.check_capture_completeness(tree.root), [])
 
     def test_heading_case_does_not_matter(self):
         with tempfile.TemporaryDirectory() as tmp:
