@@ -25,6 +25,14 @@ def run(argv):
 
 
 class DeriveTest(unittest.TestCase):
+    def test_only_a_bare_decimal_is_a_score(self):
+        # float() takes underscores and rounds 6.999... up to 7.0.
+        for score in ("0_7", "1e1", " 7", "7 ", ".5", "+7"):
+            with self.subTest(score=score):
+                self.assertEqual(reviewer_verdict.derive(score)[0], "error")
+        self.assertEqual(reviewer_verdict.derive("6.99999999999999999"),
+                         ("flag", 7.0))
+
     def test_whole_scores(self):
         for score in range(0, 11):
             with self.subTest(score=score):

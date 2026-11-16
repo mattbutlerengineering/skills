@@ -523,7 +523,8 @@ class TestRunReview(unittest.TestCase):
 
     def test_the_findings_read_is_bounded_not_whole_file(self):
         """Read past the bound and nothing should be asked of the file:
-        the reader stops at 4 * MAX_FINDINGS_CHARS bytes."""
+        the reader stops one byte past 4 * MAX_FINDINGS_CHARS, enough to
+        tell a file over the cap from one at it (#1915)."""
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             findings = tree.root / "findings.txt"
@@ -543,8 +544,21 @@ class TestRunReview(unittest.TestCase):
             finally:
                 validator.render_findings = real
             self.assertEqual(problems, [])
-            self.assertEqual(len(seen[0]), bound)
+            self.assertEqual(len(seen[0]), bound + 1)
             self.assertNotIn("BEYOND-THE-BOUND", seen[0])
+
+    def test_a_file_of_only_four_byte_characters_over_the_cap_is_noted(self):
+        """13000 emoji is 52000 bytes: the old read stopped at exactly
+        12000 characters, so the length test never added the note."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            findings = tree.root / "findings.txt"
+            findings.write_text("\U0001F600" * 13000, encoding="utf-8")
+            run = gh()
+            self.assertEqual(validator.run_review(
+                tree.root, findings, 1, env=self.env(tmp), run=run), [])
+            self.assertIn("truncated; see the check job's log",
+                          " ".join(map(str, run.calls)))
 
     def test_outside_a_pull_request_event_nothing_is_posted(self):
         with tempfile.TemporaryDirectory() as tmp:
