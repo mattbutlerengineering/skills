@@ -641,10 +641,11 @@ def standing(text):
 
 
 def _declared_status(lines):
-    """(lineno, raw status text) from the `- Status:` line, else from a
+    """(lineno, raw status text) from the `- Status:` line outside any
+    fence (fenced lines are quoted, issue #1902), else from a
     frontmatter `status:` field, else (0, None). The block is the one
     protocol.frontmatter_end bounds (ADR-0118)."""
-    for lineno, line in enumerate(lines, 1):
+    for lineno, line in unfenced(lines):
         match = ADR_STATUS_LINE.match(line)
         if match:
             return lineno, match.group(1)
@@ -676,7 +677,7 @@ def adr_record(path, lines):
             "standing": standing(text),
             "superseded_by": (match.group("by")
                               if match and match.group("retired") else None),
-            "title": next((line[2:].strip() for line in lines
+            "title": next((line[2:].strip() for _, line in unfenced(lines)
                            if line.startswith("# ")), None),
             "lines": lines}
 

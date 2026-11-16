@@ -804,6 +804,29 @@ class TestDeclaredStatusFallback(unittest.TestCase):
                                  expected)
 
 
+class TestFencedStatusAndTitle(unittest.TestCase):
+    """Fenced lines are quoted, not asserted (issue #1902)."""
+
+    def test_a_fenced_status_line_does_not_override_frontmatter(self):
+        lines = ["---", "status: superseded by ADR-0002", "---",
+                 "# Real title", "", "```", "- Status: accepted", "```"]
+        record = knowledge_plane.adr_record(Path("0001-x.md"), lines)
+        self.assertEqual(record["status"], "superseded by ADR-0002")
+        self.assertEqual(record["lineno"], 2)
+        self.assertEqual(record["standing"], "retired")
+
+    def test_a_fenced_example_before_the_real_status_is_skipped(self):
+        lines = ["# T", "```", "- Status: accepted", "```",
+                 "- Status: superseded by ADR-0003"]
+        self.assertEqual(knowledge_plane._declared_status(lines),
+                         (5, "superseded by ADR-0003"))
+
+    def test_a_fenced_heading_is_not_the_title(self):
+        lines = ["```sh", "# a shell comment", "```", "# Real title"]
+        record = knowledge_plane.adr_record(Path("0001-x.md"), lines)
+        self.assertEqual(record["title"], "Real title")
+
+
 class TestGuardedAdrRead(unittest.TestCase):
     """Issue #855: one guarded ADR read (cli.read_file, ADR-0075) under
     every reader — adr_records, parse_run's adr_files and, through them,
