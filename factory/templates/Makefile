@@ -88,7 +88,8 @@ toolsmith-mine:
 # Makefiles carry it verbatim.
 web-quality:
 	@if ls playwright.config.* >/dev/null 2>&1; then \
-		npx --yes playwright@$(PLAYWRIGHT_VERSION) install --with-deps; \
+		if [ -f package-lock.json ]; then npm ci; fi && \
+		npx --yes playwright@$(PLAYWRIGHT_VERSION) install --with-deps && \
 		npx --yes playwright@$(PLAYWRIGHT_VERSION) test; \
 	else \
 		echo "web-quality: no playwright.config.* — skipping (no web app to test)"; \

@@ -157,11 +157,12 @@ def _case_problems(case, root, label):
     if case.get("role") not in factory_roles.ROLES:
         problems.append(f"{where} has invalid role {case.get('role')!r}")
     fixture = case.get("fixture")
-    if not fixture or not (root / fixture / "work-order.md").is_file():
+    fixture_ok = isinstance(fixture, str) and bool(fixture)
+    if not fixture_ok or not (root / fixture / "work-order.md").is_file():
         problems.append(f"{where} fixture {fixture!r} has no work-order.md")
     if not case.get("trap"):
         problems.append(f"{where} names no trap")
-    if fixture:
+    if fixture_ok:
         problems += _git_layout_problems(root / fixture, where)
 
     expectations = case.get("expectations")
