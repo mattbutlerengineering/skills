@@ -1941,7 +1941,13 @@ def run_all(root, env=None):
 
 
 def main(argv):
-    if "--selftest" in argv:
+    if argv not in ([], ["--selftest"]):
+        # A mistyped flag must not fall through to the real gates and
+        # exit 0: the check the caller asked for would silently not run.
+        print(f"gates: unknown argument(s): {' '.join(argv)} "
+              "(usage: gates.py [--selftest])", file=sys.stderr)
+        return 2
+    if argv:
         # The planted-defect fixtures and selftest() live in their own
         # mirrored module (#784); imported here, not at the top, because
         # it imports this one.

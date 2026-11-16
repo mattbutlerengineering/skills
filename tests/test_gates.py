@@ -4042,6 +4042,19 @@ class TestSelftest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout, "selftest: ok\n")
 
+    def test_an_unknown_argument_is_refused_not_ignored(self):
+        """A mistyped `--selftst` used to run the real gates and exit 0,
+        so the self-test the caller asked for silently never ran."""
+        repo = Path(__file__).resolve().parent.parent
+        for argv in (["--selftst"], ["--verbose"], ["x", "--selftest"]):
+            with self.subTest(argv=argv):
+                result = subprocess.run(
+                    [sys.executable, str(repo / "gates.py"), *argv],
+                    cwd=repo, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stdout)
+                self.assertNotIn("problem(s)", result.stdout)
+                self.assertIn("unknown argument", result.stderr)
+
     def test_selftest_passes(self):
         self.assertEqual(fixtures.selftest(), 0)
 
