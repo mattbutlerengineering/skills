@@ -123,6 +123,17 @@ def imported_names(nodes):
     return names
 
 
+class TestBlockersLabels(unittest.TestCase):
+    def test_a_comma_list_that_is_only_inside_a_label_is_split(self):
+        bd = ("- [ ] **S1** first\n- [ ] **S2** second\n"
+              "- [ ] **S3 Fold S1, S2 together** third\n"
+              "- [ ] **S4** fourth \u2014 blocked by: S1, S2\n")
+        items = dg.read_items(bd)
+        self.assertEqual(
+            dg.blockers(items[3]["block"], ["S3 Fold S1, S2 together"]),
+            ["S1", "S2"])
+
+
 class TestGradeCore(unittest.TestCase):
     def test_a_breakdown_with_no_rows_scores_zero_with_one_line(self):
         result = dg.grade("# Breakdown: Demo\n\nprose only\n", ARCH)
