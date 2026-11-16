@@ -84,11 +84,23 @@ def pages(root):
     relative, posix), file (Path), fields (dict, or None without a
     frontmatter block)}."""
     root = Path(root)
-    return [{"slug": path.stem,
-             "path": path.relative_to(root).as_posix(),
-             "file": path,
-             "fields": read_frontmatter(path)}
-            for path in sorted((root / KB_DIR).glob("*.md"))]
+    found = []
+    for path in sorted((root / KB_DIR).glob("*.md")):
+        # A page that cannot be read keeps fields None, so every check
+        # that needs fields already skips it; unreadable carries why.
+        try:
+            fields, unreadable = read_frontmatter(path), None
+        except (OSError, UnicodeDecodeError) as err:
+            fields, unreadable = None, str(err)
+        found.append({"slug": path.stem,
+                      "path": path.relative_to(root).as_posix(),
+                      "file": path, "fields": fields,
+                      "unreadable": unreadable})
+    return found
+
+
+def _unreadable_problem(page):
+    return f"{LABEL}: {page['path']} cannot be read: {page['unreadable']}"
 
 
 def _summary(page):
@@ -135,6 +147,8 @@ def _budget_problems(block):
 
 
 def _field_problems(page):
+    if page.get("unreadable"):
+        return [_unreadable_problem(page)]
     if page["fields"] is None:
         return [f"{LABEL}: {page['path']} has no frontmatter block"]
     problems = [f"{LABEL}: {page['path']} is missing frontmatter field"
@@ -368,6 +382,9 @@ def stats(root):
     if not (root / KB_DIR).is_dir():
         return None, [NO_KB]
     every = pages(root)
+    unreadable = [_unreadable_problem(p) for p in every if p["unreadable"]]
+    if unreadable:
+        return None, unreadable
     return {"pages": len(every),
             "index_bytes": len(render_index(every).encode("utf-8")),
             "index_budget": INDEX_BUDGET,

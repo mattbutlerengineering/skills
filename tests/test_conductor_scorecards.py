@@ -85,6 +85,17 @@ class TestHistory(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(close.history(tmp), ([], []))
 
+    def test_a_file_that_is_not_utf8_fails_naming_the_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / close.SCORECARDS
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b'{"batch": "caf\xe9"}\n')
+            rows, problems = close.history(tmp)
+        self.assertIsNone(rows)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            f"cd: cannot read {close.SCORECARDS}: "), problems)
+
     def test_a_line_that_does_not_parse_fails_naming_file_and_line(self):
         with tempfile.TemporaryDirectory() as tmp:
             write(tmp, [OLDER], "{nope\n")

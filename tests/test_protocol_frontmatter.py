@@ -209,6 +209,16 @@ class TestSkillFrontmatterProblems(unittest.TestCase):
         self.assertEqual(skill_frontmatter_problems(self.root, "idea"),
                          ["missing skills/idea/SKILL.md"])
 
+    def test_a_file_that_is_not_utf8_is_a_problem_naming_it(self):
+        # saved by an editor in another encoding: lint printed a
+        # UnicodeDecodeError traceback instead of the file
+        skill_dir = self.root / "skills" / "idea"
+        skill_dir.mkdir(parents=True)
+        (skill_dir / "SKILL.md").write_bytes(b"---\nname: caf\xe9\n---\n")
+        [problem] = skill_frontmatter_problems(self.root, "idea")
+        self.assertTrue(problem.startswith(
+            "skills/idea/SKILL.md cannot be read: "), problem)
+
     def test_no_frontmatter_block(self):
         self.seed("idea", "body only\n")
         self.assertEqual(skill_frontmatter_problems(self.root, "idea"),

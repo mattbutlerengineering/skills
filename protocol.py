@@ -234,7 +234,11 @@ def skill_frontmatter_problems(root, slug):
     label = f"skills/{slug}/SKILL.md"
     if not path.is_file():
         return [f"missing {label}"]
-    fields = parse_frontmatter(path.read_text(encoding="utf-8"), raw=True)
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as err:
+        return [f"{label} cannot be read: {err}"]
+    fields = parse_frontmatter(text, raw=True)
     if fields is None:
         return [f"{label} has no frontmatter block"]
     description = fields.get("description")
