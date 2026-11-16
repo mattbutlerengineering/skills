@@ -253,11 +253,18 @@ def _deferral(issue, labels, owner, rules=None):
 def ceilings(estimate, steps, weights):
     """step -> ceiling: the estimate split across `steps` by weight, in
     cents. The first step takes the rounding remainder, so the ceilings
-    sum to the estimate exactly (#724)."""
+    sum to the estimate exactly (#724); every ceiling stays at least one
+    cent, the shortfall of a tiny share coming off the largest (#1941)."""
     total = sum(weights[step] for step in steps)
-    rest = {step: round(estimate * weights[step] / total, 2)
-            for step in steps[1:]}
-    return {steps[0]: round(estimate - sum(rest.values()), 2), **rest}
+    cents = round(estimate * 100)
+    shares = [max(1, round(estimate * weights[step] / total * 100))
+              for step in steps[1:]]
+    shares.insert(0, cents - sum(shares))
+    if shares[0] < 1:
+        shares[0] = 1
+    while sum(shares) > cents and max(shares) > 1:
+        shares[shares.index(max(shares))] -= 1
+    return {step: share / 100 for step, share in zip(steps, shares)}
 
 
 def _steps(item_type, labels, config, agents_dir, ceiling):

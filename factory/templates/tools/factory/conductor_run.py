@@ -65,7 +65,7 @@ ALLOWED_TOOLS = allowed_tools(
 # refuses), and no credential helper hands out a token. Local-path
 # remotes still work, so the suite's own scratch-repo pushes pass.
 WORKER_STRIPPED = re.compile(r"GH_.*|GITHUB_(?:ENTERPRISE_)?TOKEN|CLAUDECODE"
-                             r"|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)"
+                             r"|GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+|PARAMETERS|GLOBAL|SYSTEM)"
                              r"|GIT_SSH(?:_COMMAND)?|(?:GIT|SSH)_ASKPASS")
 NO_PUSH = "/dev/null/conductor-worker-may-not-push/"
 WORKER_GIT_CONFIG = ((f"url.{NO_PUSH}.pushInsteadOf", "https://"),
@@ -172,7 +172,8 @@ def push_gaps(git, worktree, netrc):
                  " transport would hand a Worker's push; move it aside"
                  " while a batch runs"
                  for host in hosts or [] if host == "default"
-                 or host == "github.com" or host.endswith(".github.com")]
+                 or host.lower() == "github.com"
+                 or host.lower().endswith(".github.com")]
     return problems
 
 

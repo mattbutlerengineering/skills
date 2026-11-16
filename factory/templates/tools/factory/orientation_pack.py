@@ -114,7 +114,8 @@ def _python_structure(path):
     except (OSError, ValueError, SyntaxError) as err:
         return f"(could not be parsed: {err.__class__.__name__})", None
     doc = ast.get_docstring(tree)
-    headline = doc.strip().splitlines()[0] if doc else "(no module docstring)"
+    lines = doc.strip().splitlines() if doc else []
+    headline = lines[0] if lines else "(no module docstring)"
     names = [node.name for node in tree.body
              if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
                                    ast.ClassDef))]

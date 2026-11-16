@@ -51,6 +51,14 @@ class TestDefaultWeights(unittest.TestCase):
             ("spec", 4.99), ("build", 1.67), ("verify", 1.67),
             ("review", 5.0), ("ship", 1.67)])
 
+    def test_a_tiny_weight_leaves_every_ceiling_positive(self):
+        steps = conductor_plan.ITEM_STEPS["feature"]
+        weights = {"spec": 0.01, "build": 1, "verify": 1, "review": 3,
+                   "ship": 1}
+        self.assertEqual(conductor_plan.ceilings(1.0, steps, weights), {
+            "spec": 0.01, "build": 0.17, "verify": 0.17, "review": 0.48,
+            "ship": 0.17})
+
     def test_the_ceilings_sum_to_the_item_estimate(self):
         for labels in (("type:feature", "size:M"), ("type:defect", "size:S"),
                        ("type:chore", "size:L"),
