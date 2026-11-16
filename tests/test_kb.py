@@ -299,6 +299,26 @@ class TestAnUndecodablePage(Tree):
         self.assertTrue(problems[0].startswith(
             "kb: docs/kb/latin.md cannot be read: "), problems)
 
+    def test_an_undecodable_claude_md_is_a_lint_problem(self):
+        # the always-loaded file the index lives in, saved in another
+        # encoding: lint raised out of _index_problems
+        self.kb_page("good")
+        (self.root / "CLAUDE.md").write_bytes(b"# Caf\xe9\n")
+        problems = [p for p in self.lint() if "CLAUDE.md" in p]
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "kb: cannot read CLAUDE.md: "), problems)
+
+    def test_index_refuses_to_write_into_an_undecodable_file(self):
+        self.kb_page("good")
+        raw = b"# Caf\xe9\n"
+        (self.root / "CLAUDE.md").write_bytes(raw)
+        problems = kb.index(self.root)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertTrue(problems[0].startswith(
+            "kb: cannot update CLAUDE.md: "), problems)
+        self.assertEqual((self.root / "CLAUDE.md").read_bytes(), raw)
+
     def test_stats_refuses_with_the_same_problem(self):
         self.kb_page("good")
         self.bad_page()

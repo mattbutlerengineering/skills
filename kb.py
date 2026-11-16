@@ -168,13 +168,18 @@ def _field_problems(page):
 
 
 def _write(path, block):
-    text = path.read_text(encoding="utf-8")
-    if BLOCK.search(text):
-        new = BLOCK.sub(lambda _: block, text, count=1)
-    else:
-        new = text.rstrip("\n") + "\n\n" + block + "\n"
-    if new != text:
-        path.write_text(new, encoding="utf-8")
+    """None once the index is in path, else the problem that stopped it."""
+    try:
+        text = path.read_text(encoding="utf-8")
+        if BLOCK.search(text):
+            new = BLOCK.sub(lambda _: block, text, count=1)
+        else:
+            new = text.rstrip("\n") + "\n\n" + block + "\n"
+        if new != text:
+            path.write_text(new, encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as err:
+        return f"{LABEL}: cannot update {path.name}: {err}"
+    return None
 
 
 def index(root):
@@ -197,9 +202,8 @@ def index(root):
     problems += _budget_problems(block)
     if problems:
         return problems
-    for path in found:
-        _write(path, block)
-    return []
+    return [problem for problem in (_write(path, block) for path in found)
+            if problem]
 
 
 def _link_problems(root, page):
@@ -273,7 +277,10 @@ def age_problems(page, today):
 
 def _index_problems(path, every, block):
     name = path.name
-    match = BLOCK.search(path.read_text(encoding="utf-8"))
+    text, problem = cli.read_file(path, name, str)
+    if problem:
+        return [f"{LABEL}: {problem}"]
+    match = BLOCK.search(text or "")
     if not match:
         return [f"{LABEL}: {name} has no knowledge-base index — run kb.py"
                 " index"]
