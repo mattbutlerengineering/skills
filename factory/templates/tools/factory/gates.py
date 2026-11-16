@@ -173,12 +173,20 @@ NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
 # verdict). Both close with a trailing delimiter — ` |` / `</summary>` — that
 # the value capture drops OUTSIDE the group, so `_is_disclosure` still reads
 # the verdict's true head (a table-cell `NOT VERIFIED` still discloses).
+# Relabelling is the escape hatch #137 closed, so the label is read widely
+# (#1900): an optional plural (`Results:`), up to two qualifier words
+# (`Overall result:`, `Final verdict:`), `*` or `_` emphasis around it
+# (`__Result:__`, `_Result_:`), a task-list box (`- [x] Result: PASS`) and
+# an HTML bold tag (`<b>Result:</b> PASS`, `<strong>`) all assert.
 RESULT_LINE = re.compile(
-    r"^\s*(?:(?:[-*+>]|\d+[.)]|\||<summary[^>]*>)\s*)*"
-    r"\**\s*(?:result|verdict|outcome|status"
+    r"^\s*(?:(?:[-*+>]|\d+[.)]|\||<summary[^>]*>|<(?:b|strong)>"
+    r"|\[[ xX]\])\s*)*"
+    r"[*_]*\s*(?:[A-Za-z][\w'-]*\s+){0,2}"
+    r"(?:result|verdict|outcome|status"
     r"|conclusion|assessment|finding|determination|evaluation|judge?ment"
-    r"|disposition|decision|ruling|appraisal)\**"
-    r"\s*:\s*(\S.*?)\s*(?:\|\s*|</summary>\s*)?$",
+    r"|disposition|decision|ruling|appraisal)s?[*_]*"
+    r"\s*:\s*(?:</(?:b|strong)>|[*_]+)?\s*(\S.*?)\s*"
+    r"(?:\|\s*|</summary>\s*)?$",
     re.IGNORECASE)
 # The disclaimer must be explicit, and it must be WRITTEN: read from body
 # text, never from a heading. TEMPLATE.md ships a `## Not verified` slot in

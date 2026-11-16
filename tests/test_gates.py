@@ -2619,6 +2619,25 @@ class TestEvidenceHonesty(unittest.TestCase):
                     f"- {label}: PASS\n"),
                     [(4, self.claim("Payments capture", "PASS"))])
 
+    def test_plural_qualified_and_wrapped_verdict_labels_engage_the_rule(self):
+        """#1900. Section A is honestly fenced, so the artifact-wide
+        backstop is quiet; section B's variant verdict line must owe its
+        own evidence."""
+        for line, verdict in (
+                ("- Results: 6/6 PASS", "6/6 PASS"),
+                ("- Overall result: PASS", "PASS"),
+                ("- Final verdict: PASS", "PASS"),
+                ("__Result:__ PASS", "PASS"),
+                ("_Result_: PASS", "PASS"),
+                ("- [x] Result: PASS", "PASS"),
+                ("<b>Result:</b> PASS", "PASS"),
+                ("<strong>Result:</strong> PASS", "PASS")):
+            with self.subTest(line=line):
+                self.assertEqual(gates.evidence_problems(
+                    "### A\n\n```\nlint: 0 problem(s)\n```\n\n"
+                    f"### B\n\n{line}\n"),
+                    [(9, self.claim("B", verdict))])
+
     def test_one_honest_fence_does_not_launder_relabelled_lies(self):
         """BYPASS 6, as reported: one real fence (lint) satisfied the
         artifact-wide backstop, and the two fabricated criteria beside it used
