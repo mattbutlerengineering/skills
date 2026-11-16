@@ -219,6 +219,11 @@ def _record_args(argv):
     except ValueError:
         cost, _ = 0.0, problems.append(
             f"bg: cost {cost_raw!r} is not a number")
+    else:
+        if not math.isfinite(cost) or cost < 0:
+            cost, _ = 0.0, problems.append(
+                f"bg: cost {cost_raw!r} is not a finite, non-negative"
+                " number")
     return dict(wo=wo, run_id=run_id, model=model, tokens=tokens,
                 cost=cost, outcome=outcome), problems
 
