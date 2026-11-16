@@ -223,6 +223,23 @@ def _bare_scalar_problems(label, description):
     )
 
 
+def _repeated_keys(text):
+    """The top-level frontmatter keys TEXT writes more than once, in
+    first-repeat order. parse_frontmatter keeps the last; a strict YAML
+    loader rejects the file, so the plain split and the loader differ."""
+    lines = text.splitlines()
+    end = frontmatter_end(lines)
+    seen, repeated = set(), []
+    for line in lines[1:end] if end is not None else []:
+        if line[:1].isspace() or ":" not in line:
+            continue
+        key = line.split(":", 1)[0].strip()
+        if key in seen and key not in repeated:
+            repeated.append(key)
+        seen.add(key)
+    return repeated
+
+
 def skill_frontmatter_problems(root, slug):
     """Problem strings for one skill's SKILL.md frontmatter — the single
     error contract behind lint's skill checker and the trigger-eval
@@ -243,6 +260,8 @@ def skill_frontmatter_problems(root, slug):
         return [f"{label} has no frontmatter block"]
     description = fields.get("description")
     name = fields.get("name")
+    repeats = [f"{label} frontmatter repeats the key {key!r}"
+               for key in _repeated_keys(text)]
     if isinstance(name, str):
         name = _unquote(name)
     if isinstance(description, dict):
@@ -250,11 +269,12 @@ def skill_frontmatter_problems(root, slug):
                  f"expected {slug!r}"]
                 if name != slug else []) + [
             f"{label} description is not a bare YAML scalar: it is a "
-            "nested map"]
+            "nested map"] + repeats
     return (
         ([f"{label} frontmatter name is {name!r}, "
           f"expected {slug!r}"]
          if name != slug else [])
+        + repeats
         + ([f"{label} frontmatter has no description"]
            if not description else [])
         + ([f"{label} description exceeds Pi's "
