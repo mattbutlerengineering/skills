@@ -51,6 +51,14 @@ class TestExistingContract(unittest.TestCase):
     def test_fieldless_block_returns_empty_dict(self):
         self.assertEqual(read_frontmatter(write("---\n\n---\n\nbody\n")), {})
 
+    def test_a_leading_byte_order_mark_does_not_hide_the_block(self):
+        # Windows editors save UTF-8 with a BOM; the file then opened
+        # with U+FEFF and read as "no frontmatter block", which lint
+        # reported for a file that visibly has one.
+        text = chr(0xFEFF) + "---\nname: idea\n---\n\nbody\n"
+        self.assertEqual(frontmatter_end(text.splitlines()), 2)
+        self.assertEqual(parse_frontmatter(text), {"name": "idea"})
+
     def test_an_empty_quoted_value_reads_as_empty(self):
         # _unquote's two-character floor: a bare pair of quotes is the
         # shortest value with a pair to strip, and a lone quote has none.
