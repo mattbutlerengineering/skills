@@ -488,6 +488,39 @@ class TestStale(unittest.TestCase):
             "kb: git is unavailable: No such file or directory: 'git'"])
 
 
+class TestNestedSources(Tree):
+    def test_a_nested_map_sources_is_a_kb_problem_not_a_crash(self):
+        write(self.root / "docs" / "kb" / "p.md",
+              "---\nsummary: s\nsources:\n  code: kb.py\nverified: abc1234\n"
+              "related:\n---\n\n# T\n")
+        self.assertIn(
+            "kb: docs/kb/p.md field 'sources' is not a string list: it is"
+            " a nested map", self.lint())
+
+
+class TestStalePathsWithSpacesAndNonAscii(unittest.TestCase):
+    def test_stale_message_names_the_real_paths(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            git_repo.init(root)
+            names = ["my notes.md", "café.md"]
+            for name in names:
+                write(root / name, "1\n")
+            git(root, "add", "-A")
+            git(root, "commit", "-q", "-m", "one")
+            sha = git(root, "rev-parse", "HEAD")
+            for name in names:
+                write(root / name, "2\n")
+            git(root, "commit", "-qam", "two")
+            page_ = {"fields": {"verified": sha,
+                                "sources": "my notes.md, café.md"},
+                     "path": "docs/kb/p.md"}
+            self.assertEqual(
+                kb._stale_problems(root, page_, kb._git),
+                [f"kb: docs/kb/p.md is stale: café.md, my notes.md changed"
+                 f" since verified {sha[:7]} — re-verify it"])
+
+
 class TestMain(Tree):
     def test_lint_reports_through_the_problem_contract(self):
         code, out = run_main(["lint", str(self.root)])

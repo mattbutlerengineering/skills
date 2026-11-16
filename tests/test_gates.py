@@ -593,7 +593,7 @@ class TestCostLedger(unittest.TestCase):
                 " string",
                 "G: docs/factory/costs.jsonl:1 tokens must be a non-negative"
                 " integer",
-                "G: docs/factory/costs.jsonl:1 cost must be a non-negative"
+                "G: docs/factory/costs.jsonl:1 cost must be a finite non-negative"
                 " number",
                 "G: docs/factory/costs.jsonl:1 wo WO-0009 has no breakdown"
                 " row",
@@ -749,6 +749,17 @@ class TestStandardsDrift(unittest.TestCase):
                  "## Normative statements", "", bullet])])
             self.assertEqual(
                 gates.check_standards_drift(tree.root, parsed), [])
+
+    def test_an_entry_missing_a_field_is_drift_not_a_crash(self):
+        # Issue #1860
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.standards(tree, [{"statement": "no slug"},
+                                  {"slug": "a", "statement": "x"}])
+            self.assertIn(
+                "K: docs/standards.json has drifted from a fresh ADR"
+                " regeneration (run `python3 standards_index.py update`)",
+                gates.check_standards_drift(tree.root))
 
     def test_an_absent_index_is_silent(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -978,6 +989,18 @@ class TestCaptureCompleteness(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
             self.assertEqual(gates.check_capture_completeness(tree.root), [])
+
+    def test_a_non_utf8_defect_md_is_a_problem_not_a_crash(self):
+        # Issue #1879
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            path = tree.root / "docs/fixes/demo/defect.md"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"---\ndate: 2026-11-01\n---\n# caf\xe9\n")
+            problems = gates.check_capture_completeness(tree.root)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "M: cannot read docs/fixes/demo/defect.md: "), problems)
 
     def test_no_defect_md_in_a_run_is_out_of_scope(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -3439,6 +3462,18 @@ class TestLockstep(unittest.TestCase):
         self.assertNotIn("&& github.event.action != 'closed'\n"
                          "      && github.event.pull_request.head.repo",
                          text)
+
+    def test_only_ready_events_share_the_dispatch_concurrency_group(self):
+        # #1886: a concurrency group holds one pending run and a newer
+        # pending run replaces it, so a non-ready label event in the
+        # dispatch group would cancel a pending wo:ready-for-agent run.
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        group = [ln for ln in text.splitlines()
+                 if ln.strip().startswith("group:")]
+        self.assertEqual(len(group), 1)
+        self.assertIn("github.event.label.name == 'wo:ready-for-agent'",
+                      group[0])
+        self.assertIn("github.run_id", group[0])
 
     def test_the_claim_step_gates_the_agent_step(self):
         # ADR-0032: the claim step flips ready -> in-progress and its

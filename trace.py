@@ -20,7 +20,8 @@ both ends' dates. Read-only: it writes nothing.
 
 Everything from files and git runs offline. Issue history (opened and
 closed dates, label flips, issues citing the run) is the one online
-input; it goes through cli's gh port and human_gates.read_timelines.
+input; it goes through cli's gh port, run with the working directory at
+`--root` so it is that checkout's repo, and human_gates.read_timelines.
 With CI set, or when gh fails, the report says in one line that issue
 history was not read, and still exits 0.
 
@@ -36,7 +37,7 @@ import re
 import sys
 from pathlib import Path
 
-from cli import CLI_FAILURES, detail, gh_read, gh_runner, report, runner
+from cli import (CLI_FAILURES, detail, gh_read, read_file, report, runner)
 from cost_ledger import ISSUE_KEY
 from human_gates import read_timelines
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
@@ -94,19 +95,24 @@ def _tokens(lines):
 
 def read_runs(root):
     """One record per run_dirs run, from parse_run: its run ref, PRD id,
-    breakdown lines, and each present artifact's lines and cited ids."""
+    breakdown lines, and each present artifact's lines and cited ids. An
+    artifact that cannot be read is left out and named in the run's
+    `notes`, never a crash for every key (ADR-0075)."""
     runs = []
     for entry in parse_run(root)["runs"]:
         path = entry["path"]
-        artifacts = {}
+        artifacts, notes = {}, []
         for name, _ in artifact_sections():
-            file = path / name
-            if file.is_file():
-                lines = file.read_text(encoding="utf-8").splitlines()
+            text, problem = read_file(
+                path / name, (path / name).relative_to(root).as_posix(), str)
+            if problem:
+                notes.append(problem)
+            elif text is not None:
+                lines = text.splitlines()
                 artifacts[name] = {"lines": lines, "ids": _tokens(lines)}
         runs.append({"path": path, "ref": run_ref(root, path),
                      "prd": entry["prd_id"], "breakdown": entry["breakdown"],
-                     "artifacts": artifacts})
+                     "artifacts": artifacts, "notes": notes})
     return runs
 
 
@@ -391,8 +397,9 @@ def build(root, key, record, notes, state, run, since, git):
         "since": start,
         "issue_history": (f"not read ({state['skipped']})"
                           if state["skipped"] else "read"),
-        "notes": notes + ([f"issue history not read ({state['skipped']})"]
-                          if state["skipped"] else []) + state["notes"],
+        "notes": notes + record["notes"]
+                 + ([f"issue history not read ({state['skipped']})"]
+                    if state["skipped"] else []) + state["notes"],
         **{name: _ordered(sections[name]) for name in SECTIONS},
         "changes": _ordered([c for c in changes
                              if start is None or c["date"] >= start]),
@@ -450,12 +457,23 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
-def main(argv, run=gh_runner, environ=os.environ, git=_git):
+def _root_gh(root):
+    """The gh port scoped to root: gh runs with cwd=root, so issue
+    history is the checked-out repo's, not the process cwd's."""
+    gh = runner("gh")
+
+    def run(args):
+        return gh(args, cwd=root).stdout
+    return run
+
+
+def main(argv, run=None, environ=os.environ, git=_git):
     args = parse_args(argv)
     if args.since is not None and not DAY.fullmatch(args.since):
         return report(LABEL, [f"{LABEL}: --since takes YYYY-MM-DD, not"
                               f" {args.since!r}"])
     root = Path(args.root).resolve()
+    run = run or _root_gh(root)
     state = gh_state(environ)
     runs = read_runs(root)
     record, notes, problems = resolve(root, args.key, runs, state, run)

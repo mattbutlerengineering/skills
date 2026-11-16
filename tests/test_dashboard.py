@@ -233,6 +233,24 @@ def labeled(ts, name):
     return {"event": "labeled", "label": {"name": name}, "created_at": ts}
 
 
+class TestUnreadableBreakdown(unittest.TestCase):
+    """#1879: a non-UTF-8 breakdown.md is a problem, not a traceback."""
+
+    def test_gather_names_the_unreadable_breakdown_and_renders_on(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            bad = Path(tmp) / "docs/features/g/breakdown.md"
+            bad.parent.mkdir(parents=True)
+            bad.write_bytes(b"- [ ] **S1** caf\xe9\n")
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [
+            "dashboard: cannot read docs/features/g/breakdown.md: "
+            "'utf-8' codec can't decode byte 0xe9 in position 16: "
+            "invalid continuation byte"])
+        self.assertEqual([q["issue"] for q in state["queues"]], [7, 8])
+
+
 class TestRemoteSlug(unittest.TestCase):
     def test_ssh_and_https_remotes_parse_to_the_slug(self):
         for url in ("git@github.com:o/r.git", "https://github.com/o/r",
@@ -964,6 +982,13 @@ console.log(JSON.stringify({
   output: renderOutput(OUTPUT_STATES),
   metrics: renderMetrics(METRICS_STATES),
   metricsEmpty: renderMetrics([METRICS_STATES[1]]),
+  metricsRatesOnly: renderMetrics([{name: "alpha", payload: {metrics: {
+    month_spend: null, cap: null, cost_per_wo: null,
+    gate_wait_median: null, acceptance: 0.5, rework: 0.5}}}]),
+  apostrophe: issueLinks("wo:won't-do on #12", "o/r"),
+  noRemote: issueLinks("see #12 <b>", null),
+  backlogSaving: renderBacklog(BACKLOG_STATES, {0: [3, 4, 5]},
+                               {0: false}, {}, {0: true}),
   backlogDirty: renderBacklog(BACKLOG_STATES, {0: [5, 3, 4]},
                               {0: true}, {0: "HTTP 500: boom"}),
   backlogClean: renderBacklog(BACKLOG_STATES, {0: [3, 4, 5]}, {}, {}),
@@ -1084,6 +1109,33 @@ console.log(JSON.stringify({
                       section)
         self.assertIn("No docs/backlog.md in this repo.", section)
 
+    def test_metrics_with_rates_but_no_ledger_render_the_rates(self):
+        """#1887: month_spend is null when only review rates exist; the
+        row used to throw in fmtMoney(null), leaving the section on
+        "No runs recorded yet." for every repo."""
+        metrics = self.rendered()["metricsRatesOnly"]
+        self.assertIn("alpha — acceptance 50% · rework 50%", metrics)
+        self.assertNotIn("No runs recorded yet.", metrics)
+
+    def test_an_apostrophe_is_not_read_as_issue_39(self):
+        """#1890: linking after esc() matched the digits of &#39;."""
+        r = self.rendered()
+        self.assertEqual(
+            r["apostrophe"],
+            "wo:won&#39;t-do on "
+            '<a href="https://github.com/o/r/issues/12" '
+            'target="_blank">#12</a>')
+        self.assertEqual(r["noRemote"], "see #12 &lt;b&gt;")
+
+    def test_a_saving_backlog_disables_save_move_and_drag(self):
+        """#1888: while a save is in flight nothing can be pressed."""
+        section = self.rendered()["backlogSaving"]
+        self.assertIn('<button data-save="0" disabled>Save order'
+                      "</button>", section)
+        self.assertIn("(saving…)", section)
+        self.assertNotIn("draggable", section)
+        self.assertEqual(section.count("disabled"), 5)
+
     def test_backlog_clean_state_disables_save(self):
         section = self.rendered()["backlogClean"]
         self.assertNotIn("(unsaved order)", section)
@@ -1130,6 +1182,79 @@ console.log(JSON.stringify({
         self.assertEqual(r["nudgeTopEdge"], [3, 4, 5])
         self.assertEqual(r["nudgeBottomEdge"], [3, 4, 5])
         self.assertEqual(r["nudgeUnknown"], [3, 4, 5])
+
+
+class TestSaveOrderInFlight(unittest.TestCase):
+    """#1888: saveOrder's flow under node with a stub fetch and DOM —
+    the regather after a 204 is slow, and the page must not accept a
+    second Save or a move until it lands, then must show no stale
+    conflict."""
+
+    HARNESS = """
+const fetches = [];
+let releaseGather;
+const gatherBody = {backlog: {hash: "h2", seeds: [
+  {line: 3, text: "a", claimed: null}, {line: 4, text: "b", claimed: null}]}};
+globalThis.document = {getElementById: () => ({})};
+globalThis.fetch = (url, opts) => {
+  fetches.push(opts ? "POST" : "GET");
+  if (opts) return Promise.resolve({status: 204});
+  return new Promise((resolve) => {
+    releaseGather = () => resolve({ok: true, status: 200,
+                                   json: async () => gatherBody});
+  });
+};
+state.repos = [{i: 0, name: "alpha"}];
+state.answers = {0: "ok"};
+state.payloads = {0: {backlog: {hash: "h1", seeds: [
+  {line: 3, text: "a", claimed: null}, {line: 4, text: "b", claimed: null}]}}};
+state.orders = {0: [4, 3]};
+state.dirty = {0: true};
+state.saveErrors = {0: "stale conflict"};
+(async () => {
+  const first = saveOrder(0);
+  await new Promise((r) => setTimeout(r, 20));
+  const during = {saving: state.saving[0], errors: {...state.saveErrors}};
+  await saveOrder(0);
+  const html = renderBacklog(
+    [{i: 0, name: "alpha", payload: state.payloads[0]}], state.orders,
+    state.dirty, state.saveErrors, state.saving);
+  const duringHtml = html;
+  releaseGather();
+  await first;
+  console.log(JSON.stringify({
+    fetches, during, duringHtml, saving: state.saving[0],
+    dirty: state.dirty[0], errors: state.saveErrors,
+    orders: state.orders[0]}));
+})();
+"""
+
+    def test_a_second_save_during_the_regather_is_ignored(self):
+        import re
+        import shutil
+        import subprocess
+        if not shutil.which("node"):
+            self.skipTest("node not available")
+        page = dashboard.PAGE.read_text(encoding="utf-8")
+        script = re.search(r"<script>(.*)</script>", page,
+                           re.DOTALL).group(1)
+        script = script[:script.index("if (typeof document")]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "save_check.js"
+            path.write_text(script + self.HARNESS, encoding="utf-8")
+            run = subprocess.run(["node", str(path)], capture_output=True,
+                                 text=True, timeout=60)
+        self.assertEqual(run.returncode, 0, run.stderr)
+        out = json.loads(run.stdout)
+        self.assertEqual(out["fetches"], ["POST", "GET"])
+        self.assertTrue(out["during"]["saving"])
+        self.assertIn('<button data-save="0" disabled>',
+                      out["duringHtml"])
+        self.assertNotIn("draggable", out["duringHtml"])
+        self.assertFalse(out["saving"])
+        self.assertFalse(out["dirty"])
+        self.assertEqual(out["errors"], {})
+        self.assertEqual(out["orders"], [3, 4])
 
 
 class TestGatherBacklog(unittest.TestCase):
@@ -1293,8 +1418,13 @@ class TestRespondPost(unittest.TestCase):
             body = json.dumps({"i": 0,
                                "hash": dashboard.backlog_hash(self.TEXT),
                                "order": [5, 3, 4]})
-            with mock.patch.object(Path, "write_text",
-                                    side_effect=OSError("Permission denied")):
+            real_open = Path.open
+
+            def read_only(self, mode="r", *args, **kwargs):
+                if "w" in mode:
+                    raise OSError("Permission denied")
+                return real_open(self, mode, *args, **kwargs)
+            with mock.patch.object(Path, "open", read_only):
                 status, payload = self.post(tmp, body)
             self.assertEqual(status, 500)
             self.assertEqual(len(payload["problems"]), 1)
@@ -1344,6 +1474,31 @@ class TestRespondPost(unittest.TestCase):
         self.assertEqual(status, 404)
         self.assertEqual(payload,
                          {"problems": ["dashboard: no such path"]})
+
+
+class TestBacklogLineEndings(unittest.TestCase):
+    """#1877: a Save permutes seed lines and changes nothing else — not
+    CRLF endings, not a U+2028 inside prose."""
+
+    TEXT = ("# Backlog\r\n\r\nNotes: see\u2028below\r\n"
+            "- alpha (from: product)\r\n- beta (from: product)\r\n")
+
+    def test_a_save_keeps_crlf_and_unicode_line_breaks_in_place(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "docs" / "backlog.md"
+            path.parent.mkdir()
+            path.write_bytes(self.TEXT.encode("utf-8"))
+            gathered = dashboard._backlog(Path(tmp), [])
+            lines = [seed["line"] for seed in gathered["seeds"]]
+            body = json.dumps({"i": 0, "hash": gathered["hash"],
+                               "order": lines[::-1]})
+            status, payload = dashboard.respond_post(
+                "/api/backlog-order", body, lambda: ([tmp], []))
+            self.assertEqual((status, payload), (204, None))
+            self.assertEqual(path.read_bytes(), (
+                "# Backlog\r\n\r\nNotes: see\u2028below\r\n"
+                "- beta (from: product)\r\n"
+                "- alpha (from: product)\r\n").encode("utf-8"))
 
 
 class TestReorderBacklog(unittest.TestCase):

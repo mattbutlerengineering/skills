@@ -5,6 +5,7 @@ retry. A facet of tests/test_conductor_merge.py (its TurnCase harness,
 scratch repo and fake ports), split out so the merge-turn suites run as
 parallel modules (#916).
 """
+import json
 import subprocess
 import sys
 import unittest
@@ -75,6 +76,25 @@ class TestMergeTurnStalls(TurnCase):
         self.assertIn("Aborting", lines)
         self.assertStalled(summary, f"merging origin/main into {BRANCH}"
                            f" failed: {' | '.join(lines)}")
+
+    def test_a_pr_the_repo_merged_is_the_items_merge_by_the_repo(self):
+        # #1881: no open PR, a merged one carrying the pushed head: the
+        # item is merged by the repo, and nothing is pushed onto it.
+        self.item({"src.txt": "x\n"})
+        head = self.head()
+        gh = self.fake_gh()
+        gh.fake.answers[("pr", "list")] = lambda args: (
+            "[]" if "open" in args else json.dumps([
+                {"number": 44, "headRefOid": head,
+                 "mergeCommit": {"oid": "m1"}}]))
+        summary, problems = self.turn(SHIPPED, gh=gh)
+        self.assertEqual(problems, [])
+        self.assertEqual(summary, {"item": "#12", "stall": None, "pr": 44,
+                                   "sha": "m1", "checks": {}})
+        self.assertEqual(self.rows[-1]["to"], "merged")
+        self.assertEqual(self.rows[-1]["reason"], "merged by the repo as m1")
+        self.assertEqual(self.head("origin/" + BRANCH), head)
+        self.assertFalse(self.calls("git", "push"))
 
     def test_a_red_make_check_stalls_before_any_push(self):
         self.item({"src.txt": "x\n"})

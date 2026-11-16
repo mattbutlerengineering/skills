@@ -30,12 +30,15 @@ on:
   issues:
     types: [labeled]
 
-# A repeat label event QUEUES behind the running dispatch — this group
-# serializes, it does not dedupe. The claim step below is what makes the
-# repeat a no-op: by the time it runs, the order is no longer in ready
-# state, transitioned=false, and the agent step is skipped.
+# Only wo:ready-for-agent events share the per-issue dispatch group: a
+# repeat ready event QUEUES behind the running dispatch, and the claim step
+# below makes it a no-op (the order is no longer ready, transitioned=false,
+# the agent step is skipped). A group holds at most ONE pending run, and a
+# newer pending run replaces it — so every other label event gets its own
+# run_id group, or a size:/risk: label landing beside the ready label would
+# cancel the pending dispatch.
 concurrency:
-  group: assembler-${{ github.event.issue.number }}
+  group: assembler-${{ github.event.issue.number }}-${{ github.event.label.name == 'wo:ready-for-agent' && 'dispatch' || github.run_id }}
   cancel-in-progress: false
 
 permissions:

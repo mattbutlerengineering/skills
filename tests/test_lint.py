@@ -739,6 +739,12 @@ class TestSkillAssets(CheckerTreeTest):
                          encoding="utf-8")
         return skill.parent
 
+    def test_a_path_ending_a_sentence_drops_the_period(self):
+        # Issue #1859
+        skill_dir = self.write_skill("idea", "Read references/playbook.md.\n")
+        self.write_ref(skill_dir, "playbook.md", "x\n")
+        self.assertEqual(lint.check_skill_assets(self.root), [])
+
     def write_ref(self, skill_dir, name, body):
         (skill_dir / "references").mkdir(exist_ok=True)
         (skill_dir / "references" / name).write_text(body, encoding="utf-8")

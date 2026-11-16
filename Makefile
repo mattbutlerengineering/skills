@@ -33,11 +33,6 @@ ISSUE ?=
 PR ?=
 EVENT ?= pr-event.json
 
-# Plain `=`, not `?=`: the pin must not be overridable from the environment,
-# or a repo's CI could change behavior when a new playwright ships. Bump
-# deliberately alongside the design workflow's Node LTS.
-PLAYWRIGHT_VERSION = 1.62.1
-
 check:
 	python3 lint.py
 	python3 kb.py drift
@@ -90,13 +85,16 @@ toolsmith-mine:
 # gate 2), run when a PR touches docs/design/**. Playwright drives the UI
 # quality / accessibility / Core Web Vitals checks. It SKIPS gracefully when
 # the repo has no web app to test (no playwright.config.*) — this factory repo
-# has none, and the target is for stamped product repos that do. Same
-# skip-when-absent shape as the sweeps sentry job. Path-agnostic, so both
-# Makefiles carry it verbatim.
+# has none, and the target is for stamped product repos that do; same
+# skip-when-absent shape as the sweeps sentry job. It installs the product's
+# own dependencies (a standard playwright.config.ts imports @playwright/test)
+# and runs that Playwright, whose version the product's lockfile pins.
+# Path-agnostic, so both Makefiles carry it verbatim.
 web-quality:
 	@if ls playwright.config.* >/dev/null 2>&1; then \
-		npx --yes playwright@$(PLAYWRIGHT_VERSION) install --with-deps; \
-		npx --yes playwright@$(PLAYWRIGHT_VERSION) test; \
+		if [ -f package-lock.json ]; then npm ci; else npm install; fi \
+			&& npx playwright install --with-deps \
+			&& npx playwright test; \
 	else \
 		echo "web-quality: no playwright.config.* — skipping (no web app to test)"; \
 	fi

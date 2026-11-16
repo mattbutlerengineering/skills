@@ -166,6 +166,20 @@ class TestLinkedWorktree(Tree):
             f" {kb_harvest.slug(self.main)})"])
 
 
+class TestSubmodule(Tree):
+    """Issue #1862: in a submodule the common dir is
+    <super>/.git/modules/<name>, not a .git, so its parent is no checkout."""
+
+    def test_a_submodule_is_its_own_main_checkout(self):
+        base = Path(self._tmp.name).resolve()
+        lib = git_repo.init(base / "lib", "-b", "main")
+        real_git(lib, "commit", "-q", "--allow-empty", "-m", "seed")
+        sup = git_repo.init(base / "sup", "-b", "main")
+        real_git(sup, "-c", "protocol.file.allow=always", "submodule", "add",
+                 "-q", str(lib), "lib")
+        self.assertEqual(kb_harvest.main_checkout(sup / "lib"), sup / "lib")
+
+
 class TestSelect(Tree):
     def test_default_is_the_newest_top_level_session(self):
         self.save(Session("old"), age_days=2)

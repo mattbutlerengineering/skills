@@ -94,7 +94,7 @@ class TestRecord(unittest.TestCase):
             bad = dict(self.ROW, wo="WO-7", cost=-1.0)
             self.assertEqual(cost_ledger.record(tmp, bad), [
                 "wo 'WO-7' is not a WO-#### token or an issue key (#<n>)",
-                "cost must be a non-negative number"])
+                "cost must be a finite non-negative number"])
             self.assertFalse(self.ledger(tmp).exists())
 
     def test_an_unreadable_ledger_appends_nothing(self):
@@ -203,7 +203,7 @@ class TestRecordNew(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             bad = dict(self.ROW, run_id="r-2", cost=-1.0)
             self.assertEqual(cost_ledger.record_new(tmp, [self.ROW, bad]), (
-                [], ["ledger: refusing run_id 'r-2': cost must be a non-negative number"]))
+                [], ["ledger: refusing run_id 'r-2': cost must be a finite non-negative number"]))
             self.assertFalse(self.ledger(tmp).exists())
 
     def test_an_unreadable_ledger_appends_nothing(self):
@@ -269,7 +269,7 @@ class TestLineProblems(unittest.TestCase):
             " (#<n>)",
             "run_id must be a non-empty string",
             "tokens must be a non-negative integer",
-            "cost must be a non-negative number",
+            "cost must be a finite non-negative number",
         ])
 
     def test_bool_tokens_and_cost_are_problems(self):
@@ -279,7 +279,7 @@ class TestLineProblems(unittest.TestCase):
                        "2026-08-02")
         self.assertEqual(cost_ledger.line_problems(record), [
             "tokens must be a non-negative integer",
-            "cost must be a non-negative number",
+            "cost must be a finite non-negative number",
         ])
 
     def test_a_non_iso_at_is_a_problem(self):
@@ -307,6 +307,20 @@ class TestLineProblems(unittest.TestCase):
                        "2026-13-40")
         self.assertEqual(cost_ledger.line_problems(record),
                          ["at '2026-13-40' is not an ISO date (YYYY-MM-DD)"])
+
+
+class TestNonFiniteCost(unittest.TestCase):
+    def test_a_nan_cost_row_is_a_located_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / cost_ledger.COST_LEDGER
+            path.parent.mkdir(parents=True)
+            path.write_text(
+                '{"wo": "WO-0001", "run_id": "r1", "model": "m", "tokens": 1,'
+                ' "cost": NaN, "outcome": "merged", "at": "2026-11-02"}\n',
+                encoding="utf-8")
+            self.assertEqual(cost_ledger.read(tmp), ([], [
+                "ledger: docs/factory/costs.jsonl:1 cost must be a finite"
+                " non-negative number"]))
 
 
 class TestGateEntry(unittest.TestCase):
@@ -647,7 +661,7 @@ class TestRead(unittest.TestCase):
             self.ledger(tmp, json.dumps(bad) + "\n")
             self.assertEqual(cost_ledger.read(tmp), ([], [
                 "ledger: docs/factory/costs.jsonl:1 cost must be a"
-                " non-negative number"]))
+                " finite non-negative number"]))
 
     def test_an_injected_ledger_path_overrides_the_repo_default(self):
         with tempfile.TemporaryDirectory() as tmp:

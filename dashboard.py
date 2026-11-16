@@ -207,6 +207,7 @@ def _output(root, by_number, prs, spend):
     over the issue, spend is the ledger's recorded total for the work
     order."""
     entries = []
+    # An unreadable breakdown is skipped here; gather names it once.
     for _, lines in breakdown_files(root):
         for row in breakdown_rows(lines):
             number, wo = row["issue"], row["wo"]
@@ -383,8 +384,11 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                              if isinstance(entry.get("number"), int)}
                 state["queues"] = _queues(slug, listing, mirror, run,
                                           now, state["problems"])
+                unread = []
                 rows = [(str(path.relative_to(root)), lines)
-                        for path, lines in breakdown_files(root)]
+                        for path, lines in breakdown_files(root, unread)]
+                state["problems"].extend(f"dashboard: {problem}"
+                                         for problem in unread)
                 # absent_is_drift=False: this listing is windowed and
                 # renders on when truncated, so a mirror it never saw
                 # says nothing. sweeps aborts instead, and claims True.
@@ -439,19 +443,28 @@ def reorder_backlog(text, posted_hash, order):
     the desired sequence, each seed line moves wholesale (claim marker
     riding along), and every other line — header prose, blanks,
     malformed bullets — keeps its exact position. The console never
-    adds, drops, or edits a seed; producers append (ADR-0029)."""
-    if posted_hash != backlog_hash(text):
+    adds, drops, or edits a seed; producers append (ADR-0029). Line
+    terminators stay where they were (CRLF, a final line without one)
+    and only splitlines' own breaks number lines, as parse_backlog's do."""
+    # gather hashed the text through universal newlines (cli.read_file);
+    # the raw text here may still carry CR or CRLF.
+    if posted_hash != backlog_hash(text.replace("\r\n", "\n")
+                                   .replace("\r", "\n")):
         return None, [_STALE]
     seed_lines = [entry["line"] for entry in parse_backlog(text)]
     if sorted(order) != seed_lines:
         return None, ["dashboard: order is not a permutation of the "
                       "current seed lines"]
+    # Numbered as parse_backlog numbers them (splitlines), but each
+    # line keeps its own terminator: only a seed's content moves, so
+    # CRLF endings and a final line without a newline stay put.
     lines = text.splitlines()
+    ends = [kept[len(line):] for kept, line
+            in zip(text.splitlines(keepends=True), lines)]
     reordered = list(lines)
     for position, source in zip(seed_lines, order):
         reordered[position - 1] = lines[source - 1]
-    tail = "\n" if text.endswith("\n") else ""
-    return "\n".join(reordered) + tail, []
+    return "".join(line + end for line, end in zip(reordered, ends)), []
 
 
 DEFAULT_PORT = 7700
@@ -532,9 +545,10 @@ def respond_post(target, body, repos_fn):
     path = Path(repos[index]) / BACKLOG
     # Hand-written rather than cli.read_file (ADR-0075): an absent
     # backlog is an OSError message here, where read_file gives
-    # (None, None).
+    # (None, None). newline="" keeps CRLF endings through the rewrite.
     try:
-        text = path.read_text(encoding="utf-8")
+        with path.open(encoding="utf-8", newline="") as handle:
+            text = handle.read()
     except (OSError, UnicodeDecodeError) as err:
         return 500, {"problems": [
             f"dashboard: cannot read {BACKLOG}: {err}"]}
@@ -544,7 +558,8 @@ def respond_post(target, body, repos_fn):
         status = 409 if reorder_problems == [_STALE] else 400
         return status, {"problems": reorder_problems}
     try:
-        path.write_text(new_text, encoding="utf-8")
+        with path.open("w", encoding="utf-8", newline="") as handle:
+            handle.write(new_text)
     except OSError as err:
         return 500, {"problems": [
             f"dashboard: cannot write {BACKLOG}: {err}"]}

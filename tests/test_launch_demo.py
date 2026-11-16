@@ -143,6 +143,13 @@ class TestLoad(unittest.TestCase):
             (None, [f"{LABEL} against must be an http(s) URL for the"
                     " browser recorder"]))
 
+    def test_a_malformed_against_url_is_the_url_problem_not_a_crash(self):
+        self.assertEqual(
+            self.load({**VALID, "recorder": "browser",
+                       "against": "http://[::1"}),
+            (None, [f"{LABEL} against must be an http(s) URL for the"
+                    " browser recorder"]))
+
     def test_voice_must_name_out_when_present(self):
         for bad in ("say -o out.wav", ""):
             with self.subTest(voice=bad):
@@ -497,6 +504,14 @@ class TestBody(unittest.TestCase):
 class TestCheckStoryboard(unittest.TestCase):
     def check(self, board, recorder="terminal"):
         return launch_demo.check_storyboard(board, COPY, recorder)
+
+    def test_empty_blank_and_fragment_narration_is_not_a_sentence(self):
+        board = storyboard(intro="", outro="eeds no comm")
+        board["steps"][0]["say"] = "   "
+        problems = self.check(board)
+        self.assertIn(f"{SB} intro is not a sentence of launch.md", problems)
+        self.assertIn(f"{SB} outro is not a sentence of launch.md", problems)
+        self.assertEqual(len(problems), 3)
 
     def test_a_conformant_terminal_storyboard(self):
         self.assertEqual(self.check(STORYBOARD), [])
@@ -1028,6 +1043,17 @@ class RenderMixin:
 
 
 class TestRender(RenderMixin, unittest.TestCase):
+    def test_a_slug_that_leaves_the_publish_dir_is_a_problem(self):
+        for slug in ("../../outside", "a/b", "/abs", ".."):
+            with self.subTest(slug=slug):
+                self.assertEqual(
+                    launch_demo.render(self.root, self.config, slug,
+                                       self.which, self.runners,
+                                       scratch=self.scratch),
+                    (None, [], ["launch-demo: slug must be a plain"
+                                " directory name"]))
+        self.assertEqual(self.runners.calls, [])
+
     def test_no_copy_is_the_missing_problem(self):
         (self.slug_dir / "launch.md").unlink()
         self.assertEqual(self.render(),
@@ -1183,6 +1209,10 @@ class TestReachable(unittest.TestCase):
             raise urllib.error.URLError("Connection refused")
         self.assertEqual(launch_demo.reachable("http://h", head),
                          (False, "Connection refused"))
+
+    def test_a_malformed_url_is_unreachable_not_a_crash(self):
+        self.assertEqual(
+            launch_demo.reachable("http://localhost:3000/my page")[0], False)
 
     def test_a_timeout_names_the_budget(self):
         def head(url, timeout):

@@ -413,6 +413,16 @@ class TestPageWriter(unittest.TestCase):
                 self.assertTrue(out.splitlines()[0].startswith(
                     "assembly_line: cannot write the page: "), out)
 
+    def test_a_comment_opener_before_a_script_tag_cannot_swallow_the_page(self):
+        """#1889: `<!--` then `<script` in the model puts the HTML parser
+        in the double-escaped state, where the template's own </script>
+        no longer closes the model block."""
+        model = {"title": "Strip `<!--<script>` blocks", "slug": "a</b"}
+        page = assembly_line.render(model, "<m>__MODEL__</m>", {})
+        body = page[len("<m>"):-len("</m>")]
+        self.assertNotIn("<", body)
+        self.assertEqual(json.loads(body), model)
+
     def test_slot_names_inside_the_model_are_data_not_slots(self):
         model = {"slug": "__THREE_CORE__ and __MODEL__"}
         page = assembly_line.render(

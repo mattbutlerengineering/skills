@@ -262,9 +262,11 @@ def reconcile(root, run=gh_runner):
     issues, problems = live_issues(run)
     if issues is None:
         return [], problems
+    unread = []
     rows = [(str(path.relative_to(root)), lines)
-            for path, lines in breakdown_files(root)]
+            for path, lines in breakdown_files(root, unread)]
     drift, problems = reconcile_drift(rows, issues)
+    problems = [f"sweeps: {problem}" for problem in unread] + problems
     intake = reconcile_intake(drift)
     return ([intake] if intake else []), problems
 
@@ -408,6 +410,8 @@ def file_issues(root, intakes, run=gh_runner, notify=print):
     already on the board, dedupe would drop all of them, and nothing behind
     them would ever be filed. Over the cap, the remainder is deferred to the
     next sweep and said out loud — never silently dropped."""
+    if not intakes:
+        return [], []
     fileable, problems = screen(root, intakes)
     if not fileable:
         return [], problems

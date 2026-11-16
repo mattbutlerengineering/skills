@@ -400,5 +400,20 @@ class TestOneFenceDefinition(unittest.TestCase):
                 self.assertEqual(fence_definitions(source), [])
 
 
+class TestNestedMapDescription(unittest.TestCase):
+    def test_a_nested_map_description_is_a_problem_not_a_crash(self):
+        root = Path(tempfile.mkdtemp(prefix="skill-fm-"))
+        self.addCleanup(shutil.rmtree, root)
+        path = skill_path(root, "demo")
+        path.parent.mkdir(parents=True)
+        path.write_text("---\nname: demo\ndescription:\n"
+                        "  Use when the user says: plan this\n---\n",
+                        encoding="utf-8")
+        self.assertEqual(
+            skill_frontmatter_problems(root, "demo"),
+            ["skills/demo/SKILL.md description is not a bare YAML scalar:"
+             " it is a nested map"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -116,7 +116,12 @@ def Git(tmp, changed="", shows=None, failing=None, log="", heads=None,
         ("rev-parse", "--path-format=absolute", "--git-common-dir"):
             f"{Path(tmp) / '.git'}\n",
         ("worktree", "add"): add_worktree, ("log",): log,
-        ("diff",): changed, ("ls-tree", "--name-only"): listed,
+        ("diff", "--name-only"): "".join(
+            f"{path}\0" for path in changed.split()),
+        ("diff", "--raw"): "".join(
+            f":100644 100644 {'0' * 40} b1 M\0{path}\0"
+            for path in changed.split()),
+        ("ls-tree", "--name-only"): listed,
         ("ls-tree", "-r", "--name-only"): listed_runs,
         # Read at call time: a Worker's commit changes what a ref holds.
         ("show",): lambda args: shows.get(args[-1], "")},

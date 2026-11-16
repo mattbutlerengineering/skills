@@ -145,6 +145,13 @@ class TestPaths(Tree):
             " exist",
         ])
 
+    def test_a_double_star_rule_covers_the_top_level_too(self):
+        # Issue #1861
+        rules = kb_drift._ignore_rules("**/dist\n")
+        self.assertTrue(kb_drift.gitignored(rules, "dist/app.js"))
+        self.assertTrue(kb_drift.gitignored(rules, "a/dist/app.js"))
+        self.assertFalse(kb_drift.gitignored(rules, "a/distx/app.js"))
+
     def test_a_bare_filename_resolves_anywhere_in_the_repo(self):
         self.file("CLAUDE.md", "`app.py` lives deep; `nowhere.py` does"
                   " not.\n")

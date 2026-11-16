@@ -57,7 +57,14 @@ REDIRECTS = {">", ">>", "<", "<<", "<<<", ">&", "<&", "&>"}
 INLINE_CODE = re.compile(r"(`+)([^`\n]+?)\1")
 PLACEHOLDER = re.compile(r"[<>{}$*?\[\]~|\s]|\.\.\.")
 TEMPLATE = re.compile(r"<[A-Za-z][^<>]*>")
-HEREDOC = re.compile(r"<<-?\s*['\"]?(\w+)['\"]?")
+HEREDOC = re.compile(r"(?<!<)<<(?!<)-?\s*['\"]?(\w+)['\"]?")
+FD_PREFIX = re.compile(r"(?<!\S)\d+(?=[<>])")
+# Options that consume the next word: it is a value, never a target or
+# a script.
+MAKE_VALUE_OPTIONS = {"-f", "-C", "-I", "-j", "-l", "-o", "-W"}
+INTERPRETER_VALUE_OPTIONS = {
+    "node": {"-r", "--require"},
+    "python": {"-W", "-X"}, "python3": {"-W", "-X"}}
 MAKE_RULE = re.compile(r"^([^\s:=#][^:=#]*?)\s*::?(?!=)")
 
 
@@ -255,7 +262,7 @@ def _verify_command(root, doc_dir, line):
     if TEMPLATE.search(line):
         return []
     try:
-        lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
+        lexer = shlex.shlex(FD_PREFIX.sub("", line), posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
         tokens = list(lexer)
     except ValueError:
@@ -289,7 +296,8 @@ def _segments(tokens):
 
 
 def _cd(cwd, segment):
-    if len(segment) != 2 or PLACEHOLDER.search(segment[1]):
+    if (len(segment) != 2 or PLACEHOLDER.search(segment[1])
+            or segment[1].startswith("/")):
         return None
     return cwd / segment[1]
 
@@ -303,11 +311,18 @@ def _verify_segment(root, cwd, doc_dir, segment):
     if program in PACKAGE_RUNNERS:
         return _verify_package(root, cwd, args)
     if program in INTERPRETERS:
-        for at, arg in enumerate(args):
+        valued = INTERPRETER_VALUE_OPTIONS.get(program, ())
+        at = 0
+        while at < len(args):
+            arg = args[at]
             if arg in NO_SCRIPT:
                 return []
+            if arg in valued:
+                at += 2
+                continue
             if not arg.startswith("-"):
                 return _verify_script(root, cwd, doc_dir, arg, args[at + 1:])
+            at += 1
         return []
     if "/" in program:
         return _verify_script(root, cwd, doc_dir, program, args)
@@ -339,11 +354,16 @@ def _long_flags(args):
 
 
 def _verify_make(root, cwd, args):
-    targets, at = [], 0
+    targets, at, named = [], 0, None
     while at < len(args):
         arg = args[at]
-        if arg == "-C" and at + 1 < len(args):
-            cwd, at = cwd / args[at + 1], at + 2
+        if arg in MAKE_VALUE_OPTIONS:
+            if at + 1 < len(args):
+                if arg == "-C":
+                    cwd = cwd / args[at + 1]
+                elif arg == "-f":
+                    named = args[at + 1]
+            at += 2
             continue
         if not arg.startswith("-") and "=" not in arg:
             targets.append(arg)
@@ -353,14 +373,20 @@ def _verify_make(root, cwd, args):
     # Listed, not probed: a case-insensitive filesystem answers is_file()
     # for every spelling, and the message names the one on disk.
     present = set(os.listdir(cwd)) if cwd.is_dir() else set()
-    makefile = next((cwd / n for n in MAKEFILES if n in present), None)
+    if named is not None:
+        makefile = cwd / named
+        if PLACEHOLDER.search(named) or not makefile.is_file():
+            return []
+    else:
+        makefile = next((cwd / n for n in MAKEFILES if n in present), None)
     if makefile is None:
         return [f"command runs make, but no Makefile exists in {where}"]
     text, _ = cli.read_file(makefile, where, str)
     rules = {name for line in (text or "").splitlines()
              for match in [MAKE_RULE.match(line)] if match
              for name in match.group(1).split()}
-    shown = makefile.relative_to(root).as_posix()
+    shown = makefile.relative_to(root).as_posix() \
+        if makefile.is_relative_to(root) else str(makefile)
     return [f"make target {target!r} is not defined in {shown}"
             for target in targets
             if target not in rules and not PLACEHOLDER.search(target)]

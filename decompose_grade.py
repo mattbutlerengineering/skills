@@ -119,7 +119,7 @@ def _fraction(good, total):
 def blockers(block, labels=()):
     """The elements of a block's Blocked by clause (sub-bullet or inline),
     split on `;` and `,`; an empty, dash or `none` element is no edge. A
-    `;` segment that is wholly some item's bold label (`labels`) stays one
+    `;` segment that is wholly some item's bold label (`labels`, exact match) stays one
     element, so a label holding a comma is not cut in two."""
     clause = _BLOCKED_BY.search(block)
     if clause is None:
@@ -127,9 +127,8 @@ def blockers(block, labels=()):
     parts = []
     for segment in clause.group(1).split(";"):
         whole = segment.strip(" .`*")
-        parts.extend([whole] if "," in whole and any(
-            whole in label for label in labels)
-            else (p.strip(" .`*") for p in segment.split(",")))
+        parts.extend([whole] if "," in whole and whole in labels
+                     else (p.strip(" .`*") for p in segment.split(",")))
     return [p for p in parts if p.lower() not in _NO_EDGE]
 
 

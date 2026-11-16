@@ -565,19 +565,26 @@ def _publish(root, batch, git, gh, finals, reasons, branches):
 
 def reconcile_landed(gh, root, batch, now, blocked):
     """(the blocked items whose PR merged after the block, in item
-    order, problems): each is moved blocked → merged as merged outside
+    order, problems; a PR the ledger already raised as merge-drift for
+    the item is left to the Owner's answer, so a `block` stands): each is moved blocked → merged as merged outside
     the batch (#938, ADR-0105), before the close reads its finals,
     carries spend or labels anything — its branch merged, so its spend
     rows reached main on that PR, and it needs no needs-human label.
     Every branch is read before any row is written: a read that fails
     refuses the close with nothing written."""
+    rows, problems = load(root, batch)
+    if problems:
+        return None, problems
     landed = {}
     for item in blocked:
         found, problems = conductor_next.merged_pr(
             gh, flow.item_branch(batch, item))
         if problems:
             return None, _refused(problems)
-        if found is not None:
+        # A PR the ledger already asked about is the Owner's to decide:
+        # a `block` answer declined treating it as merged (#1872).
+        if found is not None and not conductor_landed.asked(
+                rows, item, found["pr"]):
             landed[item] = found
     for item, found in landed.items():
         reason, fields = conductor_landed.merge(found)

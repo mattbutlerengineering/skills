@@ -78,10 +78,11 @@ class TestConsumerWidth(unittest.TestCase):
         (self.wt / "docs/adr/README.md").write_text(
             CONSUMER_INDEX + "- [ADR-027](ADR-027-redis.md) Use Redis\n")
         self.git = FakeGit({
-            ("ls-tree", "--name-only", "origin/main", "--", "docs/adr/"):
-                "".join(f"docs/adr/{name}\n"
+            ("ls-tree", "-z", "--name-only", "origin/main", "--",
+             "docs/adr/"):
+                "".join(f"docs/adr/{name}\0"
                         for name in CONSUMER_MAIN + ["README.md"]),
-            ("diff", "--name-only"): f"{ITEM_ADR}\ndocs/adr/README.md\n",
+            ("diff", "--name-only"): f"{ITEM_ADR}\0docs/adr/README.md\0",
             ("show", "origin/main:docs/adr/README.md"): CONSUMER_INDEX})
         rows = [{"at": AT, "kind": "reserve", "item": "#12",
                  "what": "adr", "values": [27, 28, 29]}]

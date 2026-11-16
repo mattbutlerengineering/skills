@@ -457,6 +457,11 @@ class TestSurveyWrites(unittest.TestCase):
                       " row", "cause": "runner-lost"})
         self.assertEqual((writes[1]["ask_kind"], writes[1]["recommended"]),
                          ("stall", "retry"))
+        # #1874: a merge turn has no band to raise.
+        self.assertEqual(writes[1]["options"], ["retry", "block"])
+        self.assertEqual(writes[1]["question"],
+                         "#14 stalled in merging: its merge turn (pid 4242)"
+                         " is gone with no merged row. Retry, or block?")
         resumed = rows + writes + [answered(writes[1]["id"], "retry",
                                             "#14")]
         ready, _, _ = flow.survey(START + resumed, NOW, 3, dead, {})
@@ -609,24 +614,62 @@ class TestVerdict(unittest.TestCase):
             "cd: verdict 'meh' is not pass or changes"]))
 
 
+def raw_diff(*entries):
+    """What `git diff --raw -z --no-renames --no-abbrev` prints for
+    (blob id, path) entries; a deletion's new blob id is all zeros."""
+    return "".join(f":100644 100644 {'f' * 40} {blob} M\0{path}\0"
+                   for blob, path in entries)
+
+
 class TestGitFacts(unittest.TestCase):
-    def git(self, changed, tree="", shows=None):
-        return FakeGit({("diff",): changed, ("ls-tree",): tree,
+    def git(self, changed="", raw="", shows=None):
+        names = "".join(f"{path}\0" for path in changed.split("\n") if path)
+        return FakeGit({("diff", "--name-only"): names,
+                        ("diff", "--raw"): raw,
                         **{("show", spec): text
                            for spec, text in (shows or {}).items()}})
 
     def test_gate_blobs_are_the_changed_gate_files_blob_ids(self):
-        git = self.git(
-            "docs/features/x/prd.md\nconductor.py\ndocs/adr/0090-y.md\n",
-            "100644 blob aaa\tdocs/adr/0090-y.md\n"
-            "100644 blob bbb\tdocs/features/x/prd.md\n")
+        git = self.git(raw=raw_diff(
+            ("c" * 40, "docs/features/x/prd.md"), ("d" * 40, "conductor.py"),
+            ("a" * 40, "docs/adr/0090-y.md")))
         self.assertEqual(flow.gate_blobs(git, "conductor/b1-12"), (
-            {"docs/adr/0090-y.md": "aaa", "docs/features/x/prd.md": "bbb"},
-            []))
+            {"docs/adr/0090-y.md": "a" * 40,
+             "docs/features/x/prd.md": "c" * 40}, []))
+        self.assertEqual(git.called("diff"), [[
+            "diff", "--raw", "-z", "--no-renames", "--no-abbrev",
+            "origin/main...conductor/b1-12"]])
+
+    def test_a_deleted_gate_file_is_a_blob_no_approval_matches(self):
+        # #1871: git prints the all-zero blob id for a deletion.
+        zero = "0" * 40
+        git = self.git(raw=raw_diff((zero, "docs/adr/0001-x.md")))
+        blobs, problems = flow.gate_blobs(git, "conductor/b1-12")
+        self.assertEqual((blobs, problems),
+                         ({"docs/adr/0001-x.md": zero}, []))
+
+    def test_gate_paths_with_spaces_and_non_ascii_names_are_kept(self):
+        git = self.git(raw=raw_diff(
+            ("a" * 40, "docs/adr/0002-d\u00e9cision.md"),
+            ("b" * 40, "docs/adr/0003 two words.md")))
+        self.assertEqual(flow.gate_blobs(git, "conductor/b1-12"), ({
+            "docs/adr/0002-d\u00e9cision.md": "a" * 40,
+            "docs/adr/0003 two words.md": "b" * 40}, []))
+
+    def test_changed_files_are_read_nul_separated(self):
+        git = self.git("docs/adr/0002-d\u00e9cision.md\n"
+                       "docs/adr/0003 two words.md\n")
+        self.assertEqual(flow.changed_files(git, "conductor/b1-12"), ([
+            "docs/adr/0002-d\u00e9cision.md",
+            "docs/adr/0003 two words.md"], []))
+        self.assertEqual(git.called("diff"), [[
+            "diff", "--name-only", "-z", "--no-renames",
+            "origin/main...conductor/b1-12"]])
 
     def test_no_changed_gate_file_is_empty(self):
-        self.assertEqual(flow.gate_blobs(self.git("conductor.py\n"),
-                                         "conductor/b1-12"), ({}, []))
+        self.assertEqual(flow.gate_blobs(
+            self.git(raw=raw_diff(("a" * 40, "conductor.py"))),
+            "conductor/b1-12"), ({}, []))
 
     def test_unchecked_rows_come_from_the_branchs_breakdown(self):
         path = "docs/features/x/breakdown.md"
@@ -1096,6 +1139,39 @@ class TestLandedPr(unittest.TestCase):
                          ("reviewed", "merged"))
         self.assertTrue(writes[1]["why"].endswith(
             "retry reruns reviewed on a fresh PR"))
+
+    def retried(self, rows):
+        """Rows for a merged-outside stall of #12 answered retry."""
+        _, writes, _ = flow.survey(START + rows, NOW, 3, alive,
+                                   {"#12": {"merged_pr": LANDED}})
+        return START + rows + writes + [
+            answered(writes[1]["id"], "retry", "#12")]
+
+    def test_retrying_a_stalled_reviewed_item_resumes_at_ship(self):
+        # #1870: reviewed is a state, not a step; retry reruns what
+        # follows it.
+        rows = self.retried([moved("#12", "review", "reviewed",
+                                   verdict="pass", author_runs=["a"],
+                                   reviewer_run="r")])
+        ready, _, _ = flow.survey(rows, NOW, 3, alive, {})
+        self.assertEqual([r for r in ready if r["item"] == "#12"],
+                         [{"item": "#12", "step": "ship"}])
+        self.assertEqual(flow.transition_problems(rows, "#12", "ship", {}),
+                         [])
+        self.assertEqual(
+            flow.transition_problems(rows, "#12", "reviewed", {}),
+            ["cd: #12 leaves stalled only for ship, after a retry answer"])
+
+    def test_retrying_a_stalled_approved_gate_item_resumes_at_build(self):
+        rows = self.retried([
+            launch("#12", "planned", "spec"), ran("#12", "spec"),
+            moved("#12", "spec", "awaiting-gate"), gate_ask("ask-2", "#12"),
+            answered("ask-2", "approve", "#12")])
+        ready, _, _ = flow.survey(rows, NOW, 3, alive, {})
+        self.assertEqual([r for r in ready if r["item"] == "#12"],
+                         [{"item": "#12", "step": "build"}])
+        self.assertEqual(flow.transition_problems(rows, "#12", "build", {}),
+                         [])
 
     def test_the_same_pr_is_asked_about_once(self):
         # The Owner answered retry: the rest builds on a fresh PR, and

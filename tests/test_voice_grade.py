@@ -104,6 +104,12 @@ class TestPatterns(unittest.TestCase):
 
 
 class TestSlop(unittest.TestCase):
+    def test_a_backtick_fence_inside_a_tilde_fence_stays_code(self):
+        text = "Write it:\n\n~~~markdown\n```\nfoo \u2014 bar\n```\n~~~\n"
+        self.assertEqual(vg.slop(text), [])
+        self.assertEqual(vg.slop(text + "\nfoo \u2014 bar"),
+                         [("em-dash", "\u2014")])
+
     def test_clean_text_is_an_empty_list(self):
         self.assertEqual(vg.slop("Run `git reset --soft HEAD~1`."), [])
         self.assertEqual(vg.slop(""), [])

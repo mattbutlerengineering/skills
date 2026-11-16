@@ -126,6 +126,19 @@ class TestValidation(unittest.TestCase):
         self.path.write_text(json.dumps(data), encoding="utf-8")
         return charter_replay.load_cases(self.path, ROOT, LABEL)
 
+    def test_a_non_string_fixture_is_a_problem_not_a_crash(self):
+        for fixture in (5, ["x"]):
+            with self.subTest(fixture=fixture):
+                data = {"version": 1, "cases": [{
+                    "id": "a", "role": "swe", "fixture": fixture,
+                    "trap": "t", "expectations": [
+                        {"id": "e", "scope": "commands", "mode": "forbid",
+                         "pattern": "x"}]}]}
+                problems = charter_replay.validate(data, ROOT, LABEL)
+                self.assertIn(
+                    f"{LABEL} case 'a' fixture {fixture!r} has no"
+                    " work-order.md", problems)
+
     def test_missing_file(self):
         _, problems = charter_replay.load_cases(
             self.dir / "absent.json", ROOT, LABEL)

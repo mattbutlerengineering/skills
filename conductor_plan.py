@@ -66,11 +66,12 @@ AUTO_MERGE_GREP = ["grep", "-l", "-i", "-E",
 
 def _listed(git, args):
     """(the names `git ls-tree --name-only` prints for ARGS, problems)."""
+    # -z: git otherwise C-quotes a non-ASCII name, hiding its extension.
     try:
-        out = git(args).stdout
+        out = git([args[0], "-z", *args[1:]]).stdout
     except CLI_FAILURES as err:
         return None, [f"cd: git ls-tree origin/main failed: {detail(err)}"]
-    return [PurePosixPath(line).name for line in out.splitlines()], []
+    return [PurePosixPath(name).name for name in out.split("\0") if name], []
 
 
 def ids_on_main(git):

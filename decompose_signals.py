@@ -495,9 +495,12 @@ def measure(root, run):
     if history is None:
         return None, problems
     read = _reader(root, run, problems)
+    unread = []
+    files = sorted(breakdown_files(root, unread))
+    problems.extend(f"{LABEL}: {problem}" for problem in unread)
     runs = [_run_record(root, path.parent, lines, history["commits"], read,
                         problems)
-            for path, lines in sorted(breakdown_files(root))]
+            for path, lines in files]
     return {"refs": history["refs"], "refs_digest": history["digest"],
             "rule": RULE, "runs": runs, "aggregate": _aggregate(runs)}, \
         problems

@@ -530,6 +530,22 @@ class TestClose(unittest.TestCase):
              " blocked items (none).\n\nCloses #12\nCloses #13\nCloses #14"
              "\n\nNo work order: the Conductor's closing PR for batch b1."]])
 
+    def test_a_pr_the_owner_declined_as_merged_stays_blocked(self):
+        # #1872: #13 stalled merge-drift on PR #6541 and the Owner
+        # answered block; that PR merged before the block, so close
+        # leaves the item blocked rather than recording it merged.
+        rows = [dict(row, cause="merge-drift", pr=6541)
+                if row.get("item") == "#13" and row.get("to") == "stalled"
+                else row for row in ROWS]
+        summary, problems = self.close(rows, gh=FakeGh(
+            {**LANDED_GH, LABEL_LIST: HAS_NEEDS_HUMAN}))
+        self.assertEqual(problems, [])
+        self.assertEqual((summary["landed"], summary["blocked"],
+                          summary["merged"]), ([], ["#13"], ["#12", "#14"]))
+        self.assertEqual(
+            [row for row in self.ledger() if row.get("item") == "#13"
+             and row.get("to") == "merged"], [])
+
     def test_an_unreadable_merged_pr_refuses_the_close(self):
         gh = FakeGh(failing=list(MERGED_READ))
         self.assertEqual(self.close(ROWS, gh=gh), (None, [

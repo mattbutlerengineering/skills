@@ -161,6 +161,14 @@ class TempFile(unittest.TestCase):
 
 
 class TestFile(TempFile):
+    def test_a_non_string_id_is_a_problem_not_a_crash(self):
+        self.path.write_text(
+            jsonl([], {**lesson(), "id": ["x"]}), encoding="utf-8")
+        _, _, problems = dl.load(self.path)
+        self.assertEqual(problems, [
+            "decompose-lessons: lessons.jsonl line 2:"
+            " missing or malformed field id"])
+
     def test_a_file_round_trips_byte_identically(self):
         text = jsonl(["replan:feature:a", "review:feature:b"],
                      lesson("replan/feature/added"),

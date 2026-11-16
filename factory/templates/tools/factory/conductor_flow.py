@@ -108,6 +108,20 @@ def _successors(item_type, state, rows, item):
     return list(SEQUENCE[following:following + 1])
 
 
+def _resume(found):
+    """The step or turn a retry answer resumes a stalled item at, or
+    None. The stall's `from` is a step, `merging` (a merge turn), or a
+    state with no step of its own: reviewed resumes at ship, and
+    awaiting-gate at build once its gate is approved."""
+    state = found["last"]["from"]
+    if state == "reviewed":
+        return "ship"
+    if state == "awaiting-gate":
+        opened = found["gate"]
+        return "build" if opened and opened["choice"] == "approve" else None
+    return state
+
+
 def _stalled_problems(rows, found, to, fields):
     stalled, resumed = found["last"], found["resumed"]
     if to == landed.MERGED:
@@ -116,9 +130,10 @@ def _stalled_problems(rows, found, to, fields):
             return []
         return [f"cd: {found['item']} leaves stalled for merged only after"
                 " a merged answer to its stall ask"]
-    if to != stalled["from"] or not found["retry"]:
+    if to != _resume(found) or not found["retry"]:
         return [f"cd: {found['item']} leaves stalled only for"
-                f" {stalled['from']}, after a retry answer"]
+                f" {_resume(found) or stalled['from']}, after a retry"
+                " answer"]
     # A launch carries a fresh run id; `next`'s bookkeeping resume
     # carries the completed run's own (#939).
     run = delivered_run(rows, found)
@@ -219,9 +234,13 @@ def stall_rows(rows, now, entry, reason, cause, recommended, why,
     found = item_view(rows, item)
     state, finishing = found["state"], found["finishing"]
     if options is None:
-        options = stall_options(finishing["band"] if finishing is not None
-                                else found["steps"].get(state, {})
-                                .get("band"))
+        band = (finishing["band"] if finishing is not None
+                else found["steps"].get(state, {}).get("band"))
+        options = stall_options(band)
+        if band is None:
+            # No band to raise: a merge turn has no finishing run and no
+            # step of its own.
+            options = [o for o in options if o != "retry-up"]
     if cause == "delivery-failed":
         # The Worker finished; a retry redoes its bookkeeping (#939),
         # and no band is involved.
@@ -625,7 +644,7 @@ def _step(rows, now, entry, alive, facts, policy):
         # A finished run's bookkeeping is `next`'s own turn (#939), and
         # a merge turn that stalled resumes as a merge, not a step.
         if found["retry"] and delivered_run(rows, found) is None:
-            resume = launched["from"]
+            resume = _resume(found)
             return ("merge" if resume == "merging" else resume), False, []
         return None, False, []
     if found["pending"] is not None:
@@ -692,29 +711,29 @@ def _git(git, args, what):
 
 
 def changed_files(git, branch):
-    out, problems = _git(git, ["diff", "--name-only",
+    """(the paths the item branch changes against origin/main, problems),
+    read NUL-separated so a space or a non-ASCII name arrives whole."""
+    out, problems = _git(git, ["diff", "--name-only", "-z", "--no-renames",
                                f"origin/main...{branch}"],
                          f"diff for {branch}")
-    return (None, problems) if problems else (out.split(), [])
+    return (None, problems) if problems else (
+        [path for path in out.split("\0") if path], [])
 
 
 def gate_blobs(git, branch):
     """({gate path: blob id}, problems) for the gate files the item
-    branch changes against origin/main."""
-    changed, problems = changed_files(git, branch)
+    branch changes against origin/main. A deleted gate file carries git's
+    all-zero blob id, so it is a gate change no approval matches."""
+    out, problems = _git(git, ["diff", "--raw", "-z", "--no-renames",
+                               "--no-abbrev", f"origin/main...{branch}"],
+                         f"diff for {branch}")
     if problems:
         return None, problems
-    gates = [path for path in changed if GATE_PATH.fullmatch(path)]
-    if not gates:
-        return {}, []
-    out, problems = _git(git, ["ls-tree", branch, "--", *gates],
-                         f"ls-tree for {branch}")
-    if problems:
-        return None, problems
-    blobs = {}
-    for line in out.splitlines():
-        meta, _, path = line.partition("\t")
-        blobs[path] = meta.split()[2]
+    fields, blobs = out.split("\0"), {}
+    # Each entry is ":<modes> <old blob> <new blob> <status>", then a path.
+    for meta, path in zip(fields[0::2], fields[1::2]):
+        if GATE_PATH.fullmatch(path):
+            blobs[path] = meta.split()[3]
     return blobs, []
 
 

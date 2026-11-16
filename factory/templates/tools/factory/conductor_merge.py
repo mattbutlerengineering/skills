@@ -632,6 +632,18 @@ def landed_by_repo(git, gh, worktree, branch):
     return pr, sha
 
 
+def repo_landed(git, gh, worktree, branch):
+    """(pr, sha) when the repo itself already merged a shipped item's PR
+    (#1881, ADR-0105), read before the turn pushes a commit onto a merged
+    branch; None while the branch has exactly one open PR, or no merged
+    one. A merge without the pushed head raises landed_by_repo's Stall."""
+    try:
+        pr_number(gh, branch)
+    except Stall:
+        return landed_by_repo(git, gh, worktree, branch)
+    return None
+
+
 def _reserve(root, batch, clock, item, fields):
     _, problems = append(root, batch, lambda rows: (
         [{"at": stamp(clock()), "kind": "reserve", "item": item, **one}
@@ -732,7 +744,9 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
     a turn that cannot finish mechanically queues a stall ask and leaves
     the branch as pushed — never a forced push, never a retry. `config`
     is the batch root's factory config (None reads as empty: every
-    optional table at its default)."""
+    optional table at its default). An item whose PR the repo itself
+    already merged moves to merged, by the repo, with nothing pushed
+    (#1881)."""
     gate, problems = factory_config.resolve_gate_command(config or {})
     policy, found = factory_config.resolve_standing_consent(config or {})
     if problems or found:
@@ -765,10 +779,17 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
                             pid=os.getpid() if pid is None else pid)
     if problems:
         return None, problems
+    by_repo = False
     try:
-        merged, problems = _turn(root, batch, item,
-                                 (git, gh, tool, clock, sleep), worktree,
-                                 gate, policy)
+        repo = repo_landed(git, gh, worktree, flow.item_branch(batch, item))
+        by_repo = repo is not None
+        if by_repo:
+            merged, problems = {"pr": repo[0], "sha": repo[1],
+                                "checks": {}}, []
+        else:
+            merged, problems = _turn(root, batch, item,
+                                     (git, gh, tool, clock, sleep),
+                                     worktree, gate, policy)
     except Stall as stall:
         _, problems = flow.queue_stall(
             root, batch, clock(), item, stall.reason, "merge-failed",
@@ -777,8 +798,10 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
         return {"item": item, "stall": stall.reason}, problems
     if problems:
         return None, problems
-    _, problems = flow.move(root, batch, clock(), item, "merged",
-                            f"merged as {merged['sha']}", **merged)
+    reason = (f"merged by the repo as {merged['sha']}" if by_repo
+              else f"merged as {merged['sha']}")
+    _, problems = flow.move(root, batch, clock(), item, "merged", reason,
+                            **merged)
     return {"item": item, "stall": None, **merged}, problems
 
 

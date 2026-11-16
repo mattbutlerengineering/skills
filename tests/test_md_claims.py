@@ -112,6 +112,42 @@ class PathClaims(Tree):
 
 
 class CommandClaims(Tree):
+    def test_an_absolute_cd_skips_the_claim_instead_of_crashing(self):
+        # Issue #1857
+        self.readme(shell("cd /tmp && npm run build", "cd /tmp && make x",
+                          "cd /tmp && python3 run.py"))
+        self.assertEqual(self.check(), [])
+
+    def test_fd_redirects_are_not_operands(self):
+        # Issue #1858
+        write(self.root / "Makefile", "build:\n\techo\n")
+        self.readme(shell("make build 2>&1 | tee log"))
+        self.assertEqual(self.check(), [])
+
+    def test_make_option_values_are_not_targets_and_f_picks_the_file(self):
+        # Issue #1858
+        write(self.root / "Makefile", "build:\n\techo\n")
+        write(self.root / "other.mk", "other:\n\techo\n")
+        self.readme(shell("make -j 4 build", "make -f other.mk other",
+                          "make -f other.mk build"))
+        self.assertEqual(self.check(), [
+            "md-claims: README.md:4: make target 'build' is not defined in"
+            " other.mk"])
+
+    def test_an_interpreter_option_value_is_not_the_script(self):
+        # Issue #1858
+        write(self.root / "x.ts", "1\n")
+        self.readme(shell("node -r ts-node/register x.ts"))
+        self.assertEqual(self.check(), [])
+
+    def test_a_here_string_does_not_open_a_heredoc(self):
+        # Issue #1858
+        write(self.root / "Makefile", "build:\n\techo\n")
+        self.readme(shell("cat <<< word", "make missing-target", "word"))
+        self.assertEqual(self.check(), [
+            "md-claims: README.md:3: make target 'missing-target' is not"
+            " defined in Makefile"])
+
     def test_a_missing_script_is_a_problem(self):
         self.readme(shell("python3 tools/run.py --fast"))
         self.assertEqual(self.check(), [

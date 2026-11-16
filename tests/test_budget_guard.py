@@ -601,6 +601,24 @@ class TestRecordCLI(cli_contract.ReportContract, unittest.TestCase):
             self.assertEqual(self.run_cli(["record", "WO-0007"], tmp), 2)
 
 
+class TestRecordNonFiniteCost(unittest.TestCase):
+    def test_nan_and_inf_costs_are_refused_and_nothing_is_written(self):
+        for raw in ("nan", "inf", "-1"):
+            with self.subTest(raw=raw), tempfile.TemporaryDirectory() as tmp:
+                fields, problems = budget_guard._record_args(
+                    ["WO-0001", "run-1", "m", "10", raw])
+                self.assertEqual(problems, [
+                    f"bg: cost {raw!r} is not a finite, non-negative"
+                    " number"])
+                code, _ = cli_contract.capture(
+                    budget_guard.main,
+                    ["record", "WO-0001", "run-1", "m", "10", raw],
+                    root=Path(tmp))
+                self.assertEqual(code, 1)
+                self.assertFalse(
+                    (Path(tmp) / cost_ledger.COST_LEDGER).exists())
+
+
 class TestAcceptanceScenario(unittest.TestCase):
     """WO-0006's acceptance criterion, wired end to end from the public
     interfaces of budget_guard.py and handoff.py: a deliberately

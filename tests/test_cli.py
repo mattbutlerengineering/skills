@@ -833,6 +833,19 @@ class TestHarnessRun(unittest.TestCase):
         process.stdout.close.assert_called_once_with()
 
 
+class TestEventStreamMultibyte(unittest.TestCase):
+    def test_a_character_split_across_a_read_survives(self):
+        prefix = '{"t": "'
+        line = prefix + "a" * (8191 - len(prefix)) + "é" + '"}\n'
+        code = ("import sys,time; sys.stdout.buffer.write("
+                f"{line.encode()!r}); sys.stdout.flush(); time.sleep(0.3)")
+        proc = subprocess.Popen([sys.executable, "-c", code],
+                                stdout=subprocess.PIPE)
+        self.addCleanup(proc.wait)
+        events = list(cli.EventStream(proc, timeout=10))
+        self.assertEqual(events[0]["t"][-3:], "aaé")
+
+
 class TestReadEvent(unittest.TestCase):
     def test_no_event_path_is_a_silent_none(self):
         # Absence is a fact, not an error: a hand/local run has no event.

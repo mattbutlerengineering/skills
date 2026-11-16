@@ -1090,6 +1090,20 @@ class TestRecord(ReportCase):
         self.assertIn(f"{P}--record refused: git status --porcelain --"
                       " docs/ is not empty", out.splitlines())
 
+    def test_an_unreadable_breakdown_is_a_problem_not_a_traceback(self):
+        """#1879: measure walks breakdown_files; a non-UTF-8 breakdown.md
+        is named and the readable runs still measure."""
+        (self.repo.root / OTHER).mkdir(parents=True)
+        (self.repo.root / OTHER / "breakdown.md").write_bytes(
+            b"- [ ] **S1** caf\xe9\n")
+        result, problems = decompose_signals.measure(self.repo.root,
+                                                     git_run())
+        self.assertEqual(problems, [
+            f"{P}cannot read {OTHER}/breakdown.md: 'utf-8' codec can't"
+            " decode byte 0xe9 in position 16: invalid continuation"
+            " byte"])
+        self.assertEqual([run["path"] for run in result["runs"]], [RUN])
+
     def test_a_measurement_with_problems_refuses(self):
         real = git_run()
 

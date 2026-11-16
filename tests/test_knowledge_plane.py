@@ -174,6 +174,27 @@ class TestRunDirs(unittest.TestCase):
                 [root / "docs", root / "docs/features/a",
                  root / "docs/features/b", root / "docs/fixes/z"])
 
+    def test_an_unreadable_breakdown_is_skipped_and_reported(self):
+        """#1879: bytes that are not UTF-8 are a problem string, never a
+        raise; the readable runs still walk."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "docs/features/a").mkdir(parents=True)
+            (root / "docs/features/b").mkdir(parents=True)
+            (root / "docs/features/a/breakdown.md").write_bytes(
+                b"- [ ] **S1** caf\xe9\n")
+            (root / "docs/features/b/breakdown.md").write_text(
+                "- [ ] WO-0002 ok\n", encoding="utf-8")
+            problems = []
+            self.assertEqual(list(breakdown_files(root, problems)), [
+                (root / "docs/features/b/breakdown.md",
+                 ["- [ ] WO-0002 ok"])])
+            self.assertEqual(problems, [
+                "cannot read docs/features/a/breakdown.md: 'utf-8' codec"
+                " can't decode byte 0xe9 in position 16: invalid"
+                " continuation byte"])
+            self.assertEqual(len(list(breakdown_files(root))), 1)
+
     def test_a_tree_without_docs_walks_to_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])

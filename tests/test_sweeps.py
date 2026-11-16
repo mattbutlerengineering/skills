@@ -442,6 +442,15 @@ class TestEnsureLabels(unittest.TestCase):
 
 
 class TestFileIssues(unittest.TestCase):
+    def test_no_intakes_is_a_no_op_that_never_loads_the_taxonomy(self):
+        """#1878: label_drift already reports a broken taxonomy; screening
+        zero plans must not report it a second time."""
+        with tempfile.TemporaryDirectory() as tmp:
+            runner = gh()
+            self.assertEqual(
+                sweeps.file_issues(Path(tmp), [], run=runner), ([], []))
+            self.assertEqual(runner.calls, [])
+
     def test_files_one_labelled_issue_per_plan(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
@@ -718,6 +727,20 @@ class TestLabelDriftSweep(unittest.TestCase):
             self.assertIn(f"L: missing label {TAXONOMY[0]['name']}",
                           intake.body)
 
+    def test_a_missing_taxonomy_is_reported_once_by_the_cli(self):
+        """#1878: label-drift printed the load_labels problem twice."""
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(sweeps, "repo_root",
+                                   return_value=Path(tmp)):
+                code, out = cli_contract.capture(sweeps.main,
+                                                 ["label-drift"], run=gh())
+        self.assertEqual(code, 1)
+        lines = out.splitlines()
+        self.assertEqual(len(lines), 2, out)
+        self.assertTrue(lines[0].startswith("L: missing labels.json"))
+        self.assertEqual(lines[1],
+                         "sweeps: 0 issue(s) filed, 1 problem(s)")
+
     def test_a_failing_gh_is_a_problem_not_a_filed_signal(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = taxonomy_tree(tmp)
@@ -821,6 +844,21 @@ class TestReconcileSweep(unittest.TestCase):
             [intake] = intakes
             self.assertIn("docs/features/demo/breakdown.md", intake.body)
             self.assertIn("#109", intake.body)
+
+    def test_an_unreadable_breakdown_is_a_problem_not_a_traceback(self):
+        """#1879."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            bad = tree.root / "docs/features/bad/breakdown.md"
+            bad.parent.mkdir(parents=True)
+            bad.write_bytes(b"- [ ] **S1** caf\xe9\n")
+            runner = gh(issues=[issue(109, "CLOSED", ["wo:merged"])])
+            intakes, problems = sweeps.reconcile(tree.root, run=runner)
+            self.assertEqual(intakes, [])
+            self.assertEqual(problems, [
+                "sweeps: cannot read docs/features/bad/breakdown.md:"
+                " 'utf-8' codec can't decode byte 0xe9 in position 16:"
+                " invalid continuation byte"])
 
     def test_a_truncated_window_reports_nothing_rather_than_invented_drift(self):
         # Past the window an issue is simply ABSENT, and absence is what two

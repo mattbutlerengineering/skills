@@ -55,6 +55,10 @@ class TestScoreCase(unittest.TestCase):
         result = score_case(case(), Counter({"prd": 1, "none": 1}), 2, 0.5)
         self.assertTrue(result["pass"])
 
+    def test_a_case_whose_runs_all_failed_fails_at_threshold_zero(self):
+        result = score_case(case(), Counter(), 0, 0.0, errors=3)
+        self.assertFalse(result["pass"])
+
     def test_below_threshold_fails(self):
         result = score_case(case(), Counter({"prd": 1, "none": 2}), 3, 0.5)
         self.assertFalse(result["pass"])

@@ -81,15 +81,34 @@ def _blank(text):
     return re.sub(r"[^\n]", " ", text)
 
 
+def _fence_run(line):
+    """(character, length) of the fence marker opening a fence line."""
+    marker = line.strip()
+    run = len(marker) - len(marker.lstrip(marker[0]))
+    return marker[0], run
+
+
+def _closes_fence(line, opening):
+    """True when line closes the fence opened by `opening`: the same
+    character, at least as long, and nothing after it but whitespace."""
+    char, size = opening
+    marker = line.strip()
+    return len(marker) >= size and marker == char * len(marker)
+
+
 def _mask_code(text):
     """text with fenced code blocks and inline code spans blanked. An
     unclosed fence blanks to the end, as a renderer shows it."""
-    lines, inside = [], False
+    lines, opening = [], None
     for line in text.splitlines(keepends=True):
-        if _FENCE.match(line):
-            inside = not inside
+        fence = _FENCE.match(line)
+        if opening is None and fence:
+            opening = _fence_run(line)
             lines.append(_blank(line))
-        elif inside:
+        elif opening is not None and _closes_fence(line, opening):
+            opening = None
+            lines.append(_blank(line))
+        elif opening is not None:
             lines.append(_blank(line))
         else:
             lines.append(_INLINE.sub(lambda m: _blank(m.group(0)), line))

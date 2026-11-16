@@ -14,6 +14,7 @@ text is its sibling launch_demo_drivers.py's. Every external
 CLI (ffmpeg, ffprobe, vhs, node, the voice) goes through cli.runner, so
 tests inject fake runners and CI runs no real recorder. Stdlib only.
 """
+import http.client
 import json
 import os
 import re
@@ -173,8 +174,21 @@ def _normalised(text):
     return " ".join(text.split())
 
 
-def _in_copy(line, copy):
-    return isinstance(line, str) and _normalised(line) in copy
+_SENTENCE_END = re.compile(r"(?<=[.!?])\s+")
+
+
+def _sentences(copy_text):
+    """The set of copy's sentences: each blank-line-separated paragraph
+    (a heading is its own), whitespace-normalised, split after . ! or ?."""
+    return {s for paragraph in re.split(r"\n\s*\n", copy_text)
+            for s in _SENTENCE_END.split(_normalised(paragraph)) if s}
+
+
+def _in_copy(line, sentences):
+    """True when line is, once whitespace is normalised, exactly one
+    sentence of the copy (a set from _sentences) — never empty, never a
+    fragment of one."""
+    return isinstance(line, str) and _normalised(line) in sentences
 
 
 def _check_steps(steps, copy, adapter):
@@ -200,13 +214,13 @@ def _check_steps(steps, copy, adapter):
 def check_storyboard(storyboard, copy_text, recorder):
     """The storyboard held to its grammar and to the copy: problems, []
     when conformant. Every intro, say and outro must be a verbatim
-    sentence of launch.md's body, compared whitespace-normalised on
-    both sides, so "every narration line is cut from the copy" is a
+    sentence of launch.md's body (non-empty, whole), compared
+    whitespace-normalised on both sides, so "every narration line is cut from the copy" is a
     check rather than a hope. Pure: reads no file, runs nothing."""
     label = f"{LABEL}: storyboard"
     if not isinstance(storyboard, dict):
         return [f"{label} is not a JSON object"]
-    copy = _normalised(copy_text)
+    copy = _sentences(copy_text)
     adapter = _recorder(recorder)
     problems = []
     for field in STORYBOARD_FIELDS:
@@ -479,7 +493,7 @@ def reachable(against, head=None):
         if isinstance(err.reason, TimeoutError):
             return False, f"timed out after {HEAD_TIMEOUT} s"
         return False, str(err.reason)
-    except OSError as err:
+    except (OSError, ValueError, http.client.InvalidURL) as err:
         return False, str(err)
     return True, None
 
@@ -498,7 +512,11 @@ def _browser_do(do):
 
 
 def _browser_against(against):
-    if urlsplit(against).scheme not in URL_SCHEMES:
+    try:
+        scheme = urlsplit(against).scheme
+    except ValueError:
+        scheme = None
+    if scheme not in URL_SCHEMES:
         return "against must be an http(s) URL for the browser recorder"
 
 
@@ -591,6 +609,8 @@ def render(root, config, slug, which=shutil.which, runner=cli.runner,
     launch-demo- tempdir unless given), named in the first line so a
     failed run can be inspected. Reads only the config and slug dir."""
     root = Path(root)
+    if not (_plain_relative(slug) and len(Path(slug).parts) == 1):
+        return None, [], [f"{LABEL}: slug must be a plain directory name"]
     shown_dir = f"{config['publish']}/{slug}"
     slug_dir = root / config["publish"] / slug
     copy, board, problems = _read_sources(root, shown_dir, slug_dir)

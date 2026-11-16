@@ -74,5 +74,19 @@ class TestMaintenanceFixtureTrees(unittest.TestCase):
                          " return")
 
 
+class TestCheckoutNamedFixes(unittest.TestCase):
+    def test_a_repo_root_named_fixes_does_not_make_the_product_run_maintenance(
+            self):
+        import tempfile
+        from protocol import is_maintenance_run
+        with tempfile.TemporaryDirectory() as tmp:
+            docs = Path(tmp) / "fixes" / "docs"
+            docs.mkdir(parents=True)
+            (docs / "idea.md").write_text("---\nid: x\n---\n")
+            (docs / "prd.md").write_text("---\nux: required\n---\n")
+            self.assertFalse(is_maintenance_run(docs))
+            self.assertEqual(next_stage(docs), "ux-design")
+
+
 if __name__ == "__main__":
     unittest.main()

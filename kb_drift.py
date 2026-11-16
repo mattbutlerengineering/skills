@@ -124,9 +124,17 @@ def gitignored(rules, token):
     prefixes = ["/".join(parts[:n]) for n in range(1, len(parts) + 1)]
     verdict = False
     for negated, anchored, pattern in rules:
-        hit = (any(fnmatch.fnmatchcase(p, pattern) for p in prefixes)
-               if anchored else
-               any(fnmatch.fnmatchcase(p, pattern) for p in parts))
+        if pattern.startswith("**/"):
+            # `**/x` is x at any depth, the top level included: match
+            # every contiguous sub-path.
+            rest = pattern[3:]
+            hit = any(fnmatch.fnmatchcase("/".join(parts[i:j]), rest)
+                      for i in range(len(parts))
+                      for j in range(i + 1, len(parts) + 1))
+        else:
+            hit = (any(fnmatch.fnmatchcase(p, pattern) for p in prefixes)
+                   if anchored else
+                   any(fnmatch.fnmatchcase(p, pattern) for p in parts))
         if hit:
             verdict = not negated
     return verdict

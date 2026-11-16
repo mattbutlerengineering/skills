@@ -56,8 +56,9 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
 4. Commit the stamped files in the product repo, then run `make check`
    there and confirm it exits clean. Two things to fix first, or the
    first run is confusing:
-   - the target needs a `tests/` directory — `make check` runs
-     `unittest discover -q tests` and errors without one;
+   - the target needs at least one test under `tests/` — `make check`
+     runs `unittest discover -q tests`, which exits 5 ("NO TESTS RAN")
+     when it finds none, even with an empty `tests/__init__.py`;
    - `.github/CODEOWNERS` ships a placeholder owner handle. If it is not
      a collaborator on the target, GitHub ignores the entry and the
      code-owner gate goes inert.

@@ -282,6 +282,17 @@ class TestDependencyCheck(unittest.TestCase):
         text = text.replace("blocked by:", "Blocked By:")
         self.assertEqual(len(dg.grade(text, ARCH)["feedback"]), 1)
 
+    def test_a_comma_list_is_whole_only_when_exactly_a_label(self):
+        text = ("- [ ] **S1** first\n- [ ] **S2** second\n"
+                "- [ ] **S3 Fold S1, S2 together** third\n"
+                "- [ ] **S4** fourth \u2014 blocked by: S1, S2\n")
+        items = dg.read_items(text)
+        self.assertEqual(
+            dg.blockers(items[3]["block"], ["S3 Fold S1, S2 together"]),
+            ["S1", "S2"])
+        self.assertEqual(
+            dg.blockers(items[3]["block"], ["S1, S2"]), ["S1, S2"])
+
     def test_the_clause_splits_on_semicolons_and_commas(self):
         text = breakdown(row("A1"), row("A2"),
                          row("A3", blocked="A1; A2, A7"))

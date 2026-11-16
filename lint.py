@@ -439,13 +439,13 @@ def check_skill_recitals(root):
 # it, "../audit/references/playbook.md" also yields a bare
 # "references/playbook.md" resolved against the wrong directory.
 SKILL_ASSET = re.compile(
-    r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]+")
+    r"(?<![A-Za-z0-9._/-])(?:references|assets)/[A-Za-z0-9._-]*[A-Za-z0-9_-]")
 # A SKILL.md naming a sibling skill's bundled file, the way plugin skills
 # install side by side: "apply `../lean/references/ladder.md`". Group 1 is
 # the sibling slug. Same lookbehind as SKILL_ASSET.
 SIBLING_ASSET = re.compile(
     r"(?<![A-Za-z0-9._/-])\.\./([a-z0-9-]+)/"
-    r"((?:references|assets)/[A-Za-z0-9._-]+)")
+    r"((?:references|assets)/[A-Za-z0-9._-]*[A-Za-z0-9_-])")
 
 
 def named_files(root, path, skill_dir):

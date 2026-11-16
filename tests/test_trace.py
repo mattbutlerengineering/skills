@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -303,6 +304,40 @@ class TestIssueHistory(Repo):
         gh = FakeGh()
         self.trace("feature:demo", run=gh)
         self.assertEqual(gh.calls, [])
+
+
+class TestRootScopedReads(Repo):
+    def test_gh_runs_in_root_when_no_runner_is_injected(self):
+        import cli
+        seen = []
+
+        def fake_runner(binary, timeout=None):
+            if binary != "gh":
+                return cli.runner(binary, timeout)
+
+            def run(args, input=None, cwd=None):
+                seen.append((args[:2], cwd))
+                raise subprocess.CalledProcessError(1, "gh")
+            return run
+        out = io.StringIO()
+        with unittest.mock.patch.object(trace_view, "runner", fake_runner):
+            with contextlib.redirect_stdout(out):
+                code = trace_view.main(
+                    ["feature:demo", "--root", str(self.root)], environ={})
+        self.assertEqual(code, 0)
+        self.assertEqual(seen, [(["issue", "view"], self.root.resolve())])
+
+
+class TestUnreadableArtifact(Repo):
+    def test_a_non_utf8_artifact_is_skipped_with_a_note(self):
+        (self.run_dir / "architecture.md").write_bytes(b"# caf\xe9\n")
+        code, out = self.trace("feature:demo")
+        self.assertEqual(code, 0)
+        note = ("note: cannot read docs/features/demo/architecture.md:"
+                " 'utf-8' codec can't decode byte 0xe9 in position 5:"
+                " invalid continuation byte")
+        self.assertIn(note, out.splitlines())
+        self.assertNotIn("architecture.md created", out)
 
 
 class TestJson(Repo):

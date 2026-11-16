@@ -472,8 +472,13 @@ def active_runs(root):
     return found
 
 
-def breakdown_files(root):
+def breakdown_files(root, problems=None):
     """(breakdown path, its lines) per run that has a breakdown.md.
+
+    A breakdown.md that cannot be read (an OSError, bytes that are not
+    UTF-8) is skipped, never raised (ADR-0075); `problems`, when given,
+    gets one unlabelled `cannot read <rel>: <err>` string for it, which
+    the caller prefixes with its own label (issue #1879).
 
     The layout walk in one place: every dispatch-plane reader of
     work-order rows — the assembler, the validator and gates'
@@ -483,9 +488,12 @@ def breakdown_files(root):
     """
     for run in run_dirs(root):
         breakdown = run / "breakdown.md"
-        if breakdown.is_file():
-            yield breakdown, breakdown.read_text(
-                encoding="utf-8").splitlines()
+        text, problem = read_file(
+            breakdown, breakdown.relative_to(root).as_posix(), str)
+        if problem and problems is not None:
+            problems.append(problem)
+        if text is not None:
+            yield breakdown, text.splitlines()
 
 
 def work_orders(root, files=None):
@@ -508,7 +516,8 @@ def work_orders(root, files=None):
     parse_run already read rather than reading it again (issue #886)."""
     root = Path(root)
     index, problems = {"wo": {}, "issue": {}}, []
-    for path, lines in breakdown_files(root) if files is None else files:
+    for path, lines in (breakdown_files(root, problems) if files is None
+                        else files):
         for row in breakdown_rows(lines):
             record = {**row, "path": path, "clashes": []}
             for kind, key, shown in (

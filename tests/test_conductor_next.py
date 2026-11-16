@@ -488,6 +488,17 @@ class TestDeliverNamesTheMergedPr(NextCase):
         self.assertIsNone(self.deliver(gh_))
         self.assertEqual(gh_.calls[-1][-2:], ["--body-file", "Body\n"])
 
+    def test_the_feature_directory_the_merged_pr_made_is_not_a_duplicate(self):
+        # #1873: the item's own squash-merged PR put docs/features/widget
+        # on main; its continuation PR is not a duplicate of it.
+        self.body()
+        self.git_ = FakeGit({("diff",): "docs/features/widget/prd.md\0",
+                             ("ls-tree",): "docs/features/widget\n"})
+        gh_ = gh(landed=((6667, "abc"),))
+        self.assertIsNone(nxt.deliver(self.git_, gh_, self.wt,
+                                      "conductor/b1-13", "#13", "b1"))
+        self.assertEqual(gh_.calls[-1][:2], ["pr", "create"])
+
     def test_a_refusal_names_the_merged_pr(self):
         gh_ = gh(state="CLOSED", landed=((6667, "abc"),))
         self.assertEqual(self.deliver(gh_), (

@@ -121,8 +121,11 @@ class TestStandingProblems(unittest.TestCase):
 def branch_git(changed=""):
     """FakeGit answering the item branch's diff (and ls-tree for any
     gate path in it)."""
-    return FakeGit({("diff",): changed, ("ls-tree",): "".join(
-        f"100644 blob b1\t{path}\n" for path in changed.split())})
+    names = changed.split()
+    return FakeGit({
+        ("diff", "--name-only"): "".join(f"{path}\0" for path in names),
+        ("diff", "--raw"): "".join(
+            f":100644 100644 {'0' * 40} b1 M\0{path}\0" for path in names)})
 
 
 def issue_gh(labels):

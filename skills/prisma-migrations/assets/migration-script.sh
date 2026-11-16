@@ -57,6 +57,12 @@ STATUS=$(npx prisma migrate status 2>&1) || true
 if grep -q "Database schema is up to date" <<<"$STATUS"; then
   echo -e "${GREEN}No pending migrations. Database is up to date.${NC}"
   exit 0
+elif ! grep -q "not yet been applied" <<<"$STATUS"; then
+  # Neither up to date nor pending: the status command failed (unreachable
+  # database, bad credentials). Same verdict as check-pending.sh.
+  echo -e "${RED}Error checking migration status:${NC}"
+  echo "$STATUS"
+  exit 2
 fi
 
 echo "$STATUS"

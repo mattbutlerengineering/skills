@@ -90,5 +90,17 @@ class TestCheckBacklog(unittest.TestCase):
                 self.assertIsInstance(protocol.check_backlog(text), list)
 
 
+class TestMisorderedClaim(unittest.TestCase):
+    def test_a_claim_before_the_origin_is_skipped_like_check_rejects_it(self):
+        text = ("# Backlog\n- seed one (claimed: feature:a) (from: product)\n"
+                "- seed two (from: product)\n")
+        self.assertEqual(protocol.check_backlog(text), [
+            "backlog: line 2: '(claimed: ...)' must follow "
+            "'(from: <run-ref>)'"])
+        self.assertEqual(protocol.parse_backlog(text), [
+            {"line": 3, "text": "seed two", "origin": "product",
+             "claimed": None}])
+
+
 if __name__ == "__main__":
     unittest.main()

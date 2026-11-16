@@ -296,5 +296,14 @@ class TestSkillsRecite(unittest.TestCase):
         self.assertIn("never ship's authorization", text)
 
 
+class TestNestedMapCountLeavesOperatePending(unittest.TestCase):
+    def test_a_nested_map_count_is_a_non_integer_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = feature_run(
+                tmp, "users-observed:\n  web: 3\n  cli: 0\n"
+                     "signal-source: analytics\n")
+            self.assertEqual(next_stage(run), "operate")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -226,6 +226,12 @@ def skill_frontmatter_problems(root, slug):
     if fields is None:
         return [f"{label} has no frontmatter block"]
     description = fields.get("description")
+    if description and not isinstance(description, str):
+        return ([f"{label} frontmatter name is {fields.get('name')!r}, "
+                 f"expected {slug!r}"]
+                if fields.get("name") != slug else []) + [
+            f"{label} description is not a bare YAML scalar: it is a"
+            " nested map"]
     return (
         ([f"{label} frontmatter name is {fields.get('name')!r}, "
           f"expected {slug!r}"]
@@ -318,8 +324,8 @@ def _retro_populated(run_dir):
     source = fields.get("signal-source")
     if count is None and source is None:
         return True
-    return (count is not None and _COUNT.fullmatch(count) is not None
-            and bool(source))
+    return (isinstance(count, str) and _COUNT.fullmatch(count) is not None
+            and isinstance(source, str) and bool(source))
 
 
 def run_ref(root, run_dir):
@@ -339,7 +345,8 @@ def is_maintenance_run(run_dir):
     capture seed defect.md. Either signal suffices, so an empty fixes
     directory orients to capture before any artifact exists."""
     run_dir = Path(run_dir)
-    return (run_dir.parent.name == "fixes"
+    return ((run_dir.parent.name == "fixes"
+             and run_dir.parent.parent.name == "docs")
             or (run_dir / "defect.md").is_file())
 
 
@@ -489,6 +496,13 @@ def _backlog_refs(match):
             if match.group(marker) is not None]
 
 
+def _misordered_claim(match):
+    """True for an entry whose seed text swallowed a `(claimed: ...)`
+    marker: the claim precedes `(from: <run-ref>)`, which the grammar
+    forbids."""
+    return re.search(r"\(claimed: [^()]+\)", match["text"]) is not None
+
+
 def parse_backlog(text):
     """Parse backlog text into entries {line, text, origin, claimed}
     (line is the 1-based file line, claimed is None on unclaimed
@@ -497,8 +511,9 @@ def parse_backlog(text):
     entries = []
     for number, line in enumerate(text.splitlines(), 1):
         match = _BACKLOG_ENTRY.fullmatch(line)
-        if not match or not all(_BACKLOG_RUN_REF.fullmatch(ref)
-                                for _, ref in _backlog_refs(match)):
+        if (not match or _misordered_claim(match)
+                or not all(_BACKLOG_RUN_REF.fullmatch(ref)
+                           for _, ref in _backlog_refs(match))):
             continue
         entries.append({"line": number,
                         "text": match.group("text"),
@@ -521,7 +536,7 @@ def check_backlog(text):
             problems.append(f"backlog: line {number}: entry does not "
                             "match '- <seed text> (from: <run-ref>)'")
             continue
-        if re.search(r"\(claimed: [^()]+\)", match["text"]):
+        if _misordered_claim(match):
             problems.append(f"backlog: line {number}: '(claimed: ...)' "
                             "must follow '(from: <run-ref>)'")
             continue

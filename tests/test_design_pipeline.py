@@ -133,29 +133,21 @@ class TestWebQualityTarget(unittest.TestCase):
         recipe = " ".join(self.recipe(self.ROOT_MAKEFILE))
         self.assertIn("playwright", recipe)
 
-    def test_the_target_installs_the_pinned_playwright(self):
-        # Latest-at-runtime was the supply-chain hole: an unpinned
-        # `npx --yes playwright` changes behavior the day a new playwright
-        # ships, in every stamped repo at once.
+    def test_the_target_uses_the_products_own_playwright(self):
+        # #1883: a detached `npx playwright@X test` cannot resolve the
+        # `@playwright/test` a standard playwright.config.ts imports. The
+        # recipe installs the product's dependencies and runs its Playwright
+        # (version pinned by the product's lockfile), each step joined with
+        # `&&` so a failed install cannot fall through to the test step.
         for path in (self.ROOT_MAKEFILE, self.TEMPLATE_MAKEFILE):
             recipe = " ".join(self.recipe(path))
-            self.assertIn("playwright@$(PLAYWRIGHT_VERSION)", recipe)
-            self.assertNotIn("--yes playwright install", recipe)
-            self.assertNotIn("--yes playwright test", recipe)
-
-    def test_the_playwright_pin_is_identical_in_both_makefiles(self):
-        # The pin sits above the recipe, outside make_recipe's capture, so
-        # recipe identity alone would let the two repos install different
-        # playwrights with a green suite. Plain `=` (not `?=`) is asserted
-        # too: an environment-overridable pin is advisory, not a pin.
-        def pin(path):
-            return [line for line in
-                    path.read_text(encoding="utf-8").splitlines()
-                    if line.startswith("PLAYWRIGHT_VERSION")]
-        root = pin(self.ROOT_MAKEFILE)
-        self.assertEqual(len(root), 1, "expected exactly one pin line")
-        self.assertRegex(root[0], r"^PLAYWRIGHT_VERSION = \d+\.\d+\.\d+$")
-        self.assertEqual(root, pin(self.TEMPLATE_MAKEFILE))
+            self.assertIn("npm ci", recipe)
+            self.assertIn("&& npx playwright install --with-deps", recipe)
+            self.assertIn("&& npx playwright test", recipe)
+            self.assertNotIn("playwright@", recipe)
+            self.assertNotIn("PLAYWRIGHT_VERSION", recipe)
+            self.assertNotIn("PLAYWRIGHT_VERSION",
+                             path.read_text(encoding="utf-8"))
 
     def test_the_target_skips_when_there_is_no_web_app(self):
         # The guard: absent a playwright.config.*, the target prints why it is

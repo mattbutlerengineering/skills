@@ -1589,13 +1589,16 @@ def check_standards_drift(root, parsed=None):
         root, parsed["adr_files"])
     problems = [f"K: {p}" for p in build_problems]
 
+    # key=repr: a hand-edited entry missing a field puts None beside a
+    # str, which sorted() cannot order; equal tuples have equal reprs.
     committed_adr = sorted(
-        _drift_fingerprint(entry) for entry in committed
-        if isinstance(entry, dict)
-        and not (isinstance(entry.get("source"), str)
-                 and entry["source"].startswith(
-                     standards_index.HAND_CURATED_PREFIX)))
-    fresh_fingerprint = sorted(_drift_fingerprint(entry) for entry in fresh)
+        (_drift_fingerprint(entry) for entry in committed
+         if isinstance(entry, dict)
+         and not (isinstance(entry.get("source"), str)
+                  and entry["source"].startswith(
+                      standards_index.HAND_CURATED_PREFIX))), key=repr)
+    fresh_fingerprint = sorted(
+        (_drift_fingerprint(entry) for entry in fresh), key=repr)
     if committed_adr != fresh_fingerprint:
         problems.append(
             f"K: {standards_index.STANDARDS_PATH} has drifted from a"
@@ -1760,11 +1763,15 @@ def check_capture_completeness(root):
         defect = run / "defect.md"
         if not defect.is_file():
             continue
-        frontmatter = read_frontmatter(defect) or {}
+        rel = defect.relative_to(root)
+        text, problem = read_file(defect, rel, str)
+        if text is None:
+            if problem:
+                problems.append(f"M: {problem}")
+            continue
+        frontmatter = parse_frontmatter(text) or {}
         if _grandfathered(frontmatter.get("date"), CAPTURE_ADOPTED):
             continue
-        rel = defect.relative_to(root)
-        text = defect.read_text(encoding="utf-8")
         problems.extend(f"M: {rel} {suffix}"
                         for suffix in capture_completeness_problems(text))
     return problems
