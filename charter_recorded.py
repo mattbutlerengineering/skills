@@ -53,7 +53,7 @@ def load_transcripts(path, control):
 def recorded_runner(transcripts):
     """Score a recorded transcript set — the offline half, no model, no cost."""
     def run(case):
-        return transcripts.get(case["id"],
+        return transcripts.get(str(case["id"]),
                                {"tool_calls": [], "text": "",
                                 "error": "no recorded transcript"})
     return run

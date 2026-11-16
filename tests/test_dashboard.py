@@ -627,6 +627,29 @@ class TestMetrics(unittest.TestCase):
             "gate_wait_median": 200, "acceptance": None,
             "rework": None})
 
+    def test_issue_keyed_spend_is_not_counted_as_work_orders(self):
+        """ADR-0084: `#N` groups are not orders. WO-0001 at $10 plus
+        nine issue keys at $1 each is $10.0 per work order, not 1.9."""
+        rows = [{"wo": "WO-0001", "run_id": "r0", "model": "m",
+                 "tokens": 1, "cost": 10.0, "outcome": "completed",
+                 "at": "2026-08-01"}]
+        rows += [{"wo": f"#{n}", "run_id": f"i{n}", "model": "m",
+                  "tokens": 1, "cost": 1.0, "outcome": "completed",
+                  "at": "2026-08-01"} for n in range(2, 11)]
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            metrics = dashboard._metrics(tmp, rows, "2026-08", [])
+        self.assertEqual(metrics["cost_per_wo"], 10.0)
+
+    def test_issue_only_spend_has_no_cost_per_work_order(self):
+        rows = [{"wo": "#7", "run_id": "i7", "model": "m", "tokens": 1,
+                 "cost": 4.0, "outcome": "completed",
+                 "at": "2026-08-01"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            metrics = dashboard._metrics(tmp, rows, "2026-08", [])
+        self.assertIsNone(metrics["cost_per_wo"])
+
     def test_an_absent_ledger_is_no_runs_recorded_never_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
             factory_repo(tmp)
@@ -1693,6 +1716,24 @@ class TestPostContentLengthOverHttp(unittest.TestCase):
         self.assertEqual(payload, {"problems": [
             "dashboard: Content-Length '-1' is not a non-negative"
             " integer"]})
+
+    def test_a_huge_length_answers_413_instead_of_dropping(self):
+        """>4300 digits made int() raise ValueError; 10**15 and 20 nines
+        reached rfile.read and raised MemoryError/OverflowError. Each
+        closed the connection with no reply."""
+        for declared in (b"9" * 5000, b"1000000000000000",
+                         b"99999999999999999999", b"1048577"):
+            with self.subTest(length=len(declared)):
+                status, payload = post_with_length(declared)
+                # The reason phrase differs across Python versions.
+                self.assertTrue(status.startswith("HTTP/1.0 413 "),
+                                status)
+                self.assertEqual(payload, {"problems": [
+                    "dashboard: body exceeds 1048576 bytes"]})
+
+    def test_a_body_at_the_cap_is_still_read(self):
+        status, _ = post_with_length(b"1048576", body=b"{}")
+        self.assertEqual(status, "HTTP/1.0 404 Not Found")
 
 
 if __name__ == "__main__":

@@ -48,7 +48,9 @@ def _artifact_day(path):
     the file is absent or carries no readable date."""
     if not path.is_file():
         return None
-    value = (read_frontmatter(path) or {}).get("date") or ""
+    value = (read_frontmatter(path) or {}).get("date")
+    if not isinstance(value, str):
+        return None
     try:
         return date.fromisoformat(value.strip()[:10]).isoformat()
     except ValueError:

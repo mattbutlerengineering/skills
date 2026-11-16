@@ -171,6 +171,20 @@ class CommandClaims(Tree):
             "md-claims: README.md:3: script 'build' is not defined in"
             " package.json"])
 
+    def test_run_flags_are_skipped_and_the_program_is_named(self):
+        # #1978: `npm run --silent build` looked up script '--silent'
+        write(self.root / "package.json", '{"scripts": {"test": "x"}}\n')
+        self.readme(shell("npm run --silent test", "npm run --silent build"))
+        self.assertEqual(self.check(), [
+            "md-claims: README.md:3: script 'build' is not defined in"
+            " package.json"])
+        (self.root / "package.json").unlink()
+        self.assertEqual(self.check(), [
+            "md-claims: README.md:2: command runs npm test, but no"
+            " package.json exists in .",
+            "md-claims: README.md:3: command runs npm build, but no"
+            " package.json exists in ."])
+
     def test_console_blocks_check_only_prompted_lines(self):
         self.readme(shell("$ python3 gone.py", "python3 output.py",
                           lang="console"))
@@ -229,6 +243,12 @@ class Scope(Tree):
         self.assertEqual(self.check(), [
             "md-claims: CONTRIBUTING.md:1: path 'a/gone.md' does not exist",
             "md-claims: docs/x/y.md:1: path 'b/gone.md' does not exist"])
+
+    def test_a_root_date_prefixed_snapshot_is_skipped(self):
+        # #1978: the snapshot exclusion applied only under docs/
+        write(self.root / "2026-01-01-snapshot.md", "`c/gone.md`\n")
+        self.readme("\n")
+        self.assertEqual(self.check(), [])
 
     def test_explicit_paths_replace_the_default_set(self):
         write(self.root / "CLAUDE.md", "`d/gone.md`\n")

@@ -291,6 +291,9 @@ def dump(path, lessons, seen, shown=None):
     shown = shown or Path(path).name
     problems = _lesson_problems(sorted(lessons, key=lambda e: e["id"]),
                                 shown)
+    why = _header_problem(sorted(set(seen)))
+    if why:
+        problems.append(f"{LABEL}: {shown} line 1: {why}")
     if problems or not (lessons or seen):
         return problems
     path = Path(path)
@@ -617,6 +620,20 @@ def fold(lessons, seen, records, ballots):
         vote_lines + add_lines, []
 
 
+def _writable_runs(records):
+    """(records whose run is a REF, one line per record left out): a run
+    ref the file's own grammar rejects (a non-ASCII name) cannot be
+    written to the seen header or cited as a source."""
+    kept, lines = [], []
+    for rec in records:
+        if re.fullmatch(REF, rec["run"]):
+            kept.append(rec)
+        else:
+            lines.append(f"{LABEL}: skipped run '{rec['run'][:60]}': not a"
+                         " run ref the lessons file can hold")
+    return kept, lines
+
+
 def update(root, run, measure=decompose_signals.measure):
     """(lines, problems): load the file, measure, vote, fold and write the
     whole file once. A problem anywhere leaves the file untouched."""
@@ -627,6 +644,8 @@ def update(root, run, measure=decompose_signals.measure):
     result, problems = measure(root, run)
     if result is None or problems:
         return [], problems
+    result = dict(result)
+    result["runs"], skipped = _writable_runs(result["runs"])
     ballots, problems = votes(root, run, lessons, result["runs"], seen)
     if problems:
         return [], problems
@@ -638,13 +657,13 @@ def update(root, run, measure=decompose_signals.measure):
     if problem:
         return [], [f"{LABEL}: {problem}"]
     if not new and old_text is None:
-        return [NO_PAIR, f"{LABEL}: unchanged"], []
+        return [*skipped, NO_PAIR, f"{LABEL}: unchanged"], []
     if serialize(new, new_seen) == old_text:
-        return [*lines, f"{LABEL}: unchanged"], []
+        return [*skipped, *lines, f"{LABEL}: unchanged"], []
     problems = dump(path, new, new_seen, LESSONS_PATH)
     if problems:
         return [], problems
-    return [*lines, f"{LABEL}: wrote {LESSONS_PATH}"], []
+    return [*skipped, *lines, f"{LABEL}: wrote {LESSONS_PATH}"], []
 
 
 # Comparison: re-plan pooled (sum of count over sum of items_at_d) over

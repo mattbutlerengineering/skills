@@ -219,6 +219,14 @@ def arrivals(run):
             for hop in run["history"]]
 
 
+class TestNestedDate(unittest.TestCase):
+    def test_a_nested_date_value_is_undated_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "prd.md"
+            write(path, "---\nstage: prd\ndate:\n  year: 2026\n---\n")
+            self.assertIsNone(assembly_line._artifact_day(path))
+
+
 class TestHistory(unittest.TestCase):
     """Station arrivals, per architecture.md's Data model: a run enters
     its first station on its first artifact's date and reaches each

@@ -31,6 +31,7 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import charter_replay  # noqa: E402
+from charter_recorded import recorded_runner  # noqa: E402
 from test_charter_replay import golden_cases, synthetic, transcript  # noqa: E402
 
 HEADING = re.compile(r"^#{1,6} .*$", re.MULTILINE)
@@ -274,6 +275,57 @@ class TestControlMain(unittest.TestCase):
         self.assertEqual(code, 1)
         verdicts = {r["id"]: r["verdict"] for r in json.loads(out)["results"]}
         self.assertEqual(verdicts["planner-issue-before-row"], "inconclusive")
+
+
+class TestIntegerIds(unittest.TestCase):
+    """#1981: eval_schema.valid_id accepts integer ids."""
+
+    def int_case(self):
+        return {"id": 7, "role": "swe", "fixture": "f", "trap": "t",
+                "expectations": [
+                    {"id": 1, "scope": "commands", "mode": "require",
+                     "pattern": "ok"},
+                    {"id": 2, "scope": "commands", "mode": "forbid",
+                     "pattern": "bad"}]}
+
+    def test_a_requires_only_stripped_run_names_integer_ids(self):
+        result = charter_replay.control_verdict(
+            self.int_case(), transcript(commands=["ok"]), transcript(
+                commands=["x"], text="y"))
+        self.assertEqual(result["verdict"], "insensitive")
+        self.assertIn("it missed only 1)", result["problems"][0])
+
+    def test_the_report_prints_integer_tripped_ids(self):
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            charter_replay.print_control_report({"results": [
+                {"id": 7, "role": "swe", "verdict": "sensitive",
+                 "tripped": [2], "problems": []}],
+                "summary": {"sensitive": 1, "insensitive": 0,
+                            "inconclusive": 0, "total": 1},
+                "source": "recorded"})
+        self.assertIn("stripped run tripped: 2", err.getvalue())
+
+    def test_a_recorded_transcript_matches_an_integer_case_id(self):
+        run = recorded_runner({"7": {"tool_calls": [], "text": "hi"}})
+        self.assertEqual(run({"id": 7}), {"tool_calls": [], "text": "hi"})
+
+    def test_only_selects_an_integer_case_id(self):
+        tmp = Path(tempfile.mkdtemp(prefix="charter-int-"))
+        self.addCleanup(shutil.rmtree, tmp)
+        cases = tmp / "cases.json"
+        cases.write_text(json.dumps({"version": 1, "cases": [
+            {**self.int_case(), "fixture":
+             "factory/evals/fixtures/swe-merges-own-pr"}]}),
+            encoding="utf-8")
+        trans = tmp / "t.json"
+        trans.write_text("{}", encoding="utf-8")
+        err = io.StringIO()
+        with contextlib.redirect_stdout(io.StringIO()), \
+                contextlib.redirect_stderr(err):
+            charter_replay.main(["--cases", str(cases), "--transcripts",
+                                 str(trans), "--only", "7"])
+        self.assertNotIn("no cases match", err.getvalue())
 
 
 if __name__ == "__main__":

@@ -504,7 +504,10 @@ _RUN_KEY = re.compile(r"^(\s*(?:-\s+)?)run:\s*(.*)$")
 _BLOCK_SCALAR = re.compile(r"^[|>][+-]?\d*\s*(#.*)?$")
 _SHELL_COMMENT = re.compile(r"(^|\s)#.*")
 _SHELL_OPERATOR = re.compile(r"&&|\|\||[;|]")
-_MAKE_CALL = re.compile(r"make\s+([a-z][a-z0-9-]*)")
+# After `make`, `-flag` (with the value of -C/-f/-j/-I/-o/-W) and
+# `NAME=value` words precede the target.
+_MAKE_CALL = re.compile(
+    r"make\s+(?:(?:-[CfIoW]\s+\S+|-j\s+\d+|-\S*|\w+=\S*)\s+)*([A-Za-z0-9_.][A-Za-z0-9_.-]*)")
 
 
 def _run_commands(text):
@@ -559,7 +562,8 @@ def missing_make_targets(target):
         return ["factory-init: target has no Makefile — the refreshed"
                 " workflows have nothing to call"]
     defined = {name for head in re.findall(
-        r"(?m)^([a-z][a-z0-9 -]*?)[ \t]*(?::(?![=:])|::(?!=))",
+        r"(?m)^([A-Za-z0-9_.][A-Za-z0-9_. -]*?)[ \t]*"
+        r"(?::(?![=:])|::(?!=))",
         makefile.read_text(encoding="utf-8")) for name in head.split()}
     workflows = target / ".github" / "workflows"
     called = set()

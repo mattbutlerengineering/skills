@@ -144,6 +144,16 @@ class TestIndex(Tree):
             encoding="utf-8"))
 
 
+    def test_a_nested_map_summary_is_refused_not_written(self):
+        # #1971: the dict repr used to land in CLAUDE.md
+        self.kb_page("cache", summary="\n  a: b")
+        self.assertEqual(kb.index(self.root), [
+            "kb: docs/kb/cache.md field 'summary' is a nested map, not a"
+            " comma-separated list"])
+        self.assertNotIn("{'a'", (self.root / "CLAUDE.md").read_text(
+            encoding="utf-8"))
+
+
 class TestLint(Tree):
     def indexed(self, *slugs):
         for slug in slugs:
@@ -178,6 +188,19 @@ class TestLint(Tree):
         self.kb_page("cache")
         self.assertEqual(self.lint(), [
             "kb: CLAUDE.md has no knowledge-base index — run kb.py index"])
+
+    def test_a_nested_map_summary_is_a_problem_not_a_crash(self):
+        # #1971: lint raised AttributeError on dict.encode
+        self.kb_page("cache", summary="\n  a: b")
+        self.assertIn(
+            "kb: docs/kb/cache.md field 'summary' is a nested map, not a"
+            " comma-separated list", self.lint())
+
+    def test_a_page_whose_filename_has_a_space_is_listed(self):
+        # #1972: ENTRY excluded whitespace, so the page was an orphan forever
+        self.kb_page("my page")
+        self.assertEqual(kb.index(self.root), [])
+        self.assertEqual(self.lint(), [])
 
     def test_orphan_and_dangling_entries(self):
         self.indexed("cache", "gone")
