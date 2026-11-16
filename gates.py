@@ -1470,16 +1470,30 @@ def check_needs_clarification(root, parsed=None):
 
 
 def _prd_sections(lines):
-    """(lineno, title, waived) per `##` section of a PRD, fences skipped.
-    `waived`: the first non-blank line under the heading is a reasoned
-    coverage waiver."""
+    """(lineno, title, waived) per `##` section of a PRD, fences and the
+    frontmatter skipped; an ATX `## Title` or a Setext `Title` over `---`
+    counts. `waived`: the first non-blank line under the heading is a
+    reasoned coverage waiver."""
+    start = (frontmatter_end(lines) or -1) + 1
+    body = [(lineno, line) for lineno, line in unfenced(lines)
+            if lineno > start]
+    texts = [line for _, line in body]
     sections = []
     pending = None  # the section still looking for its first body line
-    for lineno, line in unfenced(lines):
+    skip = False  # the line is a Setext underline already consumed
+    for idx, (lineno, line) in enumerate(body):
+        if skip:
+            skip = False
+            continue
         heading = HEADING_LINE.match(line)
         if heading and len(heading.group(1)) == 2:
             pending = [lineno, heading.group(2), False]
             sections.append(pending)
+        elif (_is_setext_title(texts, idx)
+              and texts[idx + 1].lstrip().startswith("-")):
+            pending = [lineno, line.strip(), False]
+            sections.append(pending)
+            skip = True
         elif pending is not None and line.strip():
             pending[2] = bool(COVERAGE_WAIVER.match(line))
             pending = None
