@@ -454,10 +454,17 @@ def open_batch(batch, plan, now, git):
              for item in plan["items"]
              for kind, values in item["block"].items()]
     ledger = worktree / ledger_path
-    ledger.parent.mkdir(parents=True, exist_ok=True)
-    with open(ledger, "x", encoding="utf-8") as handle:
-        fcntl.flock(handle, fcntl.LOCK_EX)
-        handle.write("".join(json.dumps(row) + "\n" for row in rows))
+    try:
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        with open(ledger, "x", encoding="utf-8") as handle:
+            fcntl.flock(handle, fcntl.LOCK_EX)
+            handle.write("".join(json.dumps(row) + "\n" for row in rows))
+    except OSError as err:
+        # git has already made the worktree: say so, or a retry meets
+        # "already exists" with no hint why.
+        return None, [f"cd: cannot write {ledger_path}: {detail(err)};"
+                      f" {shown} was already created: remove it before"
+                      " opening again"]
     left = plan["cap_usd"] - plan["month_to_date_usd"]
     estimate = plan["estimate_usd"]
     _, problems = ask(

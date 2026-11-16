@@ -329,10 +329,15 @@ def _meter(root, batch, run_id, event, ended, ceiling, model):
         return 0, 0.0, "agent-failed", [], "the harness could not start"
     if event is not None:
         runs = Path(root) / RUNS.format(batch=batch)
-        runs.mkdir(parents=True, exist_ok=True)
         kept = runs / f"{run_id}.json"
-        kept.write_text(prettier_json(event), encoding="utf-8")
-        metered, error = read_execution(kept)
+        try:
+            runs.mkdir(parents=True, exist_ok=True)
+            kept.write_text(prettier_json(event), encoding="utf-8")
+            metered, error = read_execution(kept)
+        except OSError as err:
+            # The Worker has already spent: an unkeepable event is an
+            # unmeterable one, charged at the ceiling like any other.
+            metered, error = None, str(err)
         if error is None:
             reported = sorted(event.get("modelUsage") or {})
             if event.get("subtype") == "success" \
