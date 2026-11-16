@@ -1037,6 +1037,43 @@ class TestUpdate(unittest.TestCase):
             self.assertEqual(factory_init.update_manifest(source), [])
             self.assertEqual(factory_init.update(source, target)[2], [])
 
+    def test_a_retired_payload_file_is_removed_and_reported(self):
+        # #1891: update left factory/templates/tools/factory/<file> (detector
+        # E: "not in the manifest") and tools/factory/<file> behind
+        with tempfile.TemporaryDirectory() as tmp:
+            source = Path(tmp) / "source"
+            tree = make_factory_repo(source)
+            tree.write("factory/templates/tools/factory/retired.py", "x = 1\n")
+            self.assertEqual(factory_init.update_manifest(tree.root), [])
+            target = Path(tmp) / "target"
+            target.mkdir()
+            self.assertEqual(factory_init.stamp(tree.root, target), [])
+            mine = target / "tools/factory/mine.py"
+            mine.write_text("# the repo's own\n", encoding="utf-8")
+            self.assertTrue((target / "tools/factory/retired.py").is_file())
+            (tree.root / "factory/templates/tools/factory/retired.py"
+             ).unlink()
+            self.assertEqual(factory_init.update_manifest(tree.root), [])
+            code, out = cli_contract.capture(
+                factory_init.main, ["update", str(target)])
+            self.assertIn(
+                "factory-init: removed factory/templates/tools/factory/"
+                "retired.py (retired — this release no longer ships it)",
+                out.splitlines())
+            self.assertIn(
+                "factory-init: removed tools/factory/retired.py (retired"
+                " — this release no longer ships it)", out.splitlines())
+            self.assertFalse(
+                (target / "factory/templates/tools/factory/retired.py"
+                 ).exists())
+            self.assertFalse((target / "tools/factory/retired.py").exists())
+            self.assertTrue(mine.is_file())
+            self.assertEqual(
+                gates.mirror_problems(
+                    target,
+                    json.loads((target / "factory/manifest.json"
+                                ).read_text())["files"]), [])
+
     def test_factory_owned_agrees_with_detector_e_s_pristine_set(self):
         # the same split stated twice — in destination terms here, in
         # manifest-key terms in gates — so they must not drift apart

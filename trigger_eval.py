@@ -646,7 +646,7 @@ def print_metrics(path, kind):
     return 0
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(
         description="Cross-skill trigger/routing eval via claude -p or omp -p")
     parser.add_argument("--harness", choices=eval_schema.HARNESSES,
@@ -679,7 +679,7 @@ def main():
     parser.add_argument("--kind", default=None,
                         help="with --metrics, only cases of this kind "
                              "(e.g. near-miss)")
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.metrics:
         return print_metrics(Path(args.metrics), args.kind)

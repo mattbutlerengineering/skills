@@ -413,7 +413,10 @@ _STALE = "dashboard: backlog changed underneath; refresh"
 def backlog_hash(text):
     """The optimistic-concurrency token: gather stamps it, the Save
     posts it back, and reorder refuses when the file moved on."""
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    # Newline-normalised, so the token is the same whether the text came
+    # through read_text (gather) or raw with newline="" (the Save).
+    normal = text.replace("\r\n", "\n").replace("\r", "\n")
+    return hashlib.sha256(normal.encode("utf-8")).hexdigest()
 
 
 def _backlog(root, problems):
@@ -446,12 +449,15 @@ def reorder_backlog(text, posted_hash, order):
     if sorted(order) != seed_lines:
         return None, ["dashboard: order is not a permutation of the "
                       "current seed lines"]
-    lines = text.splitlines()
+    # Content moves, terminators stay in place: CRLF and the other
+    # splitlines() breaks (U+2028 ...) come back byte for byte.
+    kept = text.splitlines(keepends=True)
+    lines = [line.splitlines()[0] for line in kept]
+    ends = [line[len(body):] for line, body in zip(kept, lines)]
     reordered = list(lines)
     for position, source in zip(seed_lines, order):
         reordered[position - 1] = lines[source - 1]
-    tail = "\n" if text.endswith("\n") else ""
-    return "\n".join(reordered) + tail, []
+    return "".join(body + end for body, end in zip(reordered, ends)), []
 
 
 DEFAULT_PORT = 7700
@@ -534,7 +540,7 @@ def respond_post(target, body, repos_fn):
     # backlog is an OSError message here, where read_file gives
     # (None, None).
     try:
-        text = path.read_text(encoding="utf-8")
+        text = path.read_bytes().decode("utf-8")
     except (OSError, UnicodeDecodeError) as err:
         return 500, {"problems": [
             f"dashboard: cannot read {BACKLOG}: {err}"]}
@@ -544,7 +550,7 @@ def respond_post(target, body, repos_fn):
         status = 409 if reorder_problems == [_STALE] else 400
         return status, {"problems": reorder_problems}
     try:
-        path.write_text(new_text, encoding="utf-8")
+        path.write_bytes(new_text.encode("utf-8"))
     except OSError as err:
         return 500, {"problems": [
             f"dashboard: cannot write {BACKLOG}: {err}"]}

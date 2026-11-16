@@ -110,14 +110,16 @@ def feature_slugs(paths):
     return slugs
 
 
-def pr_create_refusal(git, gh, branch, item):
+def pr_create_refusal(git, gh, branch, item, landed=None):
     """A reason not to open a new PR, else None. An already-open PR is
     updated and never reaches here. A `#N` item whose issue is closed, or
     whose state cannot be read, is refused: re-opening a finished issue
     is how duplicate feature directories landed on main. A branch that
     touches docs/features/<slug> when that directory already exists on
     origin/main is refused the same way. Anything that is not `#N` skips
-    the issue check and still gets the directory check."""
+    the issue check and still gets the directory check. After a PR
+    merged outside the batch (`landed`, #938) the directory on main is
+    that PR's own work, so the directory check is skipped (#1873)."""
     if cost_ledger.ISSUE_KEY.fullmatch(item):
         state, problems = issue_state(gh, item)
         if problems:
@@ -131,7 +133,7 @@ def pr_create_refusal(git, gh, branch, item):
     changed, problems = flow.changed_files(git, branch)
     if problems:
         return problems[0]
-    for slug in feature_slugs(changed):
+    for slug in [] if landed else feature_slugs(changed):
         path = f"docs/features/{slug}"
         listed, problems = git_call(
             git, ["ls-tree", "--name-only", "origin/main", "--", path],
@@ -179,7 +181,8 @@ def deliver(git, gh, worktree, branch, item, batch):
             landed, problems = merged_pr(gh, branch)
             if problems:
                 raise OSError(problems[0])
-            refusal = pr_create_refusal(git, gh, branch, item)
+            refusal = pr_create_refusal(git, gh, branch, item,
+                                            landed)
             if refusal:
                 return refusal + (LANDED_NOTE.format(pr=landed["pr"])
                                   if landed else "")

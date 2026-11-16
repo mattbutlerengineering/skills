@@ -253,17 +253,25 @@ def foreign_entries(root):
     such entry. An existing file that is not valid JSON, or not a JSON
     array, is a problem: `update` must refuse to overwrite a committed
     file it cannot make sense of half of, the same fail-closed direction
-    cost_ledger.load takes on an unreadable ledger."""
+    cost_ledger.load takes on an unreadable ledger. A hand-curated entry
+    whose slug is missing or not a non-empty string is a problem too:
+    update sorts and merges by slug, so it could not place the entry."""
     existing, problem = read_file(Path(root) / STANDARDS_PATH,
                                   STANDARDS_PATH, list)
     if problem:
         return [], [problem]
     if existing is None:
         return [], []
-    return [entry for entry in existing
-            if isinstance(entry, dict)
-            and isinstance(entry.get("source"), str)
-            and entry["source"].startswith(HAND_CURATED_PREFIX)], []
+    entries = [entry for entry in existing
+               if isinstance(entry, dict)
+               and isinstance(entry.get("source"), str)
+               and entry["source"].startswith(HAND_CURATED_PREFIX)]
+    problems = [f"{STANDARDS_PATH}: hand-curated entry"
+                f" {entry['source']!r} has no slug (a non-empty string)"
+                for entry in entries
+                if not isinstance(entry.get("slug"), str)
+                or not entry["slug"]]
+    return ([] if problems else entries), problems
 
 
 def update(root):
@@ -279,6 +287,10 @@ def update(root):
     entries, problems = index_tree(root)
     foreign, foreign_problems = foreign_entries(root)
     problems = problems + foreign_problems
+    derived = {entry["slug"] for entry in entries}
+    problems += [f"{STANDARDS_PATH}: hand-curated entry {entry['source']!r}"
+                 f" reuses ADR-derived slug {entry['slug']!r}"
+                 for entry in foreign if entry["slug"] in derived]
     if problems:
         return [f"standards-index: {p}" for p in problems]
     merged = sorted(entries + foreign, key=lambda entry: entry["slug"])

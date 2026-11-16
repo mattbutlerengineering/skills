@@ -196,12 +196,14 @@ def _read(path, binary=False):
 
 
 def render(model, template, vendor):
-    """The page: template with the model inlined as JSON — `</` escaped
-    so no string in it can close the script block — and each vendored
+    """The page: template with the model inlined as JSON — every `<`
+    escaped (as u003c) so no string in it can close the script block or
+    open an HTML escape state (a comment opener before a script tag
+    leaves the template's own close tag inert) — and each vendored
     file (name -> bytes) inlined as base64 at its __NAME__ slot. One
     pass over the template, so no text a slot receives is itself read
     as a slot."""
-    fills = {"__MODEL__": json.dumps(model).replace("</", "<\\/")}
+    fills = {"__MODEL__": json.dumps(model).replace("<", "\\u003c")}
     for name, content in vendor.items():
         slot = "__" + name.upper().replace("-", "_") + "__"
         fills[slot] = base64.b64encode(content).decode("ascii")

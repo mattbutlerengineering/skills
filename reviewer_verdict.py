@@ -19,9 +19,13 @@ deterministic; no git, network or model call. Root-only (ADR-0060's
 rule), stdlib only.
 """
 import math
+import re
 import sys
+from decimal import Decimal
 
 PASS_AT = 7
+# A bare decimal: float() also takes `0_7`, `1e1` and padded forms.
+BARE_SCORE = re.compile(r"\d+(?:\.\d+)?")
 USAGE = ("usage: python3 reviewer_verdict.py <score>\n"
          "  prints the verdict comment's first line: exit 0 pass,"
          " 1 flag, 2 error")
@@ -31,6 +35,8 @@ def derive(score):
     """("pass" | "flag", number), or ("error", problem string)."""
     if isinstance(score, bool) or score is None:
         return "error", f"reviewer-verdict: no usable score ({score!r})"
+    if isinstance(score, str) and not BARE_SCORE.fullmatch(score):
+        return "error", f"reviewer-verdict: score is not a number ({score!r})"
     try:
         number = float(score)
     except (TypeError, ValueError, OverflowError):
@@ -40,7 +46,9 @@ def derive(score):
     if not 0 <= number <= 10:
         return "error", f"reviewer-verdict: score outside 0 to 10 ({score!r})"
     value = int(number) if number.is_integer() else number
-    return ("pass" if number >= PASS_AT else "flag"), value
+    # Decimal, not the float: 6.99999999999999999 rounds to 7.0 as a float.
+    passed = (Decimal(score) if isinstance(score, str) else number) >= PASS_AT
+    return ("pass" if passed else "flag"), value
 
 
 def main(argv):

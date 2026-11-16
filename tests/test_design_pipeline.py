@@ -157,6 +157,23 @@ class TestWebQualityTarget(unittest.TestCase):
         self.assertRegex(root[0], r"^PLAYWRIGHT_VERSION = \d+\.\d+\.\d+$")
         self.assertEqual(root, pin(self.TEMPLATE_MAKEFILE))
 
+    def test_the_target_installs_the_repos_dependencies_first(self):
+        # A config importing @playwright/test cannot resolve it from a
+        # detached npx run (#1883): the repo's own npm dependencies are
+        # installed before the pinned playwright drives them.
+        for path in (self.ROOT_MAKEFILE, self.TEMPLATE_MAKEFILE):
+            recipe = " ".join(self.recipe(path))
+            self.assertIn("npm ci", recipe)
+            self.assertLess(recipe.index("npm ci"), recipe.index("npx"))
+
+    def test_a_failed_browser_install_stops_the_test_step(self):
+        # `;` between the install and the test let a failed install fall
+        # through to the test run (#1883): the two are joined by `&&`.
+        for path in (self.ROOT_MAKEFILE, self.TEMPLATE_MAKEFILE):
+            recipe = " ".join(self.recipe(path))
+            self.assertRegex(recipe, r"install --with-deps\s*&&")
+            self.assertNotRegex(recipe, r"install --with-deps;")
+
     def test_the_target_skips_when_there_is_no_web_app(self):
         # The guard: absent a playwright.config.*, the target prints why it is
         # skipping and exits 0 rather than failing.

@@ -104,6 +104,21 @@ class TestLiteralBody(unittest.TestCase):
             self.assertEqual(run('cd x && gh pr create --body "x"', top),
                              refused("x"))
 
+    def test_builtin_and_command_cd_are_directory_changes(self):
+        """`builtin cd x` and `command cd x` move the shell like `cd x`, so
+        the repository judged is the one the directory holds (#1917)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            _git_repo(top / "x", "git@github.com:me/other.git")
+            plain = run('cd x && gh pr create --body "x"', top)
+            self.assertNotEqual(plain, refused("x"))
+            for prefix in ("builtin cd x", "command cd x", "builtin command cd x"):
+                with self.subTest(prefix=prefix):
+                    self.assertEqual(
+                        run(prefix + ' && gh pr create --body "x"', top),
+                        plain)
+
     def test_newline_separates_two_commands(self):
         self.assertEqual(run('git push -u origin b\ngh pr create --body "x"'),
                          refused("x"))
@@ -1885,6 +1900,14 @@ class TestOtherRepository(unittest.TestCase):
                     self.run_here(f'gh pr create {flag} --body "x"'),
                     (0, [note(f"the PR targets {value}, "
                               "not this repository")]))
+
+    def test_repo_flag_inside_a_short_flag_cluster_targets_that_repo(self):
+        reason = note("the PR targets octo/other, not this repository")
+        for command in ('gh pr create -dR octo/other --title t --body "x"',
+                        'gh pr create -dRocto/other --title t --body "x"',
+                        'gh pr create -dR=octo/other --title t --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), (0, [reason]))
 
     def test_gh_repo_naming_another_repository_fails_open(self):
         reason = note("the PR targets other/repo, not this repository")

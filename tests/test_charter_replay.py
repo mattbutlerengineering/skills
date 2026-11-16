@@ -889,6 +889,22 @@ class TestReplayIsNeverAutomatic(unittest.TestCase):
         self.assertIn("permissions:\n  contents: read", text)
 
 
+class TestNonStringFixture(unittest.TestCase):
+    def test_a_non_string_fixture_is_a_problem_not_a_crash(self):
+        for bad in (5, ["x"]):
+            with self.subTest(fixture=bad):
+                case = {"id": "a", "role": "swe", "fixture": bad,
+                        "trap": "t", "expectations": [
+                            {"id": "e", "scope": "commands",
+                             "mode": "forbid", "pattern": "x"}]}
+                problems = charter_replay.validate(
+                    {"version": 1, "cases": [case]}, Path("."),
+                    "charters.json")
+                self.assertIn(
+                    f"charters.json case 'a' fixture {bad!r} has no"
+                    " work-order.md", problems)
+
+
 if __name__ == "__main__":
     unittest.main()
 
