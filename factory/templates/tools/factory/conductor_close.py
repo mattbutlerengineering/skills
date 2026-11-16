@@ -571,13 +571,19 @@ def reconcile_landed(gh, root, batch, now, blocked):
     rows reached main on that PR, and it needs no needs-human label.
     Every branch is read before any row is written: a read that fails
     refuses the close with nothing written."""
+    rows, problems = load(root, batch)
+    if problems:
+        return None, problems
     landed = {}
     for item in blocked:
         found, problems = conductor_next.merged_pr(
             gh, flow.item_branch(batch, item))
         if problems:
             return None, _refused(problems)
-        if found is not None:
+        # A PR the ledger already asked about merged before the block,
+        # and the Owner's answer stands (#1872).
+        if found is not None and not conductor_landed.asked(
+                rows, item, found["pr"]):
             landed[item] = found
     for item, found in landed.items():
         reason, fields = conductor_landed.merge(found)

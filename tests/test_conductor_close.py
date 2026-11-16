@@ -530,6 +530,22 @@ class TestClose(unittest.TestCase):
              " blocked items (none).\n\nCloses #12\nCloses #13\nCloses #14"
              "\n\nNo work order: the Conductor's closing PR for batch b1."]])
 
+    def test_a_block_over_an_already_asked_merged_pr_is_kept(self):
+        # #1872: the Owner declined "treat it as merged" for PR 6541
+        # (block), so the PR merging before that block is no news.
+        asked = state("#13", "build", "stalled", at(12), "PR #6541 merged"
+                      " outside the batch", cause="merge-drift", pr=6541)
+        rows = ROWS[:15] + [asked] + ROWS[15:]
+        self.assertEqual(rows[15]["kind"], "state")
+        summary, problems = self.close(rows, gh=FakeGh(
+            {**LANDED_GH, LABEL_LIST: HAS_NEEDS_HUMAN}))
+        self.assertEqual(problems, [])
+        self.assertEqual((summary["landed"], summary["blocked"]),
+                         ([], ["#13"]))
+        self.assertNotIn("merged", [row["to"] for row in self.ledger()
+                                    if row["kind"] == "state"
+                                    and row["item"] == "#13"][-1:])
+
     def test_an_unreadable_merged_pr_refuses_the_close(self):
         gh = FakeGh(failing=list(MERGED_READ))
         self.assertEqual(self.close(ROWS, gh=gh), (None, [
