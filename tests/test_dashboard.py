@@ -964,6 +964,12 @@ console.log(JSON.stringify({
   output: renderOutput(OUTPUT_STATES),
   metrics: renderMetrics(METRICS_STATES),
   metricsEmpty: renderMetrics([METRICS_STATES[1]]),
+  metricsNoLedger: renderMetrics([{name: "gamma", payload: {metrics: {
+    month_spend: null, cap: null, cost_per_wo: null,
+    gate_wait_median: null, acceptance: 0.5, rework: 0.5}}}]),
+  apostropheLink: issueLinks("wo:won't-do carries #12", "o/r"),
+  backlogSaving: renderBacklog(BACKLOG_STATES, {0: [3, 4, 5]},
+                               {0: false}, {}, {0: true}),
   backlogDirty: renderBacklog(BACKLOG_STATES, {0: [5, 3, 4]},
                               {0: true}, {0: "HTTP 500: boom"}),
   backlogClean: renderBacklog(BACKLOG_STATES, {0: [3, 4, 5]}, {}, {}),
@@ -1083,6 +1089,28 @@ console.log(JSON.stringify({
         self.assertIn('<button data-save="0">Save order</button>',
                       section)
         self.assertIn("No docs/backlog.md in this repo.", section)
+
+    def test_metrics_with_rates_but_no_ledger_still_renders(self):
+        """A repo with merged-PR rates and no cost ledger carries
+        month_spend null; the row renders the rates, not a throw."""
+        row = self.rendered()["metricsNoLedger"]
+        self.assertIn("acceptance 50%", row)
+        self.assertIn("rework 50%", row)
+        self.assertNotIn("No runs recorded yet.", row)
+
+    def test_an_escaped_apostrophe_is_not_read_as_an_issue_number(self):
+        links = self.rendered()["apostropheLink"]
+        self.assertIn("wo:won&#39;t-do", links)
+        self.assertNotIn("issues/39", links)
+        self.assertIn('href="https://github.com/o/r/issues/12"', links)
+
+    def test_backlog_controls_are_inert_while_a_save_is_in_flight(self):
+        section = self.rendered()["backlogSaving"]
+        self.assertIn('<button data-save="0" disabled>Save order'
+                      "</button>", section)
+        self.assertNotIn("draggable", section)
+        self.assertEqual(section.count("disabled"), 5)
+        self.assertEqual(section.count('aria-label="Move'), 4)
 
     def test_backlog_clean_state_disables_save(self):
         section = self.rendered()["backlogClean"]
