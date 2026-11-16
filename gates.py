@@ -100,7 +100,7 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
                              local_link_targets, parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
                              work_orders)
-from protocol import frontmatter_end, parse_frontmatter, read_frontmatter
+from protocol import frontmatter_end, parse_frontmatter
 # Not every factory PR implements a work order: a governance or chore PR
 # (the merge-auth removal in #139, a docs fix) closes an issue but maps to no
 # `WO-####`. Such a PR declares that EXPLICITLY — the same "declared, never
@@ -111,6 +111,7 @@ from protocol import frontmatter_end, parse_frontmatter, read_frontmatter
 # deliberate lie the same as any other gamed gate. The Closes-#N audit link is
 # still required in both cases. (ADR-0033, amended: merge stays gated, but the
 # gate no longer assumes every PR is a work order.)
+HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
@@ -172,12 +173,20 @@ NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
 # verdict). Both close with a trailing delimiter — ` |` / `</summary>` — that
 # the value capture drops OUTSIDE the group, so `_is_disclosure` still reads
 # the verdict's true head (a table-cell `NOT VERIFIED` still discloses).
+# Relabelling is the escape hatch #137 closed, so the label is read widely
+# (#1900): an optional plural (`Results:`), up to two qualifier words
+# (`Overall result:`, `Final verdict:`), `*` or `_` emphasis around it
+# (`__Result:__`, `_Result_:`), a task-list box (`- [x] Result: PASS`) and
+# an HTML bold tag (`<b>Result:</b> PASS`, `<strong>`) all assert.
 RESULT_LINE = re.compile(
-    r"^\s*(?:(?:[-*+>]|\d+[.)]|\||<summary[^>]*>)\s*)*"
-    r"\**\s*(?:result|verdict|outcome|status"
+    r"^\s*(?:(?:[-*+>]|\d+[.)]|\||<summary[^>]*>|<(?:b|strong)>"
+    r"|\[[ xX]\])\s*)*"
+    r"[*_]*\s*(?:[A-Za-z][\w'-]*\s+){0,2}"
+    r"(?:result|verdict|outcome|status"
     r"|conclusion|assessment|finding|determination|evaluation|judge?ment"
-    r"|disposition|decision|ruling|appraisal)\**"
-    r"\s*:\s*(\S.*?)\s*(?:\|\s*|</summary>\s*)?$",
+    r"|disposition|decision|ruling|appraisal)s?[*_]*"
+    r"\s*:\s*(?:</(?:b|strong)>|[*_]+)?\s*(\S.*?)\s*"
+    r"(?:\|\s*|</summary>\s*)?$",
     re.IGNORECASE)
 # The disclaimer must be explicit, and it must be WRITTEN: read from body
 # text, never from a heading. TEMPLATE.md ships a `## Not verified` slot in
@@ -422,7 +431,10 @@ def pr_body_problems(body):
     """B's body rule on a bare string: the one owner of it and of its two
     problem strings, judged by check_pr_traceability on CI and by the
     root-only pr_body_preflight hook before `gh pr create` runs.
-    `""` stands for a missing body."""
+    `""` stands for a missing body. HTML comments are stripped first: the
+    PR template's own comment is never the author's declaration (issue
+    #1907)."""
+    body = HTML_COMMENT.sub("", body)
     problems = []
     if not WO_TOKEN.search(body) and not NO_WO_DECLARATION.search(body):
         problems.append("B: PR body cites no work-order id")
@@ -472,12 +484,19 @@ def check_link_integrity(root, parsed=None):
         (entry["path"] / "breakdown.md", entry["breakdown"])
         for entry in parsed["runs"] if entry["breakdown"] is not None])
     problems.extend(f"C: {duplicate}" for duplicate in duplicates)
-    adr_numbers = {adr_record(path, lines)["number"]
-                   for path, lines in parsed["adr_files"]}
+    adr_by_number = {}
+    for path, lines in parsed["adr_files"]:
+        adr_by_number.setdefault(
+            adr_record(path, lines)["number"], []).append(path)
+    for number, paths in sorted(adr_by_number.items()):
+        if len(paths) > 1:
+            listed = ", ".join(str(p.relative_to(root)) for p in paths)
+            problems.append(
+                f"C: duplicate ADR number ADR-{number} in {listed}")
+    adr_numbers = set(adr_by_number)
     wo_rows = collect_wo_rows(parsed)
     for path, lines in parsed["scannable"]:
         rel = path.relative_to(root)
-        in_breakdown = path.name == "breakdown.md"
         for lineno, line in enumerate(lines, 1):
             for token in PRD_TOKEN.findall(line):
                 if token not in prd_ids:
@@ -489,12 +508,11 @@ def check_link_integrity(root, parsed=None):
                     problems.append(
                         f"C: {rel}:{lineno} dangling ADR-{number}"
                         " (no docs/adr file)")
-            if not in_breakdown:
-                for token in WO_TOKEN.findall(line):
-                    if token not in wo_rows:
-                        problems.append(
-                            f"C: {rel}:{lineno} dangling {token}"
-                            " (no breakdown row)")
+            for token in WO_TOKEN.findall(line):
+                if token not in wo_rows:
+                    problems.append(
+                        f"C: {rel}:{lineno} dangling {token}"
+                        " (no breakdown row)")
     return problems
 
 
@@ -506,7 +524,9 @@ def _claim_path(root, raw):
             or not ARCH_PLAIN_PATH.match(cleaned):
         return None, (f"tree claim '{raw}' is not a plain repo path"
                       " (no globs, no '..')")
-    return root / cleaned, None
+    # A leading `/` is the repo root, as resolve_link reads it — never the
+    # host filesystem (issue #1903).
+    return root / cleaned.lstrip("/"), None
 
 
 def _declared_claims(root, rel, lineno, line):
@@ -962,8 +982,12 @@ def label_declarers():
 MAKEFILE_LABEL = re.compile(r"--label\s+([a-z][a-z0-9:._-]*)")
 
 
-def declared_labels(root):
+def declared_labels(root, problems=None):
     """{label: sorted [where it is named]} across the factory's tools.
+
+    A Makefile that cannot be read (non-UTF-8 bytes, issue #1906) is
+    skipped, and its unlabelled problem string is appended to PROBLEMS
+    when the caller passes a list.
 
     The modules are imported lazily and their absence is silent. A tool
     missing from a stamped repo is a partial stamp, which detector E
@@ -981,12 +1005,12 @@ def declared_labels(root):
             continue
         for label in getattr(module, LABELS_NAME):
             named.setdefault(label, set()).add(f"{name}.py")
-    makefile = root / "Makefile"
-    if makefile.is_file():
-        for lineno, line in enumerate(
-                makefile.read_text(encoding="utf-8").splitlines(), 1):
-            for label in MAKEFILE_LABEL.findall(line):
-                named.setdefault(label, set()).add(f"Makefile:{lineno}")
+    text, problem = read_file(root / "Makefile", "Makefile", str)
+    if problem and problems is not None:
+        problems.append(problem)
+    for lineno, line in enumerate((text or "").splitlines(), 1):
+        for label in MAKEFILE_LABEL.findall(line):
+            named.setdefault(label, set()).add(f"Makefile:{lineno}")
     return {label: sorted(sites) for label, sites in named.items()}
 
 
@@ -1049,11 +1073,13 @@ def check_label_wiring(root):
     if not taxonomy:
         return problems
     known = {label["name"] for label in taxonomy}
-    return problems + [
+    makefile_problems = []
+    declared = declared_labels(root, makefile_problems)
+    return problems + [f"J: {problem}" for problem in makefile_problems] + [
         f"J: {site} names {label} but the taxonomy has no such label"
         " (add it to .github/labels.json, or the flip fails when CI"
         " runs it)"
-        for label, sites in sorted(declared_labels(root).items())
+        for label, sites in sorted(declared.items())
         if label not in known for site in sites]
 
 
@@ -1406,7 +1432,6 @@ CODE_SPAN = re.compile(r"(`+).*?\1")
 # reason — a bare marker waives nothing.
 COVERAGE_WAIVER = re.compile(
     r"^\s*<!--\s*coverage-waiver:\s*(?!-->)\S.*?-->\s*$")
-SECTION_CITATION = re.compile(r"§\s*([^,;)§]+)")
 # O's grandfather cutoff: ADR-0072's own date. Coverage is a NEW rule, and
 # a PRD approved and decomposed before it existed does not owe it — the
 # principle ADR-0043's `(pre-ledger)` annotation established for G, keyed
@@ -1461,12 +1486,13 @@ def _prd_sections(lines):
     return [tuple(section) for section in sections]
 
 
-def _cites(citations, title):
-    """Does any `§` citation name this whole section title?"""
-    title = title.casefold()
-    return any(cited == title or (cited.startswith(title)
-                                  and not cited[len(title)].isalnum())
-               for cited in citations)
+def _cites(texts, title):
+    """Does any row text carry `§<title>` as a whole title? The known
+    title is matched as a literal, so one holding `,`, `;` or `)` counts
+    (issue #1904); a longer word starting with it does not."""
+    cited = re.compile(r"§\s*" + re.escape(title.strip())
+                       + r"(?![^\W_])", re.IGNORECASE)
+    return any(cited.search(text) for text in texts)
 
 
 def check_prd_coverage(root, parsed=None):
@@ -1491,10 +1517,9 @@ def check_prd_coverage(root, parsed=None):
             continue
         if _grandfathered(entry["prd_date"], COVERAGE_ADOPTED):
             continue
-        citations = [cited.strip().casefold()
+        citations = [row["text"]
                      for row in breakdown_rows(entry["breakdown"])
-                     if row["wo"] and prd_id in row["prd_ids"]
-                     for cited in SECTION_CITATION.findall(row["text"])]
+                     if row["wo"] and prd_id in row["prd_ids"]]
         rel = (entry["path"] / "prd.md").relative_to(root)
         for lineno, title, waived in _prd_sections(entry["prd"]):
             if not waived and not _cites(citations, title):
@@ -1589,13 +1614,18 @@ def check_standards_drift(root, parsed=None):
         root, parsed["adr_files"])
     problems = [f"K: {p}" for p in build_problems]
 
+    # key=repr: a hand-edited entry missing a field puts None beside a str,
+    # which a plain tuple sort cannot order (issue #1860). Equal tuples
+    # have equal reprs, so the comparison below stays exact.
     committed_adr = sorted(
-        _drift_fingerprint(entry) for entry in committed
-        if isinstance(entry, dict)
-        and not (isinstance(entry.get("source"), str)
-                 and entry["source"].startswith(
-                     standards_index.HAND_CURATED_PREFIX)))
-    fresh_fingerprint = sorted(_drift_fingerprint(entry) for entry in fresh)
+        (_drift_fingerprint(entry) for entry in committed
+         if isinstance(entry, dict)
+         and not (isinstance(entry.get("source"), str)
+                  and entry["source"].startswith(
+                      standards_index.HAND_CURATED_PREFIX))),
+        key=repr)
+    fresh_fingerprint = sorted(
+        (_drift_fingerprint(entry) for entry in fresh), key=repr)
     if committed_adr != fresh_fingerprint:
         problems.append(
             f"K: {standards_index.STANDARDS_PATH} has drifted from a"
@@ -1758,13 +1788,19 @@ def check_capture_completeness(root):
     problems = []
     for run in run_dirs(root):
         defect = run / "defect.md"
-        if not defect.is_file():
+        rel = defect.relative_to(root)
+        # Guarded read (ADR-0075): a non-UTF-8 defect.md is this
+        # detector's finding, not a crash that loses every other
+        # detector's output (issue #1879).
+        text, problem = read_file(defect, rel.as_posix(), str)
+        if problem:
+            problems.append(f"M: {problem}")
             continue
-        frontmatter = read_frontmatter(defect) or {}
+        if text is None:
+            continue
+        frontmatter = parse_frontmatter(text) or {}
         if _grandfathered(frontmatter.get("date"), CAPTURE_ADOPTED):
             continue
-        rel = defect.relative_to(root)
-        text = defect.read_text(encoding="utf-8")
         problems.extend(f"M: {rel} {suffix}"
                         for suffix in capture_completeness_problems(text))
     return problems

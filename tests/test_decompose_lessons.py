@@ -161,6 +161,19 @@ class TempFile(unittest.TestCase):
 
 
 class TestFile(TempFile):
+    def test_a_list_or_object_id_is_a_problem_not_a_crash(self):
+        for bad in (["x"], {"k": 1}):
+            with self.subTest(id=bad):
+                self.path.write_text(
+                    '{"seen": []}\n' + json.dumps(
+                        {"id": bad, "importance": 2, "text": "t",
+                         "sources": ["product"], "voted": []}) + "\n",
+                    encoding="utf-8")
+                _, _, problems = dl.load(self.path)
+                self.assertEqual(problems, [
+                    "decompose-lessons: lessons.jsonl line 2: missing or"
+                    " malformed field id"])
+
     def test_a_file_round_trips_byte_identically(self):
         text = jsonl(["replan:feature:a", "review:feature:b"],
                      lesson("replan/feature/added"),

@@ -16,6 +16,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -236,6 +237,44 @@ class TestKeyResolution(Repo):
         code, out = self.trace("#30", run=gh, environ={})
         self.assertEqual(code, 0, out)
         self.assertEqual(out.splitlines()[0], f"maintenance:bug as of {self.d}")
+
+
+class TestGhRoot(Repo):
+    """Issue #1875: gh reads run in --root, not the process cwd."""
+
+    def test_default_gh_runs_with_root_as_cwd(self):
+        seen = []
+
+        real = trace_view.runner
+
+        def fake_runner(binary):
+            if binary != "gh":
+                return real(binary)
+
+            def run(args, input=None, cwd=None):
+                seen.append((binary, cwd))
+                raise OSError("no gh in this test")
+            return run
+
+        out = io.StringIO()
+        with mock.patch.object(trace_view, "runner", fake_runner), \
+                contextlib.redirect_stdout(out):
+            code = trace_view.main(["feature:demo", "--root",
+                                    str(self.root)], environ={})
+        self.assertEqual(code, 0, out.getvalue())
+        self.assertEqual(seen, [("gh", self.root.resolve())])
+
+
+class TestNonUtf8Artifact(Repo):
+    """Issue #1876: one Latin-1 artifact must not crash every trace."""
+
+    def test_skips_the_artifact_and_notes_it(self):
+        (self.run_dir / "architecture.md").write_bytes(b"# caf\xe9\n")
+        code, out = self.trace("feature:demo")
+        self.assertEqual(code, 0, out)
+        self.assertIn("note: cannot read docs/features/demo/architecture.md:"
+                      " 'utf-8' codec can't decode byte 0xe9 in position 5:"
+                      " invalid continuation byte", out.splitlines())
 
 
 class TestIssueHistory(Repo):

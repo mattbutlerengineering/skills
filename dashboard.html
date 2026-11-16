@@ -69,10 +69,13 @@ const fmtWait = (seconds) => {
 
 // Drift findings are plain strings; #N becomes the issue link when the
 // repo's remote slug is known.
+// Split the RAW text so a #N is never read out of an escaped entity
+// (&#39; for an apostrophe), then escape each piece.
 const issueLinks = (text, remote) => (remote
-  ? esc(text).replace(/#(\d+)/g,
-      `<a href="https://github.com/${esc(remote)}/issues/$1"` +
-      ` target="_blank">#$1</a>`)
+  ? String(text).split(/(#\d+)/).map((piece, at) => (at % 2
+      ? `<a href="https://github.com/${esc(remote)}/issues/` +
+        `${piece.slice(1)}" target="_blank">${piece}</a>`
+      : esc(piece))).join("")
   : esc(text));
 
 const renderNeedsYou = (states) => {
@@ -139,7 +142,8 @@ const nudge = (order, line, delta) => {
     ? order.slice() : applyMove(order, line, target);
 };
 
-const renderBacklog = (states, orders, dirty, saveErrors) => {
+const renderBacklog = (states, orders, dirty, saveErrors,
+                       saving = {}) => {
   const sections = states.map(({i, name, payload}) => {
     const backlog = payload.backlog;
     if (!backlog) {
@@ -149,6 +153,10 @@ const renderBacklog = (states, orders, dirty, saveErrors) => {
     const byLine = {};
     for (const seed of backlog.seeds) byLine[seed.line] = seed;
     const order = orders[i] || backlog.seeds.map((s) => s.line);
+    // While a Save is in flight the line numbers behind `order` are
+    // stale until the regather lands: nothing may move or re-save.
+    const busy = saving[i] ? " disabled" : "";
+    const drag = saving[i] ? "" : ' draggable="true"';
     const items = order.map((line, at) => {
       const seed = byLine[line];
       if (!seed) return "";
@@ -156,16 +164,16 @@ const renderBacklog = (states, orders, dirty, saveErrors) => {
         ? `<li class="claimed">${esc(seed.text)} ` +
           `<span class="repo">(claimed: ${esc(seed.claimed)})` +
           `</span></li>`
-        : `<li draggable="true" data-repo="${i}" ` +
+        : `<li${drag} data-repo="${i}" ` +
           `data-line="${line}">` +
           `<button data-move="up" aria-label="Move up"` +
-          `${at ? "" : " disabled"}>▲</button>` +
+          `${at && !busy ? "" : " disabled"}>▲</button>` +
           `<button data-move="down" aria-label="Move down"` +
-          `${at === order.length - 1 ? " disabled" : ""}>▼</button>` +
+          `${at === order.length - 1 || busy ? " disabled" : ""}>▼</button>` +
           ` ⣿ ${esc(seed.text)}</li>`;
     }).join("");
     const button = `<button data-save="${i}"` +
-      `${dirty[i] ? "" : " disabled"}>Save order</button>`;
+      `${dirty[i] && !busy ? "" : " disabled"}>Save order</button>`;
     const marker = dirty[i]
       ? ` <span class="dirty">(unsaved order)</span>` : "";
     const error = saveErrors[i]
@@ -216,8 +224,9 @@ const renderMetrics = (states) => {
         `<span class="empty">No runs recorded yet.</span></li>`;
     }
     const parts = [
-      `${fmtMoney(m.month_spend)}` +
-        `${m.cap == null ? "" : ` / ${fmtMoney(m.cap)}`}`,
+      m.month_spend == null ? null
+        : `${fmtMoney(m.month_spend)}` +
+          `${m.cap == null ? "" : ` / ${fmtMoney(m.cap)}`}`,
       m.cost_per_wo == null ? null
         : `cost/WO ${fmtMoney(m.cost_per_wo)}`,
       m.gate_wait_median == null ? null
@@ -251,7 +260,8 @@ const renderStatus = (repos, answers) => repos.map((r) => {
 // as answers land; a repo that fails shows its error on its card.
 
 const state = {repos: [], answers: {}, payloads: {}, errors: {},
-               orders: {}, dirty: {}, saveErrors: {}, dragging: null};
+               orders: {}, dirty: {}, saveErrors: {}, saving: {},
+               dragging: null};
 
 const paint = () => {
   document.getElementById("gather-status").innerHTML =
@@ -266,7 +276,8 @@ const paint = () => {
     renderRepoCard(r.name, state.payloads[r.i],
                    state.errors[r.i])).join("");
   document.getElementById("backlog").innerHTML = renderBacklog(
-    answered, state.orders, state.dirty, state.saveErrors);
+    answered, state.orders, state.dirty, state.saveErrors,
+    state.saving);
   document.getElementById("output").innerHTML = renderOutput(answered);
   document.getElementById("metrics").innerHTML =
     renderMetrics(answered);
@@ -295,7 +306,9 @@ const gatherRepo = async (r) => {
 
 const saveOrder = async (i) => {
   const backlog = (state.payloads[i] || {}).backlog;
-  if (!backlog) return;
+  if (!backlog || state.saving[i]) return;
+  state.saving[i] = true;
+  paint();
   try {
     const res = await fetch("/api/backlog-order", {
       method: "POST",
@@ -312,8 +325,11 @@ const saveOrder = async (i) => {
     delete state.saveErrors[i];
     const repo = state.repos.find((r) => r.i === i);
     await gatherRepo(repo);
+    if (state.answers[i] === "ok") delete state.saveErrors[i];
   } catch (err) {
     state.saveErrors[i] = String(err.message || err);
+  } finally {
+    delete state.saving[i];
     paint();
   }
 };
