@@ -22,7 +22,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from cli import json_lines, read_file
+from cli import append_line, json_lines, read_file
 from knowledge_plane import WO_TOKEN
 
 # The append-only cost ledger (ADR-0034). The outcome vocabulary is
@@ -166,8 +166,7 @@ def append(root, entry):
     primitive: it checks nothing, so writers go through record()."""
     ledger = Path(root) / COST_LEDGER
     ledger.parent.mkdir(parents=True, exist_ok=True)
-    with open(ledger, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry) + "\n")
+    append_line(ledger, json.dumps(entry))
 
 
 def record(root, entry):
@@ -235,8 +234,7 @@ def record_isolated(root, entry, skip_existing=False):
                 " the monthly cap"]
     path = Path(root) / rel
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(entry) + "\n")
+    append_line(path, json.dumps(entry))
     return []
 
 
