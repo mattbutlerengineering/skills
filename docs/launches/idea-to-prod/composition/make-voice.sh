@@ -9,6 +9,6 @@ i=0
 while IFS= read -r line; do
   i=$((i + 1))
   say -v Samantha -r 180 -o "assets/vo/s$i.aiff" "$line"
-  ffmpeg -loglevel error -y -i "assets/vo/s$i.aiff" -ar 44100 -ac 1 "assets/vo/s$i.wav"
+  ffmpeg -nostdin -loglevel error -y -i "assets/vo/s$i.aiff" -ar 44100 -ac 1 "assets/vo/s$i.wav"
   rm "assets/vo/s$i.aiff"
 done < voiceover.txt
