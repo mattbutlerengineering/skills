@@ -628,11 +628,11 @@ class ReadinessGatedClock:
     def __init__(self, marker, ceiling=60):
         self.marker = marker
         self.ceiling = ceiling
-        self.start = time.time()
+        self.start = time.monotonic()
         self.held = None  # seconds spent holding still, once released
 
-    def time(self):
-        now = time.time()
+    def monotonic(self):
+        now = time.monotonic()
         if self.held is None:
             waiting = now - self.start < self.ceiling
             if waiting and not self.marker.is_file():

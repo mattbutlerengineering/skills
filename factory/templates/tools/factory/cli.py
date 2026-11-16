@@ -171,11 +171,11 @@ class EventStream:
         return self._iter
 
     def _lines(self, process, timeout):
-        start_time = time.time()
+        start_time = time.monotonic()
         buffer = ""
         decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         while True:
-            if time.time() - start_time >= timeout:
+            if time.monotonic() - start_time >= timeout:
                 self.timed_out = True
                 return
             exited = process.poll() is not None
