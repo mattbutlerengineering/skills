@@ -19,7 +19,7 @@ import conductor_next as nxt
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import cli_contract  # noqa: E402
 from fake_gh import FakeGh  # noqa: E402
-from fake_git import FakeGit  # noqa: E402
+from fake_git import FakeGit, raw_diff  # noqa: E402
 from test_conductor_flow import (AT, LEDGER, NOW, START, alive,  # noqa: E402
                                  answered, clock, dead, launch, moved, ran,
                                  stall_ask)
@@ -494,6 +494,30 @@ class TestDeliverNamesTheMergedPr(NextCase):
             "refusing to open a PR for #13: the issue is already closed"
             " (PR #6667 merged outside the batch)"))
         self.assertEqual(gh_.called("pr", "create"), [])
+
+    def feature_git(self):
+        path = "docs/features/widget/prd.md"
+        return FakeGit({
+            ("diff",): raw_diff([path]),
+            ("ls-tree", "--name-only", "origin/main", "--",
+             "docs/features/widget"): "docs/features/widget\n"})
+
+    def test_the_merged_prs_own_feature_directory_does_not_refuse(self):
+        # #1873: the squash-merge put docs/features/widget on main, and
+        # the branch's three-dot diff still lists it.
+        self.body()
+        gh_ = gh(landed=((6667, "abc"),))
+        self.assertIsNone(nxt.deliver(self.feature_git(), gh_, self.wt,
+                                      "conductor/b1-13", "#13", "b1"))
+        self.assertEqual(gh_.calls[-1][:2], ["pr", "create"])
+
+    def test_without_a_merged_pr_the_feature_directory_still_refuses(self):
+        self.body()
+        self.assertEqual(
+            nxt.deliver(self.feature_git(), gh(), self.wt,
+                        "conductor/b1-13", "#13", "b1"),
+            "refusing to open a PR for #13: docs/features/widget already"
+            " exists on origin/main")
 
     def test_an_open_pr_is_updated_without_the_merged_read(self):
         gh_ = gh(prs=(7,), landed=((6667, "abc"),))

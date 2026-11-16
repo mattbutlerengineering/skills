@@ -33,7 +33,7 @@
     "templates/tools/factory/conductor_flow.py": "07d80c4c89dd272a91e9bec0b68ec008fcb68d338b88c10909fb0fb447c4b51f",
     "templates/tools/factory/conductor_landed.py": "d39825659b40f20bcc73af9600888f7a36acf36a1e3aaa1fa9913adef36cc91d",
     "templates/tools/factory/conductor_merge.py": "16731ac0d7478f62b7f49cd51834256afd6a0a23f4bda8319302bcc6a0acd591",
-    "templates/tools/factory/conductor_next.py": "2aaf04bd7b6bf1634c28dc258f929ddef40258a67cbff51bd4f2b1b34cf96166",
+    "templates/tools/factory/conductor_next.py": "ed28eff9b8ab2a98b3c5194a165ed7ee73c73394f4e88a4931e4944de5884db7",
     "templates/tools/factory/conductor_plan.py": "0b4df3498fd4f9d5892350aa7f975e9eafd46f6a852eb98e61a521e1cfb6e12c",
     "templates/tools/factory/conductor_run.py": "19b9c3368ee65fd28a76a1c35946d4c4b301940af8bcd0236012a800a8a63868",
     "templates/tools/factory/conductor_spend.py": "0b60a5afee9430d937ad11f52cd13051b27d6e7add001412fe53eec30dd1f3e9",
