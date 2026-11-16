@@ -1190,6 +1190,21 @@ class TestRenderLeg(RenderMixin, cli_contract.CliContract,
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "launch-demo"
 
 
+class TestSceneCode(unittest.TestCase):
+    def test_a_line_comment_in_do_cannot_swallow_the_wrapper_close(self):
+        import launch_demo_drivers
+        scene = {"kind": "step", "say": "Open it", "hold": 2,
+                 "do": "await page.click('#go') // open the menu"}
+        self.assertEqual(
+            launch_demo_drivers._scene_code(scene, False),
+            "marks.push(Date.now());\n"
+            'await caption("Open it");\n'
+            "await (async (page) => {\n"
+            "await page.click('#go') // open the menu\n"
+            "})(page);\n"
+            "await sleep(2);")
+
+
 class TestBrowserFixture(unittest.TestCase):
     def test_the_fixture_storyboard_is_cut_from_its_copy(self):
         board = json.loads((FIXTURE / "storyboard.json").read_text("utf-8"))

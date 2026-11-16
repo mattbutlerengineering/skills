@@ -172,6 +172,18 @@ class TestCodegraphSummary(unittest.TestCase):
             self.assertIn("could not be parsed", summary)
 
 
+class TestWhitespaceOnlyDocstring(unittest.TestCase):
+    def test_a_non_ascii_whitespace_docstring_is_no_docstring(self):
+        for doc in ("\u3000", "\x0c"):
+            with self.subTest(doc=repr(doc)), \
+                    tempfile.TemporaryDirectory() as tmp:
+                path = Path(tmp) / "m.py"
+                path.write_text(f'"""{doc}"""\ndef f(): pass\n',
+                                encoding="utf-8")
+                self.assertEqual(orientation_pack._python_structure(path),
+                                 ("(no module docstring)", ["f"]))
+
+
 class TestOrientationPack(unittest.TestCase):
     def test_bundles_context_md(self):
         with tempfile.TemporaryDirectory() as tmp:

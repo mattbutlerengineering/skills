@@ -71,7 +71,8 @@ def _refusal(data):
         parser.Parse(data, True)
     except _Refused:
         return REFUSED
-    except (expat.ExpatError, LookupError) as e:  # LookupError: no codec
+    except (expat.ExpatError, LookupError, ValueError) as e:
+        # LookupError: no codec; ValueError: a multi-byte encoding
         return f"not well-formed: {e}"
     return None
 

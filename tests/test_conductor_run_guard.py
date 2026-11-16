@@ -69,6 +69,15 @@ class TestPushGuard(GuardCase):
                 " which git's https transport would hand a Worker's push;"
                 " move it aside while a batch runs")
 
+    def test_netrc_host_names_match_case_insensitively(self):
+        for host in ("GitHub.com", "API.GITHUB.COM"):
+            self.netrc.write_text(f"machine {host} login x password t\n")
+            self.assertRefused(
+                self.launch(),
+                f"cd: launch refused: {self.netrc} has a {host} entry,"
+                " which git's https transport would hand a Worker's push;"
+                " move it aside while a batch runs")
+
     def test_a_default_netrc_entry_refuses_the_launch(self):
         self.netrc.write_text("default login x password t\n")
         self.assertRefused(

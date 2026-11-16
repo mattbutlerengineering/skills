@@ -113,6 +113,17 @@ def wrap(body, root='width="400" height="200" viewBox="0 0 400 200"'):
             ).encode()
 
 
+class TestMultiByteEncoding(unittest.TestCase):
+    def test_a_multi_byte_declaration_is_a_refusal_not_a_crash(self):
+        for enc in ("shift_jis", "utf-32", "gbk", "euc-jp"):
+            with self.subTest(enc=enc):
+                data = (f'<?xml version="1.0" encoding="{enc}"?>'
+                        '<svg xmlns="http://www.w3.org/2000/svg"/>').encode()
+                r = svg_check.check(data)
+                self.assertTrue(r.refusal.startswith("not well-formed: "),
+                                r.refusal)
+
+
 class TestDefects(unittest.TestCase):
     SINGLE = {
         "no-size.svg": "root width missing",
