@@ -40,6 +40,7 @@ importing it tool-to-tool from label_sync. gh_read is the whole gh read
 above it — run, catch, parse, shape-check, window, prefix — one call
 where fourteen sites each composed five undocumented facts by hand.
 """
+import codecs
 import contextlib
 import json
 import math
@@ -172,6 +173,7 @@ class EventStream:
     def _lines(self, process, timeout):
         start_time = time.time()
         buffer = ""
+        decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         while True:
             if time.time() - start_time >= timeout:
                 self.timed_out = True
@@ -187,7 +189,7 @@ class EventStream:
             chunk = os.read(process.stdout.fileno(), 8192)
             if not chunk:
                 return
-            buffer += chunk.decode("utf-8", errors="replace")
+            buffer += decoder.decode(chunk)
 
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1)
