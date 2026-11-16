@@ -512,7 +512,9 @@ def _claim_path(root, raw):
             or not ARCH_PLAIN_PATH.match(cleaned):
         return None, (f"tree claim '{raw}' is not a plain repo path"
                       " (no globs, no '..')")
-    return root / cleaned, None
+    # A leading `/` is the repo root, as resolve_link reads it — never the
+    # host filesystem (issue #1903).
+    return root / cleaned.lstrip("/"), None
 
 
 def _declared_claims(root, rel, lineno, line):
@@ -1412,7 +1414,6 @@ CODE_SPAN = re.compile(r"(`+).*?\1")
 # reason — a bare marker waives nothing.
 COVERAGE_WAIVER = re.compile(
     r"^\s*<!--\s*coverage-waiver:\s*(?!-->)\S.*?-->\s*$")
-SECTION_CITATION = re.compile(r"§\s*([^,;)§]+)")
 # O's grandfather cutoff: ADR-0072's own date. Coverage is a NEW rule, and
 # a PRD approved and decomposed before it existed does not owe it — the
 # principle ADR-0043's `(pre-ledger)` annotation established for G, keyed
@@ -1467,12 +1468,13 @@ def _prd_sections(lines):
     return [tuple(section) for section in sections]
 
 
-def _cites(citations, title):
-    """Does any `§` citation name this whole section title?"""
-    title = title.casefold()
-    return any(cited == title or (cited.startswith(title)
-                                  and not cited[len(title)].isalnum())
-               for cited in citations)
+def _cites(texts, title):
+    """Does any row text carry `§<title>` as a whole title? The known
+    title is matched as a literal, so one holding `,`, `;` or `)` counts
+    (issue #1904); a longer word starting with it does not."""
+    cited = re.compile(r"§\s*" + re.escape(title.strip())
+                       + r"(?![^\W_])", re.IGNORECASE)
+    return any(cited.search(text) for text in texts)
 
 
 def check_prd_coverage(root, parsed=None):
@@ -1497,10 +1499,9 @@ def check_prd_coverage(root, parsed=None):
             continue
         if _grandfathered(entry["prd_date"], COVERAGE_ADOPTED):
             continue
-        citations = [cited.strip().casefold()
+        citations = [row["text"]
                      for row in breakdown_rows(entry["breakdown"])
-                     if row["wo"] and prd_id in row["prd_ids"]
-                     for cited in SECTION_CITATION.findall(row["text"])]
+                     if row["wo"] and prd_id in row["prd_ids"]]
         rel = (entry["path"] / "prd.md").relative_to(root)
         for lineno, title, waived in _prd_sections(entry["prd"]):
             if not waived and not _cites(citations, title):

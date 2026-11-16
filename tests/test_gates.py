@@ -1232,6 +1232,21 @@ class TestArchitectureDrift(unittest.TestCase):
                        "absent: Makefile\n```\n")
             self.assertEqual(gates.check_blueprint_drift(tree.root), [])
 
+    def test_a_leading_slash_claim_resolves_against_the_repo(self):
+        # Issue #1903: `root / "/Makefile"` is the host's /Makefile.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", "check:\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "absent: /Makefile\nexists: /etc/hosts\n"
+                       "exists: /Makefile\n```\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                f"D: {self.ARCH}:4 claims /Makefile is absent, but it"
+                " exists (architecture.md is stale)",
+                f"D: {self.ARCH}:5 claims /etc/hosts exists, but it does"
+                " not (architecture.md is stale)"])
+
     def test_a_glob_or_traversal_claim_is_refused_not_resolved(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -1952,6 +1967,17 @@ class TestPrdCoverage(unittest.TestCase):
     def test_a_citation_matches_a_whole_title_not_a_prefix_of_one(self):
         rows = ["- [ ] **WO-0001** (PRD-0001 §Solutions, §Out of scopes)"]
         self.assertEqual(len(self.check(breakdown=rows)), 2)
+
+    def test_a_title_holding_punctuation_can_be_cited(self):
+        # Issue #1904: the citation span stopped at `,` `;` `)`, so a
+        # title containing one could never be matched.
+        prd = self.PRD + ["", "## Scope (in and out)", "body", "",
+                          "## Risks, assumptions", "body"]
+        rows = ["- [ ] **WO-0001** (PRD-0001 \u00a7Solution, \u00a7Out of scope,"
+                " \u00a7Scope (in and out), \u00a7Risks, assumptions)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [])
+        uncited = ["- [ ] **WO-0001** (PRD-0001 \u00a7Solution, \u00a7Out of scope)"]
+        self.assertEqual(len(self.check(prd=prd, breakdown=uncited)), 2)
 
     def test_a_prd_predating_adoption_is_grandfathered(self):
         self.assertEqual(self.check(prd_date="2026-09-20"), [])
