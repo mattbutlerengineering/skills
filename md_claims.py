@@ -289,7 +289,8 @@ def _segments(tokens):
 
 
 def _cd(cwd, segment):
-    if len(segment) != 2 or PLACEHOLDER.search(segment[1]):
+    if (len(segment) != 2 or PLACEHOLDER.search(segment[1])
+            or segment[1].startswith("/")):
         return None
     return cwd / segment[1]
 
@@ -360,7 +361,8 @@ def _verify_make(root, cwd, args):
     rules = {name for line in (text or "").splitlines()
              for match in [MAKE_RULE.match(line)] if match
              for name in match.group(1).split()}
-    shown = makefile.relative_to(root).as_posix()
+    shown = makefile.relative_to(root).as_posix() \
+        if makefile.is_relative_to(root) else str(makefile)
     return [f"make target {target!r} is not defined in {shown}"
             for target in targets
             if target not in rules and not PLACEHOLDER.search(target)]
