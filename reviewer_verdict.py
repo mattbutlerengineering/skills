@@ -25,7 +25,7 @@ from decimal import Decimal
 
 PASS_AT = 7
 # A bare decimal: float() also takes `0_7`, `1e1` and padded forms.
-BARE_SCORE = re.compile(r"\d+(?:\.\d+)?")
+BARE_SCORE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
 USAGE = ("usage: python3 reviewer_verdict.py <score>\n"
          "  prints the verdict comment's first line: exit 0 pass,"
          " 1 flag, 2 error")
@@ -38,16 +38,18 @@ def derive(score):
     if isinstance(score, str) and not BARE_SCORE.fullmatch(score):
         return "error", f"reviewer-verdict: score is not a number ({score!r})"
     try:
+        exact = Decimal(score) if isinstance(score, str) else None
         number = float(score)
     except (TypeError, ValueError, OverflowError):
         return "error", f"reviewer-verdict: score is not a number ({score!r})"
     if not math.isfinite(number):
         return "error", f"reviewer-verdict: score is not finite ({score!r})"
-    if not 0 <= number <= 10:
+    if not 0 <= (number if exact is None else exact) <= 10:
         return "error", f"reviewer-verdict: score outside 0 to 10 ({score!r})"
-    value = int(number) if number.is_integer() else number
     # Decimal, not the float: 6.99999999999999999 rounds to 7.0 as a float.
-    passed = (Decimal(score) if isinstance(score, str) else number) >= PASS_AT
+    shown = number if exact is None else exact
+    value = int(shown) if shown == int(shown) else shown
+    passed = shown >= PASS_AT
     return ("pass" if passed else "flag"), value
 
 

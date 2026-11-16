@@ -61,7 +61,8 @@ EDIT_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
 EXIT_LINE = re.compile(r"^Exit code (\d+)$")
 FAIL_LINE = re.compile(r"error|fail|traceback|problem\(s\)|not found|"
                        r"denied|refus|stale|drift|out of sync", re.I)
-NOT_ERRORS = ("The user doesn't want to proceed", "[Request interrupted")
+NOT_ERRORS = ("The user doesn't want to proceed", "[Request interrupted",
+              "Permission for this action was denied")
 QUESTION_TOOL = "AskUserQuestion"
 # A human turn whose opening words push back on what the agent just did.
 CORRECTION = re.compile(
@@ -139,7 +140,7 @@ def select(dirs, days, session, now):
     """The transcripts to scan: one named session, every one modified in
     the last `days`, or the newest top-level session."""
     if session is not None:
-        return [path for d in dirs[:1]
+        return [path for d in dirs
                 for path in [Path(session) if Path(session).is_file()
                              else d / f"{session}.jsonl"] if path.is_file()]
     if days is not None:
@@ -343,7 +344,12 @@ def human_turns(records):
 
     for record in records:
         message = record.get("message")
+        if record.get("type") == "system" \
+                and record.get("subtype") == "compact_boundary":
+            agent = None
+            continue
         if record.get("isSidechain") or record.get("isMeta") \
+                or record.get("isCompactSummary") \
                 or not isinstance(message, dict):
             continue
         content = message.get("content")
@@ -372,11 +378,14 @@ def human_turns(records):
             text = _text(item.get("content"))
             if said is not None and not _failed(item, text) \
                     and not text.startswith(NOT_ERRORS):
-                turn("answer", "question-tool", text, said, record)
+                turn("answer", "question-tool",
+                     text.split('"="', 1)[-1], said, record)
         if results:
             continue
         text = _text(items).strip()
         if not text or text.startswith("<") or text.startswith(NOT_ERRORS):
+            if text.startswith("<"):
+                agent = None
             continue
         text = _words(items)
         if agent is not None and text:
@@ -565,7 +574,7 @@ USAGE = ("usage: kb.py harvest [root] [--days N] [--session ID]"
 
 def _options(argv):
     """(root, options, problems) from harvest's own arguments."""
-    root, options, problems, rest = ".", {}, [], list(argv)
+    root, options, problems, rest = None, {}, [], list(argv)
     flags = {"--days": "days", "--session": "session",
              "--projects-dir": "projects"}
     while rest:
@@ -576,8 +585,11 @@ def _options(argv):
             options[flags[arg]] = rest.pop(0)
         elif arg.startswith("-"):
             return None, None, [USAGE]
+        elif root is not None:
+            return None, None, [USAGE]
         else:
             root = arg
+    root = "." if root is None else root
     days = options.get("days")
     if days is not None:
         if not (days.isascii() and days.isdigit() and int(days) > 0):

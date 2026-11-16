@@ -1036,6 +1036,15 @@ class TestMonthlyCap(RunCase):
             " $10.50 against its $10.00 cap; dispatch is paused behind"
             " ask-2"])
 
+    def test_a_non_jsonl_file_under_the_runs_dir_is_not_a_ledger(self):
+        # #1992: cost_ledger.read skips it; ref_rows must not parse it.
+        summary, problems = self.over(shows={
+            MAIN_COSTS: spend_line("a", 7.0) + "\n",
+            "origin/main:docs/factory/costs/runs/README.md":
+                "# per-run spend rows\n"})
+        self.assertEqual(problems, [])
+        self.assertEqual(summary["outcome"], "completed")
+
     def test_a_launch_within_the_cap_runs(self):
         summary, problems = self.over(shows={
             MAIN_COSTS: spend_line("a", 7.0) + "\n"})

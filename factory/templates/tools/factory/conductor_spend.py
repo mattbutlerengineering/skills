@@ -91,6 +91,10 @@ def _ref_entries(git, ref, path, recursive=False):
     names = [line.strip() for line in listed.splitlines() if line.strip()]
     if not recursive:
         names = [path] if names else []
+    else:
+        names = [name for name in names if name.endswith(".jsonl")
+                 and cost_ledger.run_ledger_path(
+                     name.rsplit("/", 1)[-1][:-len(".jsonl")]) is not None]
     entries = []
     for name in names:
         shown = f"{ref}:{name}"

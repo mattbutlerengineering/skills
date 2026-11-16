@@ -289,6 +289,27 @@ class TestRowsAndSpend(unittest.TestCase):
             self.assertEqual(found_rows["WO-0002"]["issue"], 107)
             self.assertIsNone(found_rows["WO-0002"]["unreadable"])
 
+    def test_a_template_style_blocked_by_sub_bullet_blocks_the_row(self):
+        # #1997: decompose's template writes `  - Blocked by: <item>`.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("docs/features/demo/breakdown.md",
+                       "- [ ] **WO-0001** base — size:S"
+                       " (PRD-0001 §S) (tracker: #106)\n"
+                       "- [ ] **WO-0002** polish — size:M"
+                       " (PRD-0001 §S) (tracker: #107)\n"
+                       "  - Accept: it works\n"
+                       "  - Blocked by: WO-0001\n"
+                       "- [ ] **WO-0003** other — size:M"
+                       " (PRD-0001 §S) (tracker: #108)\n"
+                       "  - Blocked by: Export API\n")
+            found_rows = work_queue.rows(tree.root)
+            self.assertEqual(found_rows["WO-0002"]["blockers"], ["WO-0001"])
+            self.assertEqual(found_rows["WO-0003"]["unreadable"],
+                             "Export API")
+            _, deferred = work_queue.eligible(found_rows, {106, 107, 108})
+            self.assertIn("WO-0002: blocked by WO-0001", deferred)
+
     def test_rows_carries_what_a_clause_could_not_name(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)

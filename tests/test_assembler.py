@@ -664,6 +664,15 @@ class TestSpendRowPersistence(unittest.TestCase):
         self.assertIn('git -C "$RUNNER_TEMP/spend" push origin HEAD:main',
                       text)
 
+    def test_the_worktree_dir_exists_before_the_row_is_appended(self):
+        # #1996: a stamped repo has no docs/factory/ on main, so the
+        # redirect fails unless the directory is made first.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        mkdir = text.index(
+            'mkdir -p "$RUNNER_TEMP/spend/docs/factory"')
+        tail = text.index("tail -n 1 docs/factory/costs.jsonl")
+        self.assertLess(mkdir, tail)
+
 
 class TestMechanicalStops(unittest.TestCase):
     """WO-0034: ADR-0034's two runner-side uncorrelated stops. The dollar

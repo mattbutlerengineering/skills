@@ -33,6 +33,9 @@ from conductor_close import PLACES, closed_batches
 # a hit: the ceiling was spent, whoever spent it.
 WARN_ATTEMPTS = 2
 WARN_SHARE = 0.5
+# factory_config requires a positive step weight; a step spending under
+# 5% of its ceiling would round to 0.0 at one place (#1991).
+MIN_WEIGHT = 0.1
 WARNING = ("{step}: {hits} of {attempts} attempts spent the ceiling; the"
            " weight is too low")
 # The step whose sample unit is one breakdown row (its work order), not
@@ -153,9 +156,9 @@ def _scaled(samples, weights):
                 and any(ceiling <= 0 for _, ceiling in samples[step])]
     if refused:
         return None, refused
-    return {step: round(weight * sum(cost / ceiling for cost, ceiling
-                                     in samples[step])
-                        / len(samples[step]), 1)
+    return {step: max(round(weight * sum(cost / ceiling for cost, ceiling
+                                         in samples[step])
+                            / len(samples[step]), 1), MIN_WEIGHT)
             for step, weight in weights.items()}, []
 
 

@@ -834,7 +834,7 @@ class TestStandardsDrift(unittest.TestCase):
             self.assertEqual(gates.check_standards_drift(tree.root), [
                 "K: docs/standards.json has drifted from a fresh ADR"
                 " regeneration (run `python3 standards_index.py"
-                " update`)"])
+                " update`, the script beside gates.py)"])
 
     def test_an_entry_missing_a_field_is_drift_not_a_crash(self):
         # Issue #1860: sorting fingerprint tuples put None beside a str
@@ -849,7 +849,7 @@ class TestStandardsDrift(unittest.TestCase):
             self.assertEqual(gates.check_standards_drift(tree.root), [
                 "K: docs/standards.json has drifted from a fresh ADR"
                 " regeneration (run `python3 standards_index.py"
-                " update`)"])
+                " update`, the script beside gates.py)"])
 
     def test_a_removed_bullet_is_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -862,7 +862,7 @@ class TestStandardsDrift(unittest.TestCase):
             self.assertEqual(gates.check_standards_drift(tree.root), [
                 "K: docs/standards.json has drifted from a fresh ADR"
                 " regeneration (run `python3 standards_index.py"
-                " update`)"])
+                " update`, the script beside gates.py)"])
 
     def test_a_hand_curated_entry_never_drifts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1427,7 +1427,8 @@ class TestScaffoldSync(unittest.TestCase):
             tree.write("factory/templates/extra.txt", "orphan\n")
             self.assertEqual(gates.check_scaffold_sync(tree.root), [
                 "E: factory/templates/Makefile does not match its manifest"
-                " checksum (re-run manifest update, never hand-edit)",
+                " checksum (re-run `python3 factory_init.py"
+                " update-manifest` in the skills repo, never hand-edit)",
                 "E: factory/templates/extra.txt is not in the manifest"])
 
     def test_missing_manifest_is_flagged(self):

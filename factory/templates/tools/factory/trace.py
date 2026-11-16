@@ -34,7 +34,7 @@ import json
 import os
 import re
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from cli import CLI_FAILURES, detail, gh_read, read_file, report, runner
@@ -63,6 +63,19 @@ ADR_DATE = re.compile(r"^-\s*Date:\s*(\d{4}-\d{2}-\d{2})\b")
 # one-owner: cost_ledger.AT_DATE (ADR-0061) — the --since argument's shape,
 # not a ledger row's at field; the pattern is shared, the fact is not
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
+
+
+def valid_day(text):
+    """True when `text` is a real YYYY-MM-DD calendar day (#2000)."""
+    if not DAY.fullmatch(text):
+        return False
+    try:
+        date.fromisoformat(text)
+    except ValueError:
+        return False
+    return True
+
+
 SCALES = ("feature:", "maintenance:")
 
 
@@ -487,7 +500,7 @@ def root_gh(root):
 
 def main(argv, run=None, environ=os.environ, git=_git):
     args = parse_args(argv)
-    if args.since is not None and not DAY.fullmatch(args.since):
+    if args.since is not None and not valid_day(args.since):
         return report(LABEL, [f"{LABEL}: --since takes YYYY-MM-DD, not"
                               f" {args.since!r}"])
     root = Path(args.root).resolve()
