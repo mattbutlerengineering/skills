@@ -143,6 +143,13 @@ class TestLoad(unittest.TestCase):
             (None, [f"{LABEL} against must be an http(s) URL for the"
                     " browser recorder"]))
 
+    def test_a_malformed_browser_url_is_the_url_problem_not_a_crash(self):
+        self.assertEqual(
+            self.load({**VALID, "recorder": "browser",
+                       "against": "http://[::1"}),
+            (None, [f"{LABEL} against must be an http(s) URL for the"
+                    " browser recorder"]))
+
     def test_voice_must_name_out_when_present(self):
         for bad in ("say -o out.wav", ""):
             with self.subTest(voice=bad):
@@ -506,6 +513,19 @@ class TestCheckStoryboard(unittest.TestCase):
         board["steps"][0]["do"] = "await page.click('#count');"
         board["steps"][1]["do"] = ""
         self.assertEqual(self.check(board, "browser"), [])
+
+    def test_empty_and_fragment_narration_is_not_a_sentence(self):
+        for bad in ("", "   ", "unch"):
+            with self.subTest(line=bad):
+                self.assertEqual(
+                    self.check(storyboard(intro=bad)),
+                    [f"{SB} intro is not a sentence of launch.md"])
+                board = storyboard()
+                board["steps"][0]["say"] = bad
+                self.assertEqual(
+                    self.check(board),
+                    [f"{SB} step 1 narration is not a sentence of"
+                     " launch.md"])
 
     def test_each_missing_field_is_named(self):
         for field in ("title", "tagline", "intro", "steps", "outro"):
@@ -1046,6 +1066,17 @@ class TestRender(RenderMixin, unittest.TestCase):
             f"{SB} outro is not a sentence of launch.md"]))
         self.assertEqual(self.runners.calls, [])
 
+    def test_a_slug_that_is_not_a_plain_name_is_refused(self):
+        for bad in ("../..", "../../outside", "a/b", "/abs", ""):
+            with self.subTest(slug=bad):
+                self.assertEqual(
+                    launch_demo.render(self.root, self.config, bad,
+                                       self.which, self.runners,
+                                       scratch=self.scratch),
+                    (None, [], ["launch-demo: slug must be a plain"
+                                " directory name"]))
+        self.assertEqual(self.runners.calls, [])
+
     def test_a_missing_tool_is_copy_only_before_any_tool_runs(self):
         self.which = FakeWhich({**ALL_TOOLS, "vhs": None})
         verdict, lines, problems = self.render()
@@ -1189,6 +1220,15 @@ class TestReachable(unittest.TestCase):
             raise TimeoutError()
         self.assertEqual(launch_demo.reachable("http://h", head),
                          (False, "timed out after 5 s"))
+
+    def test_an_unsendable_url_is_unreachable_not_a_crash(self):
+        import http.client
+
+        def head(url, timeout):
+            raise http.client.InvalidURL("URL can't contain control chars")
+        self.assertEqual(
+            launch_demo.reachable("http://h/my page", head),
+            (False, "URL can't contain control chars"))
 
     def test_the_head_is_asked_with_the_timeout(self):
         seen = []

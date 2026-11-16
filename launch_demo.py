@@ -14,6 +14,7 @@ text is its sibling launch_demo_drivers.py's. Every external
 CLI (ffmpeg, ffprobe, vhs, node, the voice) goes through cli.runner, so
 tests inject fake runners and CI runs no real recorder. Stdlib only.
 """
+import http.client
 import json
 import os
 import re
@@ -173,8 +174,19 @@ def _normalised(text):
     return " ".join(text.split())
 
 
-def _in_copy(line, copy):
-    return isinstance(line, str) and _normalised(line) in copy
+def _sentences(copy_text):
+    """The normalised sentences of the copy: each blank-line-separated
+    block is split after `.`, `!` or `?` followed by whitespace, so a
+    heading is its own sentence."""
+    return {sentence
+            for block in re.split(r"\n\s*\n", copy_text)
+            for sentence in re.split(r"(?<=[.!?])\s+", _normalised(block))
+            if sentence}
+
+
+def _in_copy(line, sentences):
+    return (isinstance(line, str)
+            and _normalised(line) in sentences)
 
 
 def _check_steps(steps, copy, adapter):
@@ -206,7 +218,7 @@ def check_storyboard(storyboard, copy_text, recorder):
     label = f"{LABEL}: storyboard"
     if not isinstance(storyboard, dict):
         return [f"{label} is not a JSON object"]
-    copy = _normalised(copy_text)
+    copy = _sentences(copy_text)
     adapter = _recorder(recorder)
     problems = []
     for field in STORYBOARD_FIELDS:
@@ -479,7 +491,8 @@ def reachable(against, head=None):
         if isinstance(err.reason, TimeoutError):
             return False, f"timed out after {HEAD_TIMEOUT} s"
         return False, str(err.reason)
-    except OSError as err:
+    except (OSError, http.client.InvalidURL) as err:
+        # InvalidURL: a URL urlopen cannot send (an HTTPException).
         return False, str(err)
     return True, None
 
@@ -498,7 +511,11 @@ def _browser_do(do):
 
 
 def _browser_against(against):
-    if urlsplit(against).scheme not in URL_SCHEMES:
+    try:
+        scheme = urlsplit(against).scheme
+    except ValueError:
+        scheme = None
+    if scheme not in URL_SCHEMES:
         return "against must be an http(s) URL for the browser recorder"
 
 
@@ -591,6 +608,8 @@ def render(root, config, slug, which=shutil.which, runner=cli.runner,
     launch-demo- tempdir unless given), named in the first line so a
     failed run can be inspected. Reads only the config and slug dir."""
     root = Path(root)
+    if not (_plain_relative(slug) and len(Path(slug).parts) == 1):
+        return None, [], [f"{LABEL}: slug must be a plain directory name"]
     shown_dir = f"{config['publish']}/{slug}"
     slug_dir = root / config["publish"] / slug
     copy, board, problems = _read_sources(root, shown_dir, slug_dir)
