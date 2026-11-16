@@ -236,6 +236,15 @@ class TestWorkerEnv(unittest.TestCase):
     def env(self, gh_dir="/empty"):
         return conductor_run.worker_env(self.OWNER, "b1", gh_dir)
 
+    def test_the_owners_git_config_environment_is_all_stripped(self):
+        owner = dict(self.OWNER,
+                     GIT_CONFIG_PARAMETERS="'credential.helper=store'",
+                     GIT_CONFIG_GLOBAL="/g", GIT_CONFIG_SYSTEM="/s")
+        env = conductor_run.worker_env(owner, "b1", "/empty")
+        for name in ("GIT_CONFIG_PARAMETERS", "GIT_CONFIG_GLOBAL",
+                     "GIT_CONFIG_SYSTEM"):
+            self.assertNotIn(name, env)
+
     def test_no_github_credential_reaches_the_worker(self):
         env = self.env()
         for name in ("GH_TOKEN", "GITHUB_TOKEN", "GH_HOST",

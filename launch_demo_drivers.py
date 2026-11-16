@@ -158,7 +158,7 @@ def _scene_code(scene, first_step):
             lines.append("await page.goto(against);")
         do = scene["do"] if isinstance(scene["do"], str) else ""
         lines += [f"await caption({json.dumps(scene['say'])});",
-                  f"await (async (page) => {{ {do} }})(page);"]
+                  f"await (async (page) => {{\n{do}\n}})(page);"]
     lines.append(f"await sleep({scene['hold']});")
     return "\n".join(lines)
 
