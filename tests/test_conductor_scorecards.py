@@ -107,6 +107,16 @@ class TestHistory(unittest.TestCase):
             self.assertEqual(close.append_scorecard(tmp, CURRENT), [])
             self.assertEqual(close.history(tmp), ([OLDER, CURRENT], []))
 
+    def test_a_final_line_without_a_newline_is_closed_not_fused(self):
+        # a hand-edited file ending mid-line: the next card must start its
+        # own line, or both rows read back as one invalid line
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / close.SCORECARDS
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps(OLDER), encoding="utf-8")
+            self.assertEqual(close.append_scorecard(tmp, CURRENT), [])
+            self.assertEqual(close.history(tmp), ([OLDER, CURRENT], []))
+
     def test_a_row_of_the_wrong_shape_is_never_appended(self):
         # #814: the writer checks the shape the reader checks.
         with tempfile.TemporaryDirectory() as tmp:

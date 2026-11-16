@@ -254,6 +254,21 @@ def _heredoc_delimiter(text):
             return delim
 
 
+def append_line(path, line):
+    """Append LINE and its newline to PATH, creating it. When the file
+    already ends without a newline (a hand edit, an editor that strips
+    the last one) the new line starts on its own: written straight on,
+    it would fuse onto the last row and leave one line of invalid JSON
+    in a JSONL ledger, unreadable for every later reader."""
+    with open(path, "ab+") as handle:
+        lead = b""
+        if handle.seek(0, os.SEEK_END):
+            handle.seek(-1, os.SEEK_END)
+            if handle.read(1) != b"\n":
+                lead = b"\n"
+        handle.write(lead + line.encode("utf-8") + b"\n")
+
+
 def write_outputs(env, outputs):
     """Append outputs to $GITHUB_OUTPUT for the workflow's downstream steps.
     Multiline values (e.g. the assembler's prompt) use GitHub's heredoc

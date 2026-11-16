@@ -45,7 +45,7 @@ import conductor_spend
 import cost_ledger
 import factory_config
 import label_sync
-from cli import CLI_FAILURES, detail, json_lines
+from cli import CLI_FAILURES, append_line, detail, json_lines
 from conductor import LEDGER, TERMINAL, answers, append, ask_row, \
     batch_branch, batch_dir, current_state, is_text, item_view, load, \
     numbered, parse, parsed_at, read_text, run_item, stamp, view
@@ -466,8 +466,7 @@ def append_scorecard(root, card):
         return []
     path = Path(root) / SCORECARDS
     path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "a", encoding="utf-8") as handle:
-        handle.write(json.dumps(card) + "\n")
+    append_line(path, json.dumps(card))
     return []
 
 

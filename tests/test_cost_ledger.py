@@ -70,6 +70,29 @@ class TestAppend(unittest.TestCase):
             lines = ledger.read_text(encoding="utf-8").splitlines()
             self.assertEqual(lines, [json.dumps(first), json.dumps(second)])
 
+    def test_a_final_line_without_a_newline_is_closed_not_fused(self):
+        """A hand-edited ledger can end without its newline. record()
+        found nothing wrong (every row parses), and the append wrote the
+        next row onto the same line: one line of invalid JSON, every later
+        read a problem, every later record refused, the cap's cost report
+        failing closed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            first = cost_ledger.entry(
+                "WO-0001", "r-1", "m", 100, 1.0, "merged", "2026-08-01")
+            second = cost_ledger.entry(
+                "WO-0002", "r-2", "m", 200, 2.0, "merged", "2026-08-02")
+            ledger = Path(tmp) / cost_ledger.COST_LEDGER
+            ledger.parent.mkdir(parents=True)
+            ledger.write_text(json.dumps(first), encoding="utf-8")
+            self.assertEqual(cost_ledger.record(tmp, second), [])
+            rows, problems = cost_ledger.read(tmp)
+            self.assertEqual(problems, [])
+            self.assertEqual([row["wo"] for row in rows],
+                             ["WO-0001", "WO-0002"])
+            self.assertEqual(
+                ledger.read_text(encoding="utf-8"),
+                json.dumps(first) + "\n" + json.dumps(second) + "\n")
+
 
 class TestRecord(unittest.TestCase):
     """cost_ledger.record — the one guarded write every ledger writer goes
