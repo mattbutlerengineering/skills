@@ -699,12 +699,16 @@ def _drift(rows, item, git, branch, worktree):
     try:
         # --no-renames: a rename onto an allowed path would otherwise
         # list only its new name and hide the deletion it carries.
-        changed = git(["diff", "--name-only", "--no-renames", head,
-                       branch]).stdout.split()
-        added = git(["diff", "--name-only", "--no-renames",
-                     "--diff-filter=A", head, branch]).stdout.split()
-        verified = git(["diff", "--name-only",
-                        f"origin/main...{head}"]).stdout.split()
+        # -z (#1919): a path with a space is one name, and a non-ASCII one is not
+        # C-quoted into something no allowed path equals.
+        changed = git(["diff", "--name-only", "-z", "--no-renames", head,
+                       branch]).stdout.split("\0")
+        added = git(["diff", "--name-only", "-z", "--no-renames",
+                     "--diff-filter=A", head, branch]).stdout.split("\0")
+        verified = git(["diff", "--name-only", "-z",
+                        f"origin/main...{head}"]).stdout.split("\0")
+        changed, added, verified = ([p for p in names if p] for names in
+                                    (changed, added, verified))
     except CLI_FAILURES as err:
         return None, [f"cd: git diff {head[:12]} {branch} failed:"
                       f" {detail(err, every_line=True)}"]

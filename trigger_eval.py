@@ -428,7 +428,7 @@ def score_case(case, fired_counts, runs, threshold, errors=0):
         "runs": runs,
         "errors": errors,
         "correct_rate": round(correct_rate, 3),
-        "pass": correct_rate >= threshold,
+        "pass": runs > 0 and correct_rate >= threshold,
     }
 
 
