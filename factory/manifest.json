@@ -32,7 +32,7 @@
     "templates/tools/factory/conductor_consent.py": "8d04c24706369136a4d0aa1946ec70a194f1edf839a0ac8e1cf09b302cc31c2d",
     "templates/tools/factory/conductor_flow.py": "c6c1d0aa248773068e6b4ad85c63f8daa2428307d24d5eeabd607d01fdc21c34",
     "templates/tools/factory/conductor_landed.py": "d39825659b40f20bcc73af9600888f7a36acf36a1e3aaa1fa9913adef36cc91d",
-    "templates/tools/factory/conductor_merge.py": "353a14d74acfb3ed25acc7d2ed4f2d01636c1bc3d7e066554442e6a9374044cb",
+    "templates/tools/factory/conductor_merge.py": "f49ec512186adeefd86398153d57d0b7dc839f1b1ecb14554b50bc655b1dc9be",
     "templates/tools/factory/conductor_next.py": "ed28eff9b8ab2a98b3c5194a165ed7ee73c73394f4e88a4931e4944de5884db7",
     "templates/tools/factory/conductor_plan.py": "d22b6effac5fceac6558726e4bdbd3d8e70d4af83d174b4d5e60b02c7248ba6d",
     "templates/tools/factory/conductor_run.py": "47132d2d0f0f257cff3dc905c460b370d41e5a073a57f08da3ddb166c94e53a6",
