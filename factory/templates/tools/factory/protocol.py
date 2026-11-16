@@ -91,7 +91,9 @@ def frontmatter_end(lines):
     lines[end + 1:]. None when LINES is empty, its first line is not a
     fence (an indented opener included), or no later line closes it;
     the first closing fence wins, so an empty block ends at 1."""
-    if not lines or not _FENCE.match(lines[0]):
+    # A UTF-8 BOM (Windows editors) opens the first line without being
+    # part of the fence.
+    if not lines or not _FENCE.match(lines[0].removeprefix("\ufeff")):
         return None
     for index in range(1, len(lines)):
         if _FENCE.match(lines[index]):
