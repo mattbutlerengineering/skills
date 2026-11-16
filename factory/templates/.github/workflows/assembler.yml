@@ -315,7 +315,10 @@ jobs:
           git fetch origin main
           git worktree add "$RUNNER_TEMP/spend" refs/remotes/origin/main
           mkdir -p "$RUNNER_TEMP/spend/docs/factory"
-          tail -n 1 docs/factory/costs.jsonl >> "$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
+          ledger="$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
+          # A main ledger lacking its final newline would fuse the new row onto its last line.
+          if [ -s "$ledger" ] && [ -n "$(tail -c 1 "$ledger")" ]; then echo >> "$ledger"; fi
+          tail -n 1 docs/factory/costs.jsonl >> "$ledger"
           git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
           git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"
           git -C "$RUNNER_TEMP/spend" push origin HEAD:main
