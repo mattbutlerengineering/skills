@@ -19,7 +19,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-DASH = "—"
+DASH = chr(0x2014)
 
 # Run in the child: each entry maps an adapter to the text it returned for
 # a program that wrote an em dash as UTF-8 bytes.
@@ -28,7 +28,7 @@ import json, os, stat, sys, tempfile
 sys.path.insert(0, sys.argv[1])
 import cli, conductor_merge, reap_worktrees
 
-EMIT = "import sys; sys.stdout.buffer.write('—'.encode('utf-8'))"
+EMIT = "import sys; sys.stdout.buffer.write(chr(0x2014).encode('utf-8'))"
 ECHO = ("import sys; sys.stdout.buffer.write("
         "sys.stdin.buffer.read())")
 argv = [sys.executable, "-c", EMIT]
@@ -39,7 +39,7 @@ os.chmod(script, os.stat(script).st_mode | stat.S_IXUSR)
 out = {
     "cli.runner stdout": cli.runner(sys.executable)(["-c", EMIT]).stdout,
     "cli.runner stdin": cli.runner(sys.executable)(
-        ["-c", ECHO], input="—").stdout,
+        ["-c", ECHO], input=chr(0x2014)).stdout,
     "cli.version": cli.version(script),
     "conductor_merge.run_tool": conductor_merge.run_tool(argv).stdout,
     "reap_worktrees.run": reap_worktrees.run(argv).stdout,
