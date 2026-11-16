@@ -162,6 +162,33 @@ class TestLinkIntegrity(unittest.TestCase):
             "C: duplicate PRD id PRD-0001 in"
             " docs/features/demo/prd.md, docs/features/other/prd.md"])
 
+    def test_a_dangling_wo_token_inside_a_breakdown_is_flagged(self):
+        # Issue #1899: C skipped every WO token inside breakdown.md, so
+        # `blocked by: WO-0099` naming no row passed and the row was
+        # deferred forever by work_queue.eligible.
+        rows = ["- [ ] **WO-0001** first \u2014 size: S, blocked by: WO-0099"
+                " (PRD-0001 \u00a7S)",
+                "  - also waits on WO-0042"]
+        parsed = self.base_parsed(scannable=[
+            (self.ROOT / "docs/features/demo/breakdown.md", rows)])
+        parsed["runs"][0]["breakdown"] = rows
+        self.assertEqual(gates.check_link_integrity(self.ROOT, parsed), [
+            "C: docs/features/demo/breakdown.md:1 dangling WO-0099"
+            " (no breakdown row)",
+            "C: docs/features/demo/breakdown.md:2 dangling WO-0042"
+            " (no breakdown row)"])
+
+    def test_two_adr_files_sharing_a_number_are_flagged(self):
+        # Issue #1901: C and D collapse ADR files by number, so a merge
+        # collision resolved to either decision silently.
+        parsed = self.base_parsed()
+        parsed["adr_files"] = [
+            (self.ROOT / "docs/adr/0042-use-postgres.md", ["# Postgres"]),
+            (self.ROOT / "docs/adr/0042-use-sqlite.md", ["# SQLite"])]
+        self.assertEqual(gates.check_link_integrity(self.ROOT, parsed), [
+            "C: duplicate ADR number ADR-0042 in"
+            " docs/adr/0042-use-postgres.md, docs/adr/0042-use-sqlite.md"])
+
     def test_dangling_token_outside_docs_is_now_flagged(self):
         # Issue #456: _scannable_files used to be docs/**/*.md + CONTEXT.md
         # only, so a dangling ADR token in .github/, factory/, skills/ or a
@@ -796,6 +823,21 @@ class TestStandardsDrift(unittest.TestCase):
                 " regeneration (run `python3 standards_index.py"
                 " update`)"])
 
+    def test_an_entry_missing_a_field_is_drift_not_a_crash(self):
+        # Issue #1860: sorting fingerprint tuples put None beside a str
+        # and raised TypeError out of run_all.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            self.adr(tree, "docs/adr/0001-x.md", "accepted",
+                     "- **some-slug** (factory): Something MUST happen.")
+            self.standards(tree, [
+                {"statement": "no slug"},
+                {"slug": "a", "statement": "x"}])
+            self.assertEqual(gates.check_standards_drift(tree.root), [
+                "K: docs/standards.json has drifted from a fresh ADR"
+                " regeneration (run `python3 standards_index.py"
+                " update`)"])
+
     def test_a_removed_bullet_is_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp)
@@ -1104,6 +1146,22 @@ class TestCaptureCompleteness(unittest.TestCase):
             self.assertTrue(problems)
 
 
+class TestCaptureCompletenessUnreadable(unittest.TestCase):
+    def test_a_non_utf8_defect_is_an_m_problem_not_a_crash(self):
+        # Issue #1879: one Latin-1 byte raised out of run_all.
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fix = root / "docs/fixes/x"
+            fix.mkdir(parents=True)
+            (fix / "defect.md").write_bytes(
+                b"---\ndate: 2026-11-01\n---\n# caf\xe9\n")
+            problems = gates.check_capture_completeness(root)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "M: cannot read docs/fixes/x/defect.md:"), problems)
+            gates.run_all(root, env={})  # no raise
+
+
 class TestOneFrontmatterAnswer(unittest.TestCase):
     """Where frontmatter ends has one owner, protocol.frontmatter_end
     (ADR-0118), so gates' section walk and its date read cannot disagree
@@ -1204,6 +1262,21 @@ class TestArchitectureDrift(unittest.TestCase):
                        "# this repo is not itself stamped\n\n"
                        "absent: Makefile\n```\n")
             self.assertEqual(gates.check_blueprint_drift(tree.root), [])
+
+    def test_a_leading_slash_claim_resolves_against_the_repo(self):
+        # Issue #1903: `root / "/Makefile"` is the host's /Makefile.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("Makefile", "check:\n")
+            tree.write(self.ARCH,
+                       "# Architecture\n\n```tree-claims\n"
+                       "absent: /Makefile\nexists: /etc/hosts\n"
+                       "exists: /Makefile\n```\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                f"D: {self.ARCH}:4 claims /Makefile is absent, but it"
+                " exists (architecture.md is stale)",
+                f"D: {self.ARCH}:5 claims /etc/hosts exists, but it does"
+                " not (architecture.md is stale)"])
 
     def test_a_glob_or_traversal_claim_is_refused_not_resolved(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1486,6 +1559,17 @@ class TestLabelWiring(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree, _ = self.wired_tree(tmp)
             self.assertEqual(gates.check_label_wiring(tree.root), [])
+
+    def test_a_non_utf8_makefile_is_reported_not_a_crash(self):
+        # Issue #1906: an unguarded read raised UnicodeDecodeError out of
+        # run_all, so no detector reported.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            (tree.root / "Makefile").write_bytes(b"check:\n\tcaf\xe9\n")
+            problems = gates.check_label_wiring(tree.root)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "J: cannot read Makefile:"), problems)
 
     def test_a_pruned_label_is_reported_against_every_site_that_names_it(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -1926,6 +2010,17 @@ class TestPrdCoverage(unittest.TestCase):
         rows = ["- [ ] **WO-0001** (PRD-0001 §Solutions, §Out of scopes)"]
         self.assertEqual(len(self.check(breakdown=rows)), 2)
 
+    def test_a_title_holding_punctuation_can_be_cited(self):
+        # Issue #1904: the citation span stopped at `,` `;` `)`, so a
+        # title containing one could never be matched.
+        prd = self.PRD + ["", "## Scope (in and out)", "body", "",
+                          "## Risks, assumptions", "body"]
+        rows = ["- [ ] **WO-0001** (PRD-0001 \u00a7Solution, \u00a7Out of scope,"
+                " \u00a7Scope (in and out), \u00a7Risks, assumptions)"]
+        self.assertEqual(self.check(prd=prd, breakdown=rows), [])
+        uncited = ["- [ ] **WO-0001** (PRD-0001 \u00a7Solution, \u00a7Out of scope)"]
+        self.assertEqual(len(self.check(prd=prd, breakdown=uncited)), 2)
+
     def test_a_prd_predating_adoption_is_grandfathered(self):
         self.assertEqual(self.check(prd_date="2026-09-20"), [])
 
@@ -2228,6 +2323,27 @@ class TestPrBodyProblems(unittest.TestCase):
     NO_WO = "B: PR body cites no work-order id"
     NO_CLOSES = "B: PR body has no Closes #N link"
 
+    def test_an_html_comment_never_satisfies_the_waiver(self):
+        # Issue #1907: the template's own comment text counted as the
+        # author's `No work order:` declaration.
+        body = "<!-- a `No work order:` line with a reason -->\nCloses #12\n"
+        self.assertEqual(gates.pr_body_problems(body),
+                         ["B: PR body cites no work-order id"])
+        multi = "<!--\nWO-0001\nCloses #9\n-->\nCloses #12\n"
+        self.assertEqual(gates.pr_body_problems(multi),
+                         ["B: PR body cites no work-order id"])
+
+    def test_the_unfilled_template_with_only_closes_filled_still_fails(self):
+        template = (Path(__file__).resolve().parents[1]
+                    / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(
+                        encoding="utf-8")
+        self.assertEqual(gates.pr_body_problems(template), [
+            "B: PR body cites no work-order id",
+            "B: PR body has no Closes #N link"])
+        filled = template.replace("Closes #\n", "Closes #12\n")
+        self.assertEqual(gates.pr_body_problems(filled),
+                         ["B: PR body cites no work-order id"])
+
     def test_work_order_token_and_closes_line_pass(self):
         self.assertEqual(
             gates.pr_body_problems("WO-0003 per breakdown\n\nCloses #108"),
@@ -2502,6 +2618,25 @@ class TestEvidenceHonesty(unittest.TestCase):
                     "- Check: eyeballed the dashboard.\n"
                     f"- {label}: PASS\n"),
                     [(4, self.claim("Payments capture", "PASS"))])
+
+    def test_plural_qualified_and_wrapped_verdict_labels_engage_the_rule(self):
+        """#1900. Section A is honestly fenced, so the artifact-wide
+        backstop is quiet; section B's variant verdict line must owe its
+        own evidence."""
+        for line, verdict in (
+                ("- Results: 6/6 PASS", "6/6 PASS"),
+                ("- Overall result: PASS", "PASS"),
+                ("- Final verdict: PASS", "PASS"),
+                ("__Result:__ PASS", "PASS"),
+                ("_Result_: PASS", "PASS"),
+                ("- [x] Result: PASS", "PASS"),
+                ("<b>Result:</b> PASS", "PASS"),
+                ("<strong>Result:</strong> PASS", "PASS")):
+            with self.subTest(line=line):
+                self.assertEqual(gates.evidence_problems(
+                    "### A\n\n```\nlint: 0 problem(s)\n```\n\n"
+                    f"### B\n\n{line}\n"),
+                    [(9, self.claim("B", verdict))])
 
     def test_one_honest_fence_does_not_launder_relabelled_lies(self):
         """BYPASS 6, as reported: one real fence (lint) satisfied the
