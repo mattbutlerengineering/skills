@@ -970,8 +970,12 @@ def label_declarers():
 MAKEFILE_LABEL = re.compile(r"--label\s+([a-z][a-z0-9:._-]*)")
 
 
-def declared_labels(root):
+def declared_labels(root, problems=None):
     """{label: sorted [where it is named]} across the factory's tools.
+
+    A Makefile that cannot be read (non-UTF-8 bytes, issue #1906) is
+    skipped, and its unlabelled problem string is appended to PROBLEMS
+    when the caller passes a list.
 
     The modules are imported lazily and their absence is silent. A tool
     missing from a stamped repo is a partial stamp, which detector E
@@ -989,12 +993,12 @@ def declared_labels(root):
             continue
         for label in getattr(module, LABELS_NAME):
             named.setdefault(label, set()).add(f"{name}.py")
-    makefile = root / "Makefile"
-    if makefile.is_file():
-        for lineno, line in enumerate(
-                makefile.read_text(encoding="utf-8").splitlines(), 1):
-            for label in MAKEFILE_LABEL.findall(line):
-                named.setdefault(label, set()).add(f"Makefile:{lineno}")
+    text, problem = read_file(root / "Makefile", "Makefile", str)
+    if problem and problems is not None:
+        problems.append(problem)
+    for lineno, line in enumerate((text or "").splitlines(), 1):
+        for label in MAKEFILE_LABEL.findall(line):
+            named.setdefault(label, set()).add(f"Makefile:{lineno}")
     return {label: sorted(sites) for label, sites in named.items()}
 
 
@@ -1057,11 +1061,13 @@ def check_label_wiring(root):
     if not taxonomy:
         return problems
     known = {label["name"] for label in taxonomy}
-    return problems + [
+    makefile_problems = []
+    declared = declared_labels(root, makefile_problems)
+    return problems + [f"J: {problem}" for problem in makefile_problems] + [
         f"J: {site} names {label} but the taxonomy has no such label"
         " (add it to .github/labels.json, or the flip fails when CI"
         " runs it)"
-        for label, sites in sorted(declared_labels(root).items())
+        for label, sites in sorted(declared.items())
         if label not in known for site in sites]
 
 

@@ -1529,6 +1529,17 @@ class TestLabelWiring(unittest.TestCase):
             tree, _ = self.wired_tree(tmp)
             self.assertEqual(gates.check_label_wiring(tree.root), [])
 
+    def test_a_non_utf8_makefile_is_reported_not_a_crash(self):
+        # Issue #1906: an unguarded read raised UnicodeDecodeError out of
+        # run_all, so no detector reported.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree, named = self.wired_tree(tmp)
+            (tree.root / "Makefile").write_bytes(b"check:\n\tcaf\xe9\n")
+            problems = gates.check_label_wiring(tree.root)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "J: cannot read Makefile:"), problems)
+
     def test_a_pruned_label_is_reported_against_every_site_that_names_it(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree, named = self.wired_tree(tmp)
