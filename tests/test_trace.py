@@ -265,6 +265,18 @@ class TestGhRoot(Repo):
         self.assertEqual(seen, [("gh", self.root.resolve())])
 
 
+class TestNonUtf8Artifact(Repo):
+    """Issue #1876: one Latin-1 artifact must not crash every trace."""
+
+    def test_skips_the_artifact_and_notes_it(self):
+        (self.run_dir / "architecture.md").write_bytes(b"# caf\xe9\n")
+        code, out = self.trace("feature:demo")
+        self.assertEqual(code, 0, out)
+        self.assertIn("note: cannot read docs/features/demo/architecture.md:"
+                      " 'utf-8' codec can't decode byte 0xe9 in position 5:"
+                      " invalid continuation byte", out.splitlines())
+
+
 class TestIssueHistory(Repo):
     def online_gh(self):
         def view(number, title, created, closed):
