@@ -127,8 +127,7 @@ def blockers(block, labels=()):
     parts = []
     for segment in clause.group(1).split(";"):
         whole = segment.strip(" .`*")
-        parts.extend([whole] if "," in whole and any(
-            whole in label for label in labels)
+        parts.extend([whole] if "," in whole and whole in labels
             else (p.strip(" .`*") for p in segment.split(",")))
     return [p for p in parts if p.lower() not in _NO_EDGE]
 

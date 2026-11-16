@@ -204,7 +204,8 @@ def _lesson_problems(lessons, shown):
             why = f"duplicate id {entry['id']}"
         if why:
             problems.append(f"{LABEL}: {shown} line {n}: {why}")
-        ids.add(entry.get("id"))
+        if isinstance(entry.get("id"), str):
+            ids.add(entry["id"])
     return problems
 
 
