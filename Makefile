@@ -95,7 +95,8 @@ toolsmith-mine:
 # Makefiles carry it verbatim.
 web-quality:
 	@if ls playwright.config.* >/dev/null 2>&1; then \
-		if [ -f package-lock.json ]; then npm ci; fi && \
+		if [ -f package-lock.json ]; then npm ci; \
+		elif [ -f package.json ]; then npm install; fi && \
 		npx --yes playwright@$(PLAYWRIGHT_VERSION) install --with-deps && \
 		npx --yes playwright@$(PLAYWRIGHT_VERSION) test; \
 	else \

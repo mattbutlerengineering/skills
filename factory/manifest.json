@@ -10,7 +10,7 @@
     "templates/.github/workflows/gate-digest.yml": "5abc8a86c8bcebc0ab41e217f13b32843dcb91eb0d90390ca3a5f6b892539552",
     "templates/.github/workflows/toolsmith-mine.yml": "5a53428847c14bc2d112a6c50dfcf4b51008baff1d5baba523aeb0ee4bbe2168",
     "templates/.github/workflows/validator.yml": "f5508cb5961c9bc5edcca10105b08553ab381c3ad59bb87af82f4732db4029e1",
-    "templates/Makefile": "08fb0d6de3c316a8bcce1ee2e226731422818561a47fa20b6b14f506f27c17f7",
+    "templates/Makefile": "72497d88bc1361f0c7ace57d0a7c3809dc5a55672f665132465893d80f7ec997",
     "templates/docs/adr/0001-decisions-are-recorded-here.md": "2dda45634398a0a29d04f073fadaf51ecbdf7c1ccbb3795583355396382c02e5",
     "templates/docs/adr/0002-artifacts-are-the-state.md": "78b63944832b8421bbc1d635b53bfcab739748b65d74bfb2d0ac822981d41bf9",
     "templates/docs/adr/0003-soft-gating.md": "5c47715cc5da80c411efb48498c132d773b7bea9d26acd17262d0df17af43705",
