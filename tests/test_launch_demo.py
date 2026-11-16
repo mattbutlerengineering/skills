@@ -535,6 +535,13 @@ class TestCheckStoryboard(unittest.TestCase):
                 self.assertEqual(self.check(board),
                                  [f"{SB} has no {field}"])
 
+    def test_title_and_tagline_must_be_non_empty_strings(self):
+        # #1949
+        self.assertEqual(
+            self.check(storyboard(title=5, tagline=None)),
+            [f"{SB} title must be a non-empty string",
+             f"{SB} tagline must be a non-empty string"])
+
     def test_several_missing_fields_come_in_field_order(self):
         board = storyboard()
         del board["outro"], board["title"], board["steps"]

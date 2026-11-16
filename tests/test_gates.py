@@ -4026,16 +4026,17 @@ class TestSelftest(unittest.TestCase):
         return code, labels
 
     def test_selftest_fails_when_the_date_checks_compare_the_raw_string(self):
-        """The quoted-date dodge rows: a _grandfathered that compared the
-        raw frontmatter string (the pre-#1018 shape) grandfathers
-        '"2026-10-20"', and each of O, M and H's own row must go red."""
+        """The empty-date dodge rows: a _grandfathered that compared the
+        raw frontmatter string (the pre-#1018 shape) grandfathers an empty
+        date, and each of O, M and H's own row must go red. The quoted-date
+        rows no longer go red: parse_frontmatter strips one pair of
+        quotes (#1954) before _grandfathered sees the value."""
         def raw(date, cutoff):
             return isinstance(date, str) and date < cutoff
         code, labels = self._selftest_failures("_grandfathered", raw)
         self.assertEqual(code, 1)
         self.assertEqual(labels,
-                         {"O quoted date", "M quoted date", "H quoted date",
-                          "O empty date", "M empty date", "H empty date"})
+                         {"O empty date", "M empty date", "H empty date"})
 
     def test_selftest_fails_when_the_date_checks_drop_the_iso_match(self):
         """The empty-date dodge rows: a _grandfathered that strips the

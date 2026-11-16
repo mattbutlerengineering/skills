@@ -471,6 +471,13 @@ ARCH4 = ARCH.replace(
 
 
 class TestSizeCheck(unittest.TestCase):
+    def test_the_judge_grader_fails_only_past_the_max_span(self):
+        grader = (ROOT / "plugin-evals/decompose/csv-export-cut/graders/"
+                  "items-are-one-sitting.md").read_text(encoding="utf-8")
+        self.assertEqual(dg.MAX_SPAN, 3)
+        self.assertIn("builds four or more (more than three) of", grader)
+        self.assertNotIn("three or more", grader)
+
     def test_an_item_naming_four_components_is_mis_sized(self):
         result = dg.grade(breakdown(row("A1", title=" ".join(FOUR.values()))),
                           ARCH4)

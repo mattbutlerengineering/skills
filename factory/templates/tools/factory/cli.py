@@ -611,7 +611,11 @@ def json_lines(text):
     never a raise; what an error means — skip, refuse the file, report
     and go on — stays each caller's. Seven readers held copies until the
     2026-10-25 consolidation, and three of them raised on deep nesting."""
-    for lineno, line in enumerate(text.splitlines(), 1):
+    # Split on "\n" alone: str.splitlines also breaks on U+2028, U+2029
+    # and U+0085, which JSON allows unescaped inside a string.
+    for lineno, line in enumerate(text.split("\n"), 1):
+        if line.endswith("\r"):
+            line = line[:-1]
         if not line.strip():
             continue
         try:

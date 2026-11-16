@@ -32,6 +32,15 @@ class TestJsonLines(unittest.TestCase):
         self.assertIsNone(rows[2][2])
 
 
+class TestUnicodeSeparators(unittest.TestCase):
+    def test_a_unicode_line_separator_inside_a_string_is_not_a_line_break(self):
+        # Issue #1953: splitlines broke on U+2028/U+2029/U+0085.
+        text = '{"a": "x\u2028y\u2029z\u0085w"}\r\n{"b": 2}\n'
+        self.assertEqual(list(cli.json_lines(text)),
+                         [(1, {"a": "x\u2028y\u2029z\u0085w"}, None),
+                          (2, {"b": 2}, None)])
+
+
 class TestCallersFailClosed(unittest.TestCase):
     """Each caller keeps its own policy; none of them raises."""
 

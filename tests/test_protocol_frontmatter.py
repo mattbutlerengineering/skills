@@ -113,6 +113,16 @@ class TestNestedBlocks(unittest.TestCase):
         self.assertEqual(fields, {"metadata": {"author": "a"}})
 
 
+class TestQuotedScalars(unittest.TestCase):
+    def test_one_matching_pair_of_quotes_is_stripped_from_scalars(self):
+        # Issue #1954: `ux: "not-applicable"` was compared with quotes on.
+        text = ('---\nux: "not-applicable"\nusers-observed: "0"\n'
+                "re-entry: 'architect'\nmixed: \"a'\nbare: x\n---\n")
+        self.assertEqual(parse_frontmatter(text), {
+            "ux": "not-applicable", "users-observed": "0",
+            "re-entry": "architect", "mixed": "\"a'", "bare": "x"})
+
+
 class TestLineEndings(unittest.TestCase):
     def test_crlf_file_parses_like_lf(self):
         path = write("---\r\nname: idea\r\ndescription: d\r\n---\r\n\r\nbody\r\n")

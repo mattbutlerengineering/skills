@@ -519,6 +519,19 @@ class TestCompletedStays(unittest.TestCase):
             ("2026-08-03T09:00:00Z", "2026-08-04T09:00:00Z", True),
         ])
 
+    def test_a_pass_label_beside_an_open_re_entered_stay_is_not_the_closed_ones(self):
+        # Issue #1951: draft -> blocked (rejection) -> draft again, then
+        # the pass label lands beside the open second stay.
+        events = label_events([
+            labeled("2026-07-01T09:00:00Z", "wo:draft"),
+            labeled("2026-07-02T09:00:00Z", "wo:blocked"),
+            unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
+            labeled("2026-07-03T09:00:00Z", "wo:draft"),
+            labeled("2026-07-04T09:00:00Z", "wo:prd-approved"),
+        ])
+        self.assertEqual(completed_stays(events, self.PRD), [
+            ("2026-07-01T09:00:00Z", "2026-07-02T09:00:00Z", False)])
+
     def test_an_open_stay_is_absent_still_waiting(self):
         events = label_events([
             labeled("2026-07-01T09:00:00Z", "wo:draft")])

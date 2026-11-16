@@ -70,7 +70,7 @@ from trigger_eval import HARNESSES, ROOT
 # it, and it grows as fixtures for the other six land.
 SUPPORTED_REPLAY_ROLES = ("swe", "reviewer", "planner")
 
-SCOPES = ("commands", "transcript")
+SCOPES = ("commands", "tool-inputs", "transcript")
 MODES = ("require", "forbid")
 
 DEFAULT_MODEL = "haiku"  # cheap by policy; the band tables are not for evals
@@ -258,6 +258,17 @@ def command_text(transcript):
         and isinstance(call["input"].get("command"), str))
 
 
+def tool_input_text(transcript):
+    """Every tool call's name and input, never the run's prose — what the
+    run wrote, not what it said. A forbid on code (a skip marker) scopes
+    here so "I did not reach for unittest.skip" is not a skip."""
+    parts = []
+    for call in transcript.get("tool_calls", []):
+        parts.append(str(call.get("name", "")))
+        parts.extend(_strings(call.get("input")))
+    return "\n".join(parts)
+
+
 def transcript_text(transcript):
     """Commands, every other tool input, and the run's prose — what it did
     and what it said. A `commands`-scoped forbid ignores prose on purpose:
@@ -270,7 +281,8 @@ def transcript_text(transcript):
     return "\n".join(parts)
 
 
-HAYSTACKS = {"commands": command_text, "transcript": transcript_text}
+HAYSTACKS = {"commands": command_text, "tool-inputs": tool_input_text,
+             "transcript": transcript_text}
 
 
 # ----------------------------------------------------------------- scoring

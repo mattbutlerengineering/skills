@@ -233,6 +233,12 @@ def completed_stays(events, gate):
     is absent: still waiting, neither passage nor rejection."""
     confirmations = [ts for ts, kind, name in events
                      if kind == "labeled" and name == gate.passed]
+    # Every queue-label entry, the open stay's included: a pass label
+    # beside an open re-entered stay belongs to that stay, never to the
+    # completed one before it. Compared as parsed instants, so a
+    # timestamp that is not GitHub's `...Z` form still orders.
+    entries = [ts for ts, kind, name in events
+               if kind == "labeled" and name == gate.queue]
     stays = []
     entered = None
     for ts, kind, name in events:
@@ -244,11 +250,13 @@ def completed_stays(events, gate):
             stays.append((entered, ts))
             entered = None
     completed = []
-    for index, (start, end) in enumerate(stays):
-        next_start = (stays[index + 1][0] if index + 1 < len(stays)
-                      else None)
+    for start, end in stays:
+        begun = _parse_ts(start)
+        next_start = next((_parse_ts(ts) for ts in entries
+                           if _parse_ts(ts) > begun), None)
         inside = [ts for ts in confirmations
-                  if start <= ts and (next_start is None or ts < next_start)]
+                  if begun <= _parse_ts(ts)
+                  and (next_start is None or _parse_ts(ts) < next_start)]
         # A confirmed stay ends at its pass label when that came first
         # (ADR-0074): a pass label ADDED beside the queue label leaves the
         # queue label on until some later flip strips it, and that gap is
