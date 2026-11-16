@@ -36,7 +36,7 @@ import re
 import sys
 from pathlib import Path
 
-from cli import CLI_FAILURES, detail, gh_read, gh_runner, report, runner
+from cli import CLI_FAILURES, detail, gh_read, report, runner
 from cost_ledger import ISSUE_KEY
 from human_gates import read_timelines
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
@@ -450,12 +450,20 @@ def parse_args(argv):
     return parser.parse_args(argv)
 
 
-def main(argv, run=gh_runner, environ=os.environ, git=_git):
+def root_gh(root):
+    """The gh port scoped to root: gh resolves its repo from the working
+    directory, which must be the checkout being traced (#1875)."""
+    run = runner("gh")
+    return lambda args: run(args, cwd=root).stdout
+
+
+def main(argv, run=None, environ=os.environ, git=_git):
     args = parse_args(argv)
     if args.since is not None and not DAY.fullmatch(args.since):
         return report(LABEL, [f"{LABEL}: --since takes YYYY-MM-DD, not"
                               f" {args.since!r}"])
     root = Path(args.root).resolve()
+    run = run or root_gh(root)
     state = gh_state(environ)
     runs = read_runs(root)
     record, notes, problems = resolve(root, args.key, runs, state, run)
