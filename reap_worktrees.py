@@ -34,7 +34,7 @@ def run(args, cwd=None):
     idle and broken, so callers read output). A missing binary or a
     timeout raises cli.CLI_FAILURES."""
     return subprocess.run(args, capture_output=True, text=True,
-                          timeout=TIMEOUT, cwd=cwd)
+                          encoding="utf-8", timeout=TIMEOUT, cwd=cwd)
 
 
 def parse_worktrees(text):

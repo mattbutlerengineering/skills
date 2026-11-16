@@ -811,7 +811,7 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
 def run_tool(argv, cwd=None):
     """The tool port: run argv (in `cwd`), raising CLI_FAILURES."""
     return subprocess.run(argv, check=True, capture_output=True, text=True,
-                          cwd=cwd)
+                          encoding="utf-8", cwd=cwd)
 
 
 def merge_cli(root, args, clock, git, gh, tool=None, sleep=None):
