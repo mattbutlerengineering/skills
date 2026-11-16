@@ -465,8 +465,11 @@ def append_scorecard(root, card):
     if any(row["batch"] == card["batch"] for row in rows):
         return []
     path = Path(root) / SCORECARDS
-    path.parent.mkdir(parents=True, exist_ok=True)
-    append_line(path, json.dumps(card))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        append_line(path, json.dumps(card))
+    except OSError as err:
+        return [f"cd: not appended to {SCORECARDS}: {detail(err)}"]
     return []
 
 

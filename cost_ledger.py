@@ -22,7 +22,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from cli import append_line, json_lines, read_file
+from cli import append_line, detail, json_lines, read_file
 from knowledge_plane import WO_TOKEN
 
 # The append-only cost ledger (ADR-0034). The outcome vocabulary is
@@ -195,7 +195,10 @@ def record(root, entry):
         return [f"run_id {entry['run_id']!r} is already in the ledger —"
                 " recording it twice would double-count the run against"
                 " the monthly cap"]
-    append(root, entry)
+    try:
+        append(root, entry)
+    except OSError as err:
+        return [f"cannot write {COST_LEDGER}: {detail(err)}"]
     return []
 
 
@@ -233,8 +236,11 @@ def record_isolated(root, entry, skip_existing=False):
                 " recording it twice would double-count the run against"
                 " the monthly cap"]
     path = Path(root) / rel
-    path.parent.mkdir(parents=True, exist_ok=True)
-    append_line(path, json.dumps(entry))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        append_line(path, json.dumps(entry))
+    except OSError as err:
+        return [f"cannot write {rel}: {detail(err)}"]
     return []
 
 
@@ -278,7 +284,11 @@ def record_new(root, rows):
     landed = []
     for row in rows:
         if row_key(row) not in present:
-            append(root, row)
+            try:
+                append(root, row)
+            except OSError as err:
+                return landed, [
+                    f"ledger: cannot write {COST_LEDGER}: {detail(err)}"]
             present.add(row_key(row))
             landed.append(row)
     return landed, []
