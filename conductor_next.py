@@ -276,6 +276,28 @@ def _spend_committed(git, root, batch, worktree, branch, item, run, now):
                         cost, run["outcome"], now), []
 
 
+def _review_outcome(git, rows, now, run, worktree, branch):
+    """(stall reason or None, verdict rows, problems) for a completed
+    review run whose bookkeeping was retried: the verdict in review.md
+    and the rows record_verdict would have written, over `rows` (the
+    ledger with the resume row). The head the run was launched on is
+    its launch row's reviewed_head."""
+    run_id = run["run_id"]
+    item = run["item"]
+    launch = next((row for row in reversed(rows) if row["kind"] == "state"
+                   and row["item"] == item and row["to"] == "review"
+                   and row.get("run_id") == run_id and "pid" in row), {})
+    verdict = flow.review_verdict(git, worktree, branch)
+    if verdict is None:
+        return "review.md carries no verdict: pass|changes line", [], []
+    if "reviewed_head" not in launch:
+        return (f"review run {run_id}'s launch recorded no reviewed head,"
+                " so its verdict cannot be recorded"), [], []
+    written, problems = flow.verdict_rows(rows, now, item, verdict, run_id,
+                                          launch["reviewed_head"])
+    return None, written or [], problems
+
+
 def retry_bookkeeping(git, gh, root, batch, rows, now, due):
     """(rows to write, problems): the bookkeeping turn of every item in
     `due` (bookkeeping_due) — its spend row committed, its branch
@@ -307,13 +329,25 @@ def retry_bookkeeping(git, gh, root, batch, rows, now, due):
         resumed = flow.state_row(now, item, "stalled", step,
                                  RESUMED.format(run_id=run_id),
                                  run_id=run_id)
+        cause, verdicted = "delivery-failed", []
+        if failed is None and step == "review":
+            # The runner would have recorded the verdict had its push
+            # not failed; it is read from review.md here (#1959).
+            cause = "agent-failed"
+            failed, verdicted, problems = _review_outcome(
+                git, rows + written + [resumed], now, run, worktree, branch)
+            if problems:
+                return None, problems
         if failed is None:
             (worktree / PR_BODY_FILE).unlink(missing_ok=True)
-            written.append(resumed)
+            written += [resumed, *verdicted]
             continue
+        recommended, why = ("retry", flow.DELIVERY_WHY) \
+            if cause == "delivery-failed" else flow.worker_advice(
+                rows, entry, step, run["band"], failed, None, cause)
         stalled, problems = flow.stall_rows(
-            rows + written + [resumed], now, entry, failed,
-            "delivery-failed", "retry", flow.DELIVERY_WHY)
+            rows + written + [resumed], now, entry, failed, cause,
+            recommended, why)
         if problems:
             return None, problems
         written += [resumed, *stalled]

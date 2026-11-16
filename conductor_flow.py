@@ -30,6 +30,7 @@ from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
                        ask_row, current_state, item_branch, item_view,
                        parsed_at, stamp, view)
 from conductor_spend import LOST
+from protocol import read_frontmatter
 
 STEPS = ("spec", "build", "verify", "review", "ship")
 SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
@@ -342,12 +343,22 @@ def never_started(result):
     return None if started else figures
 
 
-def queue_stall(root, batch, now, item, reason, cause, recommended, why):
-    """(rows written, problems): stall the item and queue its ask."""
+def queue_stall(root, batch, now, item, reason, cause, recommended, why,
+                run_id=None):
+    """(rows written, problems): stall the item and queue its ask,
+    refused unless the item may move to stalled and, given `run_id`, its
+    last launch is that run's: a stale runner never writes a stall onto
+    an item that stalled, blocked or relaunched in the meantime."""
     def build(rows):
         found = item_view(rows, item)
         if found["unknown"]:
             return None, [found["unknown"]]
+        problems = transition_problems(rows, item, "stalled", {})
+        if not problems and run_id is not None \
+                and found["last"].get("run_id") != run_id:
+            problems = [f"cd: {item}'s state moved on from run {run_id}"]
+        if problems:
+            return None, problems
         return stall_rows(rows, now, found["entry"], reason, cause,
                           recommended, why)
     return append(root, batch, build)
@@ -398,38 +409,53 @@ def review_change(row):
             and (row["to"] == "build" or row["reason"] == CHANGES_AGAIN))
 
 
-def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
-    """(rows written, problems): the review step's verdict. pass writes
-    `reviewed` with the item's author runs (every run but a review) and
-    `head`, the item branch head the review run was launched on, which
-    the merge holds the merged tree to; the first `changes` returns the
-    item to build for one fix step; the second stalls it."""
+def verdict_rows(rows, now, item, verdict, reviewer_run, head):
+    """(rows to write, problems): the review step's verdict on `rows`.
+    pass writes `reviewed` with the item's author runs (every run but a
+    review) and `head`, the item branch head the review run was launched
+    on, which the merge holds the merged tree to; the first `changes`
+    returns the item to build for one fix step; the second stalls it.
+    PURE."""
     if verdict not in VERDICTS:
         return None, [f"cd: verdict {verdict!r} is not pass or changes"]
+    found = item_view(rows, item)
+    entry = found["entry"]
+    if found["unknown"]:
+        return None, [found["unknown"]]
+    if verdict == "pass":
+        fields = {"verdict": "pass",
+                  "author_runs": list(found["author_runs"]),
+                  "reviewer_run": reviewer_run, "reviewed_head": head}
+        to, reason = "reviewed", "the reviewer passed it"
+    else:
+        fields, to = {}, "build"
+        reason = "the reviewer requested changes; one fix step"
+        if "build" not in _successors(entry["type"], "review", rows, item):
+            return stall_rows(rows, now, entry, CHANGES_AGAIN,
+                              "changes-again", BLOCK, CHANGES_WHY)
+    problems = transition_problems(rows, item, to, fields)
+    if problems:
+        return None, problems
+    return [state_row(now, item, current_state(rows, item), to, reason,
+                      **fields)], []
 
-    def build(rows):
-        found = item_view(rows, item)
-        entry = found["entry"]
-        if found["unknown"]:
-            return None, [found["unknown"]]
-        if verdict == "pass":
-            fields = {"verdict": "pass",
-                      "author_runs": list(found["author_runs"]),
-                      "reviewer_run": reviewer_run, "reviewed_head": head}
-            to, reason = "reviewed", "the reviewer passed it"
-        else:
-            fields, to = {}, "build"
-            reason = "the reviewer requested changes; one fix step"
-            if "build" not in _successors(entry["type"], "review", rows,
-                                          item):
-                return stall_rows(rows, now, entry, CHANGES_AGAIN,
-                                  "changes-again", BLOCK, CHANGES_WHY)
-        problems = transition_problems(rows, item, to, fields)
-        if problems:
-            return None, problems
-        return [state_row(now, item, current_state(rows, item), to, reason,
-                          **fields)], []
-    return append(root, batch, build)
+
+def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
+    """(rows written, problems): append the review step's verdict rows
+    (verdict_rows) under the ledger lock."""
+    return append(root, batch, lambda rows: verdict_rows(
+        rows, now, item, verdict, reviewer_run, head))
+
+
+def review_verdict(git, worktree, branch):
+    """The review.md verdict on the item branch, or None."""
+    changed, problems = changed_files(git, branch)
+    for path in [] if problems else changed:
+        if path.endswith("/review.md") and (worktree / path).is_file():
+            fields = read_frontmatter(worktree / path) or {}
+            verdict = (fields.get("verdict") or "").strip()
+            return verdict if verdict in VERDICTS else None
+    return None
 
 
 def held(rows):

@@ -789,6 +789,20 @@ class TestSameCallHeredoc(unittest.TestCase):
                                       f"create may change what {spelling} "
                                       "names")]))
 
+    def test_a_wrapped_cd_between_unbinds_a_relative_spelling(self):
+        """`builtin cd d` / `command cd d` / `command pushd d` between the
+        writer and the reader move the shell like a plain cd (#1963)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            top = Path(tmp)
+            _git_repo(top, "git@github.com:me/this.git")
+            (top / "d").mkdir()
+            for verb in ("builtin cd d", "command cd d", "command pushd d"):
+                with self.subTest(verb=verb):
+                    self.assertEqual(
+                        run(self.spelled("b.md", between=verb + "\n"), top),
+                        (0, [note("a cd between the heredoc and gh pr "
+                                  "create may change what b.md names")]))
+
     def test_an_absolute_spelling_survives_a_cd(self):
         with tempfile.TemporaryDirectory() as tmp:
             top = Path(tmp)
