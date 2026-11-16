@@ -5,7 +5,10 @@ such pins went red under a loaded full suite on a docs-only diff, and
 passed when re-run alone. Growth does not move with load: time F at
 input sizes N and FACTOR·N, keep the best of REPEATS runs of each (load
 only ever adds time, so the minimum is the least disturbed sample), and
-compare. Linear work grows by about FACTOR; quadratic by about FACTOR².
+compare. The clock is process CPU time, not wall time: a preempted
+process keeps its wall clock running, and the longer large-input run is
+preempted more often, which inflated the ratio past the limit (28x, 41x)
+under three concurrent suites (#2026). Linear work grows by about FACTOR; quadratic by about FACTOR².
 
 `growth` returns that ratio; `GROWTH_LIMIT` sits between the two at the
 default FACTOR, twice the linear ratio and half the quadratic one.
@@ -20,9 +23,9 @@ GROWTH_LIMIT = 8.0
 def _best(fn, arg, repeats):
     samples = []
     for _ in range(repeats):
-        started = time.perf_counter()
+        started = time.process_time()
         fn(arg)
-        samples.append(time.perf_counter() - started)
+        samples.append(time.process_time() - started)
     return min(samples)
 
 

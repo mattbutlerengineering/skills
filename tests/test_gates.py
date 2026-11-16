@@ -3322,7 +3322,7 @@ class TestEvidenceRollUp(unittest.TestCase):
     def test_a_long_zero_count_line_reads_in_linear_time(self):
         self.assertFalse(gates._names_unknown("0 not run, " * 800))
         ratio = linear_time.growth(gates._names_unknown,
-                                   lambda n: "0 not run, " * n, 200)
+                                   lambda n: "0 not run, " * n, 1000)
         self.assertLess(ratio, linear_time.GROWTH_LIMIT)
 
     def test_a_wide_zero_count_over_a_disclosure_stays_refused(self):
