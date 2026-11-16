@@ -3455,6 +3455,18 @@ class TestLockstep(unittest.TestCase):
         self.assertIn("if: needs.dispatch.outputs.transitioned == 'true'",
                       agent)
 
+    def test_only_ready_events_share_the_dispatch_concurrency_group(self):
+        # A concurrency group holds ONE pending run and a newer pending
+        # run replaces it, so a workflow-level group keyed on the issue
+        # alone lets a later size:/risk: label event evict the pending
+        # wo:ready-for-agent dispatch. Non-ready events get their own
+        # group (the run id) and can never displace it.
+        text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn(
+            "group: assembler-${{ github.event.issue.number }}-"
+            "${{ github.event.label.name == 'wo:ready-for-agent'"
+            " && 'dispatch' || github.run_id }}", text)
+
     def test_a_failed_dispatch_flips_the_order_it_claimed(self):
         # ADR-0045: without this step a dying agent run leaves its order on
         # wo:in-progress forever. Gated on the claim's verdict, not on
