@@ -1,7 +1,7 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
 sources: gates.py, knowledge_plane.py
-verified: e6ed5849ba5174e4249fe59884f35745a1807fb2
+verified: 5e950c54fbf0a59b044c8b431d2d67a170e4e188
 related: pr-body-contract, manifest-regen
 ---
 
@@ -14,6 +14,8 @@ as text: fenced blocks and inline code are not skipped.
 
 - **C** requires every four-digit `PRD-`, `ADR-` and `WO-` token to
   resolve (a `prd.md` declaring it, a `docs/adr/` file, a breakdown row).
+  A `breakdown.md` is no longer exempt from the work-order check: every
+  `WO-` token in it must resolve to a row too.
   An illustrative id in prose — a made-up work order in a research note,
   an example in a fix brief — is a dangling-token failure.
 - **I** requires every markdown link target that is not a URL or an
@@ -21,8 +23,9 @@ as text: fenced blocks and inline code are not skipped.
   from the repo root). Targets are read through
   `knowledge_plane.local_link_targets`, the one link grammar kb lint and
   kb drift share since #758: a `"title"` is dropped, an `<angle target>`
-  keeps its spaces, and `#fragment` and `?query` are ignored. A sample layout in a
-  copied research note — a markdown link to an illustrative
+  keeps its spaces, and `#fragment` and `?query` are ignored; the path is
+  then percent-decoded, so an encoded target names the file it decodes to.
+  A sample layout in a copied research note — a markdown link to an illustrative
   `pages/x.md` — is a stale link, even inside backticks.
 
 A doc that does not decode as UTF-8 is not scanned at all: detector D
