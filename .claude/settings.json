@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/pr_body_preflight.py\" ] || python3 \"$CLAUDE_PROJECT_DIR/pr_body_preflight.py\"",
+            "command": "[ ! -f \"$CLAUDE_PROJECT_DIR/tools/pr_body_preflight.py\" ] || python3 \"$CLAUDE_PROJECT_DIR/tools/pr_body_preflight.py\"",
             "timeout": 10
           }
         ]

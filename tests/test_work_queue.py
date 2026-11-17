@@ -21,7 +21,7 @@ from fixture_tree import FixtureTree  # noqa: E402
 from test_work_orders import (  # noqa: E402
     DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
 import cli  # noqa: E402
 import work_queue  # noqa: E402
 

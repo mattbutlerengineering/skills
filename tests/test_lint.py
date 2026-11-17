@@ -18,7 +18,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 
 import lint  # noqa: E402
 import protocol  # noqa: E402
@@ -2078,7 +2078,7 @@ class TestEntryPointRefusesArguments(unittest.TestCase):
         reason): `python3 lint.py --fast` used to run the full lint and
         exit 0, so the flag looked as if it applied."""
         result = subprocess.run(
-            [sys.executable, str(ROOT / "lint.py"), "--fast"],
+            [sys.executable, str(ROOT / "tools" / "lint.py"), "--fast"],
             cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(result.returncode, 2, result.stdout)
         self.assertNotIn("problem(s)", result.stdout)

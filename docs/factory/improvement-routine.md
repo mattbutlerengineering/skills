@@ -72,7 +72,7 @@ Read, in order:
    issues are the only tracker). Read-only intel: status changes the
    routine would have made (close, relabel) go in the report for the
    human to apply, except closing the day's own issue through its PR.
-9. `python3 one_owner.py` — the one-fact-one-owner pre-pass (ADR-0061).
+9. `python3 tools/one_owner.py` — the one-fact-one-owner pre-pass (ADR-0061).
    Read-only intel, like everything else in this section: every finding
    is report material, and a finding whose group `docs/backlog.md` does
    not already name is a seed proposal under Proposals, quoting the
@@ -103,8 +103,8 @@ Run the verify suite at the repo root, exactly:
 
 ```
 python3 -m unittest discover tests
-python3 lint.py
-python3 gates.py && python3 gates.py --selftest
+python3 tools/lint.py
+python3 tools/gates.py && python3 tools/gates.py --selftest
 ```
 
 Classify main: **green**; **red-on-main** (any command fails on an
@@ -154,7 +154,7 @@ pipeline wants everywhere; the routine gets no exemption.
 - The discipline is the [implement](../../skills/implement/SKILL.md)
   skill's test-first slice, scaled to one bounded change.
 - If anything under `factory/templates/**` or any root file in
-  `factory_init.MIRRORS` changed: `python3 factory_init.py
+  `factory_init.MIRRORS` changed: `python3 tools/factory_init.py
   update-manifest`, manifest committed with the change (detector E).
 - Conventional-commit title, matching repo history (`fix(gates): ...`,
   `chore(factory): ...`).

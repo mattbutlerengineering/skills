@@ -514,10 +514,10 @@ class TestMirrorMap(unittest.TestCase):
 
 class TestRepoRoot(unittest.TestCase):
     def test_resolves_to_this_git_checkout(self):
-        # The seam file lives at the factory repo root here, so the
-        # nearest .git ancestor is the checkout itself.
+        # The seam file lives in tools/ here, so the nearest .git
+        # ancestor is the checkout one level up.
         self.assertEqual(repo_root(),
-                         Path(knowledge_plane.__file__).resolve().parent)
+                         Path(knowledge_plane.__file__).resolve().parent.parent)
         self.assertTrue((repo_root() / ".git").exists())
 
 

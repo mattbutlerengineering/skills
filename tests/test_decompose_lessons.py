@@ -1134,7 +1134,7 @@ class TestNoShippedLesson(unittest.TestCase):
     def test_the_repo_holds_no_hand_written_seed(self):
         """The only way a lessons file exists is `update`, so one that
         exists must load clean with every lesson citing a source run."""
-        path = Path(dl.__file__).resolve().parent / dl.LESSONS_PATH
+        path = Path(dl.__file__).resolve().parent.parent / dl.LESSONS_PATH
         lessons, _, problems = dl.load(path)
         self.assertEqual(problems, [])
         self.assertTrue(all(entry["sources"] for entry in lessons))
@@ -1368,7 +1368,7 @@ class TestFrontDoor(TempFile):
         self.assertEqual(names & NETWORK, set())
 
 
-SKILL = (Path(dl.__file__).resolve().parent / "skills" / "decompose"
+SKILL = (Path(dl.__file__).resolve().parent.parent / "skills" / "decompose"
          / "SKILL.md")
 
 

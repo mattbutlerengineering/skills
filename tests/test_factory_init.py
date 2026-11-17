@@ -143,8 +143,8 @@ def make_factory_repo(root):
                "# root stub header\n"
                "\n"
                "check:\n"
-               "\tpython3 lint.py\n"
-               "\tpython3 gates.py\n"
+               "\tpython3 tools/lint.py\n"
+               "\tpython3 tools/gates.py\n"
                "\tpython3 -m unittest discover tests\n")
     tree.write(".github/CODEOWNERS", "* @owner\n")
     tree.write(".claude-plugin/plugin.json",
@@ -237,10 +237,10 @@ class TestUpdateManifest(unittest.TestCase):
     def test_missing_root_tool_file_writes_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = make_factory_repo(tmp)
-            (tree.root / "protocol.py").unlink()
+            (tree.root / "tools" / "protocol.py").unlink()
             self.assertEqual(
                 factory_init.update_manifest(tree.root),
-                ["factory-init: missing protocol.py at repo root"])
+                ["factory-init: missing tools/protocol.py"])
             self.assertFalse((tree.root / "factory/manifest.json").exists())
             self.assertFalse(
                 (tree.root / "factory/templates/tools").exists())
@@ -322,7 +322,7 @@ class TestPayloadToolsImport(unittest.TestCase):
         being silently skipped — a derivation that quietly covers nothing
         is the same silence this test exists to close.
         """
-        tree = ast.parse((self.REPO / "gates.py").read_text(encoding="utf-8"))
+        tree = ast.parse((self.REPO / "tools" / "gates.py").read_text(encoding="utf-8"))
         discovered = {node.target.id for node in ast.walk(tree)
                       if isinstance(node, ast.For)
                       and isinstance(node.target, ast.Name)
@@ -389,7 +389,7 @@ class TestProductForm(unittest.TestCase):
                      "rejection_mining.py"):
             with self.subTest(tool=tool):
                 self.assertEqual(
-                    factory_init.product_form(f"python3 {tool} --flag"),
+                    factory_init.product_form(f"python3 tools/{tool} --flag"),
                     f"python3 tools/factory/{tool} --flag")
 
     def test_the_stamped_test_run_is_quiet(self):
@@ -401,7 +401,7 @@ class TestProductForm(unittest.TestCase):
         """#904: run_tests.py is root-only, so the payload Makefile keeps
         the discover command a stamped repo always ran, byte-identical."""
         self.assertEqual(
-            factory_init.product_form("python3 run_tests.py"),
+            factory_init.product_form("python3 tools/run_tests.py"),
             "python3 -m unittest discover -q tests")
 
     def test_a_path_agnostic_command_is_untouched(self):
@@ -430,7 +430,7 @@ class TestTheRespellingHasOneOwner(unittest.TestCase):
     # plugin's structural lint and the instruction-file drift check have
     # no product-repo counterpart, so product_makefile drops their lines
     # rather than respelling them.
-    DROPPED = ("lint.py", "kb.py")
+    DROPPED = ("tools/lint.py", "tools/kb.py")
 
     @staticmethod
     def payload_tools():
@@ -438,7 +438,7 @@ class TestTheRespellingHasOneOwner(unittest.TestCase):
         derived here the same way product_form derives it, so the test
         states the rule rather than re-typing its output."""
         return [(name, rel) for name, rel, _ in factory_init.MIRRORS
-                if "/" not in name and rel != name]
+                if name.startswith("tools/") and rel != name]
 
     @staticmethod
     def recipe_commands(text):
@@ -448,7 +448,7 @@ class TestTheRespellingHasOneOwner(unittest.TestCase):
 
     def test_every_root_tool_mirrors_moves_is_respelled(self):
         tools = self.payload_tools()
-        self.assertIn(("work_queue.py", "tools/factory/work_queue.py"),
+        self.assertIn(("tools/work_queue.py", "tools/factory/work_queue.py"),
                       tools, "the derivation must cover the whole payload,"
                              " not the subset a hand-typed list happened"
                              " to carry")
@@ -473,7 +473,7 @@ class TestTheRespellingHasOneOwner(unittest.TestCase):
         text = self.ROOT_MAKEFILE.read_text(encoding="utf-8")
         for command in self.recipe_commands(text):
             for name in re.findall(r"python3 (\S+\.py)", command):
-                if name in self.DROPPED or "/" in name:
+                if name in self.DROPPED:
                     continue
                 with self.subTest(command=command):
                     self.assertNotIn(
@@ -502,9 +502,9 @@ class TestProductMakefile(unittest.TestCase):
                  ".PHONY: check\n"
                  "\n"
                  "check:\n"
-                 "\tpython3 lint.py\n"
-                 "\tpython3 kb.py drift\n"
-                 "\tpython3 gates.py\n"
+                 "\tpython3 tools/lint.py\n"
+                 "\tpython3 tools/kb.py drift\n"
+                 "\tpython3 tools/gates.py\n"
                  "\tpython3 -m unittest discover tests\n")
 
     def test_swaps_the_header_drops_lint_and_respells_commands(self):

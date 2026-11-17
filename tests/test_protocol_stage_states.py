@@ -14,7 +14,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,  # noqa: E402
                       next_stage, stage_states)

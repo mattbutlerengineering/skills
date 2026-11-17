@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 
 import assembly_line  # noqa: E402
 import board  # noqa: E402
@@ -448,13 +448,14 @@ class TestPageWriter(unittest.TestCase):
 
 
 def _repo_imports(module, seen=None):
-    """Every root-level module `module` imports, transitively, itself
+    """Every tools/ module `module` imports, transitively, itself
     included: the Python files a change to which can change the page."""
     seen = set() if seen is None else seen
-    if module in seen or not (ROOT / f"{module}.py").is_file():
+    if module in seen or not (ROOT / "tools" / f"{module}.py").is_file():
         return seen
     seen.add(module)
-    tree = ast.parse((ROOT / f"{module}.py").read_text(encoding="utf-8"))
+    tree = ast.parse(
+        (ROOT / "tools" / f"{module}.py").read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
@@ -474,11 +475,15 @@ class TestPagesWorkflowPaths(unittest.TestCase):
         self.paths = set(re.findall(r'^      - "([^"]+)"$', text, re.MULTILINE))
 
     def test_every_module_the_tool_imports_triggers_a_rebuild(self):
-        modules = {f"{name}.py" for name in _repo_imports("assembly_line")}
+        imported = _repo_imports("assembly_line")
+        # Not vacuous: the closure holds the tool itself and a seam it uses.
+        self.assertGreaterEqual(imported, {"assembly_line", "cli"})
+        modules = {f"tools/{name}.py" for name in imported}
         self.assertEqual(modules - self.paths, set())
 
     def test_the_template_and_the_vendored_library_trigger_a_rebuild(self):
-        self.assertIn(assembly_line.TEMPLATE.name, self.paths)
+        self.assertIn(assembly_line.TEMPLATE.relative_to(ROOT).as_posix(),
+                      self.paths)
         for path in assembly_line.VENDOR.values():
             self.assertIn(
                 f"{path.relative_to(ROOT).parts[0]}/**", self.paths)

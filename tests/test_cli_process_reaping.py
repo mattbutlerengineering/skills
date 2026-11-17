@@ -23,7 +23,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 
 import cli  # noqa: E402
 from trigger_eval import run_single_query  # noqa: E402

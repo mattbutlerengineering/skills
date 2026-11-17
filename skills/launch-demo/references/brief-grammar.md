@@ -59,7 +59,7 @@ spends money unless the repo chooses a voice that does.
  "tagline": "A launch brief nobody made by hand",
  "intro": "<one sentence of What it is>",
  "steps": [{"say": "<one sentence of What it does>",
-            "do": ["python3 board.py"]}],
+            "do": ["python3 tools/board.py"]}],
  "outro": "<one sentence of How it helps>"}
 ```
 

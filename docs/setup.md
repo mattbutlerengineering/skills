@@ -36,7 +36,7 @@ stamp — because it needs nothing but the installed plugin.
 From a checkout of this repo:
 
 ```
-python3 factory_init.py stamp <path-to-target-repo>
+python3 tools/factory_init.py stamp <path-to-target-repo>
 ```
 
 All-or-nothing. It refuses a drifted source payload, a malformed manifest key,
@@ -48,7 +48,7 @@ moving the conflict out of the way first.
 A repo with curated files of its own can opt in instead (#701):
 
 ```
-python3 factory_init.py stamp --keep-existing <path-to-target-repo>
+python3 tools/factory_init.py stamp --keep-existing <path-to-target-repo>
 ```
 
 It keeps the target's own copy of every curated, non-executable seed already
@@ -103,7 +103,7 @@ fails the build if you do. Change the template at the source and re-stamp.
 A stamp is a snapshot. When the factory gains a fix, refresh the repo:
 
 ```
-python3 factory_init.py update <path-to-target-repo>
+python3 tools/factory_init.py update <path-to-target-repo>
 ```
 
 It overwrites the executable half and the mirror, lands any payload file the
@@ -212,7 +212,7 @@ supported; run discovery would not find them.
 
 Coordinating several issues at once — fanning out agents, choosing a
 model and effort per step, ordering merges — is the `conduct` utility
-skill and its root tool `conductor.py` (PRD-0013,
+skill and its tool `tools/conductor.py` (PRD-0013,
 `docs/features/orchestrator/`). The payload ships it, so a stamped repo
 runs `tools/factory/conductor.py`, passing this plugin's charter stubs
 with `--agents` (#678). Its optional `conductor` table in

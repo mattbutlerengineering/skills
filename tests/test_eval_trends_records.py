@@ -15,12 +15,12 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tools"))
 
 import eval_schema  # noqa: E402
 import eval_trends  # noqa: E402
 
-REPO = Path(eval_trends.__file__).resolve().parent
+REPO = Path(eval_trends.__file__).resolve().parent.parent
 FROZEN = REPO / "tests" / "fixtures" / "eval_trends_2026_10_21"
 # (surface, glob under the root) in the order the view prints them.
 LOCATIONS = (

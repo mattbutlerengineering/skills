@@ -19,9 +19,9 @@ the verdict.
 The tool lives two directories above this skill's directory, in the
 same checkout, and is run from the repo root:
 
-    python3 <this skill's directory>/../../launch_demo.py config
-    python3 <this skill's directory>/../../launch_demo.py probe
-    python3 <this skill's directory>/../../launch_demo.py render <slug>
+    python3 <this skill's directory>/../../tools/launch_demo.py config
+    python3 <this skill's directory>/../../tools/launch_demo.py probe
+    python3 <this skill's directory>/../../tools/launch_demo.py render <slug>
 
 Each prints lines prefixed `launch-demo: `, then a verdict word alone
 (`SHIP` or `ON-DEMAND` for `config`, the `when` that Ship acts on, or

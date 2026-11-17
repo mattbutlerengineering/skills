@@ -2,7 +2,7 @@
 
 ## Naming convention
 
-- `test_<module>.py` — the primary suite pinning that root module's
+- `test_<module>.py` — the primary suite pinning that `tools/` module's
   contract; `test_<module>_<facet>.py` when one module carries several
   suites (e.g. `test_cli_process_reaping.py` is cli.harness_run
   coverage). Suites over cross-cutting artifacts that no single module
@@ -12,7 +12,7 @@
   `test_*.py`, so un-prefixed files are scaffolding, never suites.
 - Flat directory, no subpackages: the discover invocation is pinned in
   the payload Makefile and CI, and helpers are imported by bare module
-  name. The root Makefile runs `python3 run_tests.py`, one `python3 -m
+  name. The root Makefile runs `python3 tools/run_tests.py`, one `python3 -m
   unittest tests.<module>` child per module, so a suite that imports a
   helper adds its own directory to `sys.path` first (the two-line
   pattern every such suite carries); under the runner, a suite that
@@ -109,6 +109,6 @@
 - `timings.json` — each suite's last recorded wall time, which
   `run_tests.py` schedules longest-first from, after every module with
   no entry here (an unrecorded module runs first); rewritten by
-  `python3 run_tests.py --record` after a clean run
+  `python3 tools/run_tests.py --record` after a clean run
 - `fixtures/` — committed fixture trees and recorded transcripts (each
   transcript family has its own README)

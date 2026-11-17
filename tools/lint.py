@@ -1130,7 +1130,7 @@ CHECKERS = (check_manifest, check_plugin_skills,
 
 
 def main():
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parent.parent
     problems = [p for checker in CHECKERS for p in checker(root)]
     checked = len(ALL_SKILLS) + len(extra_skills(root))
     # Checker strings carry no label (their suite pins them bare); the

@@ -144,7 +144,7 @@ def main(argv, spawn=spawn_child, root=None, cpu_count=os.cpu_count):
         print(USAGE)
         return 2
     workers, record = parsed
-    root = Path(root or Path(__file__).resolve().parent)
+    root = Path(root or Path(__file__).resolve().parent.parent)
     started = time.monotonic()
     timings = load_timings(root / TIMINGS)
     modules = schedule(discover(root), timings)

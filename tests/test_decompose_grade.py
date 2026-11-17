@@ -192,7 +192,7 @@ class TestGradeCore(unittest.TestCase):
 class TestGradeImports(unittest.TestCase):
     def setUp(self):
         self.tree = ast.parse(
-            (ROOT / "decompose_grade.py").read_text(encoding="utf-8"))
+            (ROOT / "tools" / "decompose_grade.py").read_text(encoding="utf-8"))
 
     def test_module_level_imports_are_stdlib_and_the_two_leaf_modules(self):
         names = imported_names(self.tree.body)

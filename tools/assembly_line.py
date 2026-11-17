@@ -39,8 +39,8 @@ LEAVES_IMPLEMENT = dict(STAGE_ARTIFACTS)["verify"]
 # inlined at the template's __<NAME>__ slot.
 HERE = Path(__file__).resolve().parent
 TEMPLATE = HERE / "assembly_line.html"
-VENDOR = {"three-core": HERE / "vendor" / "three" / "three.core.js",
-          "three-module": HERE / "vendor" / "three" / "three.module.js"}
+VENDOR = {"three-core": HERE.parent / "vendor" / "three" / "three.core.js",
+          "three-module": HERE.parent / "vendor" / "three" / "three.module.js"}
 
 
 def _artifact_day(path):

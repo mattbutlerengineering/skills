@@ -151,7 +151,7 @@ nothing.
 For the `.svg` target, first run the mechanical check over the file you
 wrote:
 
-    python3 -I <this skill's directory>/../../svg_check.py <file.svg>
+    python3 -I <this skill's directory>/../../tools/svg_check.py <file.svg>
 
 Exit 0 means no defect: a root `width` and `height`, no duplicate id, no
 `url(#…)` or `href` pointing at a missing id, no external link. It reads

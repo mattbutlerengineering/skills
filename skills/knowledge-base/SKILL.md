@@ -37,11 +37,11 @@ artifact. The run artifacts are the **knowledge plane**; this is the
 Every fact about the knowledge base's state comes from the shipped tool,
 two directories above this skill's directory in the same checkout:
 
-    python3 <this skill's directory>/../../kb.py index [repo root]
-    python3 <this skill's directory>/../../kb.py lint  [repo root]
-    python3 <this skill's directory>/../../kb.py stats [repo root]
-    python3 <this skill's directory>/../../kb.py drift [repo root]
-    python3 <this skill's directory>/../../kb.py harvest [repo root] [--days N] [--session ID] [--memory]
+    python3 <this skill's directory>/../../tools/kb.py index [repo root]
+    python3 <this skill's directory>/../../tools/kb.py lint  [repo root]
+    python3 <this skill's directory>/../../tools/kb.py stats [repo root]
+    python3 <this skill's directory>/../../tools/kb.py drift [repo root]
+    python3 <this skill's directory>/../../tools/kb.py harvest [repo root] [--days N] [--session ID] [--memory]
 
 `index` writes one line per page — `- docs/kb/<slug>.md: <summary>` —
 between managed markers in every always-loaded file present (`CLAUDE.md`,
@@ -203,7 +203,7 @@ remaining finding was shown to the user and declined.
 Run the shipped trace tool, from the same directory as `kb.py` (or
 `tools/factory/trace.py` in a factory-stamped repo):
 
-    python3 <this skill's directory>/../../trace.py <key> [--since YYYY-MM-DD] [--budget BYTES] [--json] [--root DIR]
+    python3 <this skill's directory>/../../tools/trace.py <key> [--since YYYY-MM-DD] [--budget BYTES] [--json] [--root DIR]
 
 A key is a run ref (`feature:<slug>`, `maintenance:<slug>`), a typed
 id, an issue number (`#N`) or a `docs/kb/<slug>.md` page. The tool

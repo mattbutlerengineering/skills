@@ -119,7 +119,7 @@ Modes from §1 gate this section. In normal mode, first match wins:
    well-formed `session:` lines, following the file's own precedent (a
    "Resolved —" line that names the seeds it closes). Existing lines are
    never rewritten or deleted: the producer rule forbids it, and a
-   rewritten origin marker breaks claim provenance. `python3 lint.py`'s
+   rewritten origin marker breaks claim provenance. `python3 tools/lint.py`'s
    backlog grammar check must pass.
 2. **Nothing to append** → propose-only week. The survey is still the
    run's output.

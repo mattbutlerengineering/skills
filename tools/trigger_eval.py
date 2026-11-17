@@ -42,7 +42,7 @@ import eval_schema
 import protocol
 from protocol import ALL_SKILLS, read_frontmatter
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def load_descriptions(root):

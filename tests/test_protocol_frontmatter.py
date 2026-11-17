@@ -20,7 +20,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 
 sys.path.insert(0, str(ROOT / "tests"))
 
@@ -408,10 +408,10 @@ class TestOneFenceDefinition(unittest.TestCase):
             if found:
                 counts[rel] = sorted(found)
         self.assertEqual(counts, {
-            "protocol.py": [r"^---\s*$"],
+            "tools/protocol.py": [r"^---\s*$"],
             "factory/templates/tools/factory/protocol.py": [r"^---\s*$"],
             # Not a fence: the markdown table separator row lint skips.
-            "lint.py": ["---"],
+            "tools/lint.py": ["---"],
         })
 
     def test_the_detector_sees_each_copy_shape(self):

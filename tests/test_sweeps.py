@@ -1167,17 +1167,17 @@ class TestSweepsWorkflow(unittest.TestCase):
         # sweep must ensure the labels first.
         for job, commands in self.commands().items():
             sweeping = [index for index, command in enumerate(commands)
-                        if command.startswith("sweeps.py")
-                        and not command.startswith("sweeps.py ensure-labels")]
+                        if command.startswith("tools/sweeps.py")
+                        and not command.startswith("tools/sweeps.py ensure-labels")]
             if not sweeping:
                 continue
-            self.assertIn("sweeps.py ensure-labels", commands, job)
-            self.assertLess(commands.index("sweeps.py ensure-labels"),
+            self.assertIn("tools/sweeps.py ensure-labels", commands, job)
+            self.assertLess(commands.index("tools/sweeps.py ensure-labels"),
                             min(sweeping), job)
 
     def test_every_sweep_job_ensures_the_labels(self):
         for job, commands in self.commands().items():
-            self.assertIn("sweeps.py ensure-labels", commands, job)
+            self.assertIn("tools/sweeps.py ensure-labels", commands, job)
 
     def test_a_workflow_it_cannot_parse_is_a_failure_not_a_pass(self):
         # The parse is hand-rolled -- stdlib only, like every script here
@@ -1201,7 +1201,7 @@ class TestSweepsWorkflow(unittest.TestCase):
         # file NOTHING, including the report that the taxonomy is missing.
         self.TEXT = (self.TEXT
                      .replace("\njobs:\n", "\njobs:  # the sweeps\n", 1)
-                     .replace("sweeps.py ensure-labels", "sweeps.py noop"))
+                     .replace("tools/sweeps.py ensure-labels", "sweeps.py noop"))
         with self.assertRaises(self.failureException):
             self.test_every_sweep_job_ensures_the_labels()
 
@@ -1231,7 +1231,7 @@ class TestSweepsWorkflow(unittest.TestCase):
 
     def test_every_sweep_kind_has_a_step(self):
         for kind in sweeps.TRIAGE:
-            self.assertIn(f"python3 sweeps.py {kind}", self.TEXT)
+            self.assertIn(f"python3 tools/sweeps.py {kind}", self.TEXT)
 
     def test_secrets_reach_the_shell_only_through_env(self):
         # A ${{ ... }} expansion inside a run: block is how workflow

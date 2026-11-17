@@ -463,7 +463,7 @@ class ConsumerTurnCase(tcm.TurnCase):
     @classmethod
     def setUpClass(cls):
         consumer = {path: text for path, text in tcm.SEED.items()
-                    if path != "factory_init.py"}
+                    if path != "tools/factory_init.py"}
         with mock.patch.dict(tcm.SEED, consumer, clear=True):
             super().setUpClass()
 
@@ -493,7 +493,7 @@ class TestFactorySource(tcm.TurnCase):
     def test_only_a_root_with_factory_init_and_plugin_json_is_the_source(
             self):
         self.assertTrue(merge.factory_source(self.wt))
-        (self.wt / "factory_init.py").unlink()
+        (self.wt / "tools" / "factory_init.py").unlink()
         self.assertFalse(merge.factory_source(self.wt))
         self.assertTrue(merge.factory_source(REPO))
 

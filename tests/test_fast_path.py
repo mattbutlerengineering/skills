@@ -155,7 +155,7 @@ class TestProfilePin(unittest.TestCase):
                           "`previous_filename`", "changed_files"):
                 self.assertIn(token, text)
         self.assertIn("\n## changed-files\n\n", profile)
-        self.assertIn("    python3 fast_path.py gate origin/main <sha>\n",
+        self.assertIn("    python3 tools/fast_path.py gate origin/main <sha>\n",
                       profile)
         self.assertIn("the profile's `changed-files`", routine)
 
@@ -180,8 +180,8 @@ class TestHooksClassifyTheRecordedHead(unittest.TestCase):
             with self.subTest(hook=name):
                 text = self.hook(name)
                 commands = [line.strip() for line in text.splitlines()
-                            if line.startswith("    python3 fast_path.py")]
-                self.assertEqual(commands, [f"python3 fast_path.py {argv}"])
+                            if line.startswith("    python3 tools/fast_path.py")]
+                self.assertEqual(commands, [f"python3 tools/fast_path.py {argv}"])
                 self.assertNotIn("HEAD\n", text)
                 self.assertNotIn("...HEAD", text)
 

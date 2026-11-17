@@ -16,7 +16,7 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
 
 1. From the factory repo checkout:
 
-       python3 factory_init.py stamp <path-to-product-repo>
+       python3 tools/factory_init.py stamp <path-to-product-repo>
 
 2. The stamp is all-or-nothing. It refuses a drifted source payload, a
    malformed manifest key, a destination resolving outside the target,
@@ -26,7 +26,7 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
    A repo that already has its own code owners, ADR index or similar
    curated files can opt in to keeping them:
 
-       python3 factory_init.py stamp --keep-existing <path-to-product-repo>
+       python3 tools/factory_init.py stamp --keep-existing <path-to-product-repo>
 
    It keeps the target's own copy of each curated, non-executable seed
    it finds (`.github/CODEOWNERS`, `.github/factory.json`,
@@ -69,7 +69,7 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
 A repo that already has its own CI, labels and docs and wants only the
 Conductor (the `conduct` skill's tool) takes a tools-only stamp:
 
-    python3 factory_init.py stamp --tools-only <path-to-product-repo>
+    python3 tools/factory_init.py stamp --tools-only <path-to-product-repo>
 
 It lands `tools/factory/` and `.github/factory.json` and nothing else — no
 `Makefile`, no workflows, no `docs/` seeds, no `factory/templates/` mirror
@@ -89,7 +89,7 @@ A stamp is a snapshot. When the factory gains a fix — a new detector, a new
 lifecycle target — an already-stamped repo needs it too, and `stamp` refuses
 every existing file:
 
-    python3 factory_init.py update <path-to-product-repo>
+    python3 tools/factory_init.py update <path-to-product-repo>
 
 It splits the payload where detector E does:
 
@@ -117,7 +117,7 @@ gained since the stamp, and the manifest itself — landing no Makefile,
 workflow or seed and printing no make-target report, since there are no
 workflows to call one. The flag is for adoption only:
 
-    python3 factory_init.py update --tools-only <path-to-product-repo>
+    python3 tools/factory_init.py update --tools-only <path-to-product-repo>
 
 takes a tools tree copied by hand (`tools/factory/` present, no
 `factory/manifest.json`), refreshes it and writes it the tools-only
@@ -138,7 +138,7 @@ reports exactly that, and it is the one thing to fix before the next CI run:
 After editing anything under `factory/templates/`, or changing `gates.py`
 or `protocol.py` (both are mirrored into the payload):
 
-    python3 factory_init.py update-manifest
+    python3 tools/factory_init.py update-manifest
 
 This refreshes the tool mirrors from the repo root, recomputes every
 template checksum, and rewrites `factory/manifest.json` with the plugin

@@ -1,6 +1,6 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
-sources: gates.py, knowledge_plane.py
+sources: tools/gates.py, tools/knowledge_plane.py
 verified: 5e950c54fbf0a59b044c8b431d2d67a170e4e188
 related: pr-body-contract, manifest-regen
 ---
@@ -33,7 +33,7 @@ reports it as `cannot read <path>` (#882), so fix the encoding first.
 
 What works: placeholders that cannot match (`WO-####`, `WO-00xx`, ids
 with fewer than four digits) and URL-shaped sample links. Run
-`python3 gates.py` after writing any doc, not only before committing
+`python3 tools/gates.py` after writing any doc, not only before committing
 code — a docs-only change can turn CI red.
 
 Not the same rule as the PR-body gate: there, ADR-0064 strips fenced

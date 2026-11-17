@@ -17,7 +17,7 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 
 import eval_schema  # noqa: E402
 
@@ -591,7 +591,7 @@ class TestRunnerRefusesMalformedSet(unittest.TestCase):
 
     def run_runner(self, eval_set_path):
         return subprocess.run(
-            [sys.executable, str(ROOT / "trigger_eval.py"),
+            [sys.executable, str(ROOT / "tools" / "trigger_eval.py"),
              "--eval-set", str(eval_set_path)],
             capture_output=True, text=True, timeout=60)
 

@@ -11,7 +11,7 @@ in the repo will say so.
 Run the shipped tool from the target repo's root. It lives two
 directories above the review skill's directory in the same checkout:
 
-    python3 <the review skill's directory>/../../adr_status.py [repo root]
+    python3 <the review skill's directory>/../../tools/adr_status.py [repo root]
 
 It prints one JSON document: `adrs`, each with `id`, `file`, `title`,
 `status` (the raw text), `standing` and `superseded_by`. The tool owns

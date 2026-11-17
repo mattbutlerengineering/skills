@@ -11,7 +11,7 @@ on:
     branches: [main]
     # The page's inputs, and nothing else: the run directories
     # knowledge_plane.run_dirs walks (docs/, docs/features/*, docs/fixes/*),
-    # assembly_line.py with every repo module it imports, its template and
+    # tools/assembly_line.py with every repo module it imports, its template and
     # the vendored library. 124 of 469 pushes to main measured on
     # 2026-11-11 changed none of them and rebuilt an identical page.
     # tests/test_assembly_line.py holds the module list to the tool's
@@ -20,12 +20,12 @@ on:
       - "docs/*.md"
       - "docs/features/**"
       - "docs/fixes/**"
-      - "assembly_line.py"
-      - "assembly_line.html"
-      - "board.py"
-      - "cli.py"
-      - "knowledge_plane.py"
-      - "protocol.py"
+      - "tools/assembly_line.py"
+      - "tools/assembly_line.html"
+      - "tools/board.py"
+      - "tools/cli.py"
+      - "tools/knowledge_plane.py"
+      - "tools/protocol.py"
       - "vendor/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
@@ -48,7 +48,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Write the assembly line page
-        run: python3 assembly_line.py . --publish _site
+        run: python3 tools/assembly_line.py . --publish _site
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:

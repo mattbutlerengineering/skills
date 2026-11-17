@@ -596,7 +596,7 @@ class TestLocalAndReadOnly(unittest.TestCase):
 
     def test_the_module_imports_no_network_module(self):
         source = (Path(__file__).resolve().parent.parent
-                  / "size_band_calibration.py").read_text(encoding="utf-8")
+                  / "tools" / "size_band_calibration.py").read_text(encoding="utf-8")
         imported = set()
         for node in ast.walk(ast.parse(source)):
             if isinstance(node, ast.Import):

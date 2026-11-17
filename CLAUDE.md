@@ -7,18 +7,18 @@ and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
 ## Verify (CI runs all four on every PR and every push to main)
 
-- `python3 run_tests.py` — the full suite, one `python3 -m unittest
+- `python3 tools/run_tests.py` — the full suite, one `python3 -m unittest
   tests.<module>` child per module across `os.cpu_count()` workers
   (`-j N` overrides), longest-first from `tests/timings.json`
   (`--record` rewrites it after a clean run); exit 0 only when every
   module passes. `python3 -m unittest discover tests` is the same suite
   serially, and what a stamped repo runs.
-- `python3 lint.py` — exit 0 / output matching `lint: 0 problem(s)`
-- `python3 kb.py drift` — instruction-file drift in `CLAUDE.md`,
+- `python3 tools/lint.py` — exit 0 / output matching `lint: 0 problem(s)`
+- `python3 tools/kb.py drift` — instruction-file drift in `CLAUDE.md`,
   `AGENTS.md` and `.claude/rules` (dangling paths, roster tables, slash
   commands; ADR-0078), output matching `drift: 0 problem(s)`; root-only,
   a stamped repo's Makefile drops the line
-- `python3 gates.py && python3 gates.py --selftest` — factory drift
+- `python3 tools/gates.py && python3 tools/gates.py --selftest` — factory drift
   detectors (roster in `gates.py`'s module docstring; B skips locally
   without a PR event payload, but the selftest exercises it), output
   matching `gates: 0 problem(s)`
@@ -79,7 +79,7 @@ command, the exit codes and what the output is never evidence for.
   `factory/templates/**` or to any root file in `factory_init.MIRRORS`
   (the authority on what is mirrored into the payload — root tools,
   workflows, CODEOWNERS, and the Makefile, each through its entry's
-  transform per ADR-0050), run `python3 factory_init.py update-manifest`
+  transform per ADR-0050), run `python3 tools/factory_init.py update-manifest`
   and commit the manifest with the change. Detector E gates
   manifest↔payload; `tests/test_factory_init.py` pins payload↔root.
 - **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue
