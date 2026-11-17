@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: gates.py, knowledge_plane.py, validator.py, pr_body_preflight.py, .github/workflows/validator.yml
-verified: 1b639fcad97b1e10a54a46774c6e8c0f4a21e706
+verified: 40b601d410efc6cc6e7593497b65a8b90141ab23
 related: gates-scan-every-doc
 ---
 
@@ -35,14 +35,18 @@ cannot read (`--fill`,
 establish) gets a "not checked" note and passes. A PR opened any other
 way, or edited later, is judged by CI's B alone.
 
-The body must carry both:
+The body must carry both, judged after HTML comments are stripped
+(`gates.HTML_COMMENT`, #1907): the PR template's own comment is never the
+author's declaration, and a WO id or `Closes #N` inside `<!-- ... -->`
+counts for nothing.
 
 1. A work-order id (a four-digit `WO-` token), **or** a waiver line
    matching `No work order: <reason>` (`gates.NO_WO_DECLARATION`; the
    reason must be non-empty).
 2. A closing keyword with an issue number — `Closes #N`, `Fixes #N`,
-   `Resolves #N` (`knowledge_plane.CLOSES_TOKEN`). The waiver does not
-   excuse this half.
+   `Resolves #N` (`knowledge_plane.CLOSES_TOKEN`; the past forms
+   `Closed`, `Fixed` and `Resolved` and a colon, `Closes: #N`, match
+   too). The waiver does not excuse this half.
 
 Three traps when fixing a red B:
 
