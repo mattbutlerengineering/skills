@@ -317,6 +317,19 @@ class Main(Tree):
         self.assertEqual(code, 1)
         self.assertIn("md-claims: CLAUDE.md:1:", out)
 
+    def test_a_root_that_is_not_a_directory_exits_two_for_both_verbs(self):
+        """A doc passed where the root goes (`check README.md`) used to
+        pass with 0 docs checked, a silent fail-open."""
+        self.readme("`src/gone.py`\n")
+        target = str(self.root / "README.md")
+        for verb in ("check", "extract"):
+            with self.subTest(verb=verb):
+                code, out = self.run_main(verb, target)
+                self.assertEqual(code, 2)
+                self.assertIn("md-claims: root", out)
+                self.assertIn("is not a directory", out)
+                self.assertIn(md_claims.USAGE, out)
+
     def test_bad_usage_exits_two(self):
         self.assertEqual(self.run_main(), (2, md_claims.USAGE + "\n"))
         self.assertEqual(self.run_main("fix"), (2, md_claims.USAGE + "\n"))

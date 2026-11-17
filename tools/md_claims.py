@@ -423,6 +423,10 @@ def main(argv):
         return 2
     root = argv[1] if len(argv) > 1 else "."
     paths = argv[2:] or None
+    if not Path(root).is_dir():
+        print(f"{LABEL}: root {root!r} is not a directory (a doc goes after"
+              f" the root, not in its place)\n{USAGE}")
+        return 2
     if argv[0] == "extract":
         print(json.dumps(extract(root, paths), indent=2))
         return 0
