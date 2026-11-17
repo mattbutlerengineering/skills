@@ -56,7 +56,7 @@ RULE = ("a boundary is observed when its commit subject reads"
         " other boundary is inferred: decompose at the commit that first"
         " adds breakdown.md, implement at the first later commit that checks"
         " every row (ADR-0109, ADR-0111)")
-USAGE = "python3 decompose_signals.py [--record]"
+USAGE = "python3 tools/decompose_signals.py [--record]"
 # -z lists each path raw and NUL-ended (never C-quoted, so a non-ASCII run
 # name matches), which leaves NUL no commit-record opener: SOH opens each
 # record; unit separators split its header, a NUL ends it.
@@ -579,7 +579,7 @@ def record(root, run, result, problems):
 
 
 def main(argv, root=None, run=None):
-    """`python3 decompose_signals.py [--record]` — print every run's
+    """`python3 tools/decompose_signals.py [--record]` — print every run's
     signals and the aggregate; with --record, also write them as an
     append-only snapshot. Exit 0 when nothing failed (unmeasurable runs
     included), 1 with problems, 2 on an unknown argument."""

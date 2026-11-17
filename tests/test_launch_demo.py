@@ -378,7 +378,7 @@ class CliMixin:
 
 class TestConfigLeg(CliMixin, cli_contract.CliContract,
                     cli_contract.ReportContract, unittest.TestCase):
-    usage_fragment = "python3 launch_demo.py config | probe | render"
+    usage_fragment = "python3 tools/launch_demo.py config | probe | render"
     summary_line = "launch-demo: 0 problem(s)"
 
     def clean_cli(self):
@@ -1166,7 +1166,7 @@ class TestRender(RenderMixin, unittest.TestCase):
 
 class TestRenderLeg(RenderMixin, cli_contract.CliContract,
                     unittest.TestCase):
-    usage_fragment = "python3 launch_demo.py config | probe | render"
+    usage_fragment = "python3 tools/launch_demo.py config | probe | render"
     bad_argv = ("render",)
 
     def run_cli(self, argv):

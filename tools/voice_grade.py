@@ -17,7 +17,7 @@ import re
 import sys
 
 LABEL = "voice-grade"
-USAGE = (f"{LABEL}: usage: python3 voice_grade.py <reply.md>"
+USAGE = (f"{LABEL}: usage: python3 tools/voice_grade.py <reply.md>"
          " [<reply.md> ...]")
 
 # (name, pattern, flags). The flags are the harness regex grader's letters,
@@ -131,7 +131,7 @@ def _read_all(paths):
 
 
 def main(argv):
-    """`python3 voice_grade.py <reply.md> [<reply.md> ...]` — print each
+    """`python3 tools/voice_grade.py <reply.md> [<reply.md> ...]` — print each
     file's count, then one line per slop match and the summary. Exit 0
     clean, 1 on any slop, 2 on usage or an unreadable input. Writes
     nothing."""

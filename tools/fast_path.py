@@ -1,7 +1,7 @@
 """ADR-0096's fast-path classifier: is a PR's diff docs-only and clear of
 every gate path? (faster-sdlc #909)
 
-`python3 fast_path.py <base> <head>` reads `git diff --name-only
+`python3 tools/fast_path.py <base> <head>` reads `git diff --name-only
 --no-renames <base>...<head>` (a rename counts as both its source and
 its destination) and prints one line:
 
@@ -23,7 +23,7 @@ resume obeys the brief's release authorization, `operate:` and
 `stop-after:`). The queue profile's `gate_paths` is the same list in glob
 spelling; gate_globs() renders it and a test pins the two equal.
 
-`python3 fast_path.py gate <base> <head>` is the merge train's
+`python3 tools/fast_path.py gate <base> <head>` is the merge train's
 `gate_paths` check (ADR-0087's consent rule) on the same list, so a
 gate-path file renamed out of the gate shows by its old path:
 `gate-paths: clear` (exit 0), `gate-paths: human (<first gate path>)`
@@ -49,10 +49,10 @@ GATE_NAMES = ("prd.md", "architecture.md", "autorun-brief.md")
 GATE_FILES = (".claude-plugin/plugin.json", "docs/pipeline-protocol.md",
               "docs/standards.json")
 LOW_RISK_PREFIX = "docs/"
-USAGE = ("usage: python3 fast_path.py <base> <head>\n"
+USAGE = ("usage: python3 tools/fast_path.py <base> <head>\n"
          "  classifies `git diff --name-only --no-renames"
          " <base>...<head>`: exit 0 low-risk, 1 review, 2 git failed\n"
-         "       python3 fast_path.py gate <base> <head>\n"
+         "       python3 tools/fast_path.py gate <base> <head>\n"
          "  the merge train's gate_paths check on the same list: exit 0"
          " clear, 1 human, 2 git failed")
 

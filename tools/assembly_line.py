@@ -226,7 +226,7 @@ def _target(args):
 
 
 def main(argv):
-    """`python3 assembly_line.py [root] [--out PATH | --publish DIR]` —
+    """`python3 tools/assembly_line.py [root] [--out PATH | --publish DIR]` —
     writes the page (default: a new file in the system temp directory,
     outside the repo's tracked tree) and prints its absolute path."""
     parser = argparse.ArgumentParser(prog="assembly_line.py")

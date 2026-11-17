@@ -140,7 +140,7 @@ class TestLoadTimings(unittest.TestCase):
 
 
 class TestMain(cli_contract.CliContract, TreeCase):
-    usage_fragment = "python3 run_tests.py"
+    usage_fragment = "python3 tools/run_tests.py"
 
     def test_each_module_runs_as_its_own_unittest_child_in_the_root(self):
         code, _ = self.run_cli([])
@@ -195,7 +195,7 @@ class TestMain(cli_contract.CliContract, TreeCase):
         self.assertEqual(
             lines[-2],
             "tests: 2 module(s) have no recorded timing and ran first"
-            " (python3 run_tests.py --record refreshes tests/timings.json)")
+            " (python3 tools/run_tests.py --record refreshes tests/timings.json)")
         self.assertRegex(
             lines[-1],
             r"^tests: 9 tests across 3 modules in \d+\.\ds on 4 workers,"

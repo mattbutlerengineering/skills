@@ -222,7 +222,7 @@ class TestFixtures(unittest.TestCase):
         self.assertEqual(names & {"prompt.md", "case.yaml"}, set())
 
 
-USAGE = "voice-grade: usage: python3 voice_grade.py <reply.md> [<reply.md> ...]"
+USAGE = "voice-grade: usage: python3 tools/voice_grade.py <reply.md> [<reply.md> ...]"
 
 
 class TestFrontDoor(unittest.TestCase):

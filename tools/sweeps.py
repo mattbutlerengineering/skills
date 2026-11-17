@@ -6,13 +6,13 @@ ADR-0030 tracker intake, ADR-0032 two planes).
 Three sweeps ship, all driven by .github/workflows/sweeps.yml, plus the
 bootstrap step that must run before any of them can file anything:
 
-  python3 sweeps.py ensure-labels             create the triage labels a
+  python3 tools/sweeps.py ensure-labels             create the triage labels a
                                               sweep stamps, if missing
-  python3 sweeps.py sentry [--payload PATH]   PATH or stdin: the Sentry
+  python3 tools/sweeps.py sentry [--payload PATH]   PATH or stdin: the Sentry
                                               issues JSON the workflow fetched
-  python3 sweeps.py label-drift               detector L (network-bound, so
+  python3 tools/sweeps.py label-drift               detector L (network-bound, so
                                               sweeps-only) -> one intake issue
-  python3 sweeps.py reconcile                 the two planes disagree
+  python3 tools/sweeps.py reconcile                 the two planes disagree
                                               (ADR-0032) -> one intake issue
 
 Conventions match label_sync.py/gates.py: functions return problem strings

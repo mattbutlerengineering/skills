@@ -1,7 +1,7 @@
 """reap_worktrees.py — remove merged, idle agent worktrees under
 `<repo>/.claude/worktrees/`.
 
-`python3 reap_worktrees.py` is a dry run; `--apply` removes. The rule is
+`python3 tools/reap_worktrees.py` is a dry run; `--apply` removes. The rule is
 `## reap` in .claude/implement-queue.md (four tests: clean, idle, no open
 PR, this tip merged); this module implements it and the profile points at
 it. Every command goes through one injected runner, so a failed command is
@@ -18,7 +18,7 @@ import cli
 
 LABEL = "reap"
 SCOPE = os.path.join(".claude", "worktrees")
-USAGE = "usage: python3 reap_worktrees.py [--apply | --no-fetch]"
+USAGE = "usage: python3 tools/reap_worktrees.py [--apply | --no-fetch]"
 # The full ref: a bare `origin/main` resolves refs/tags/origin/main and
 # refs/heads/origin/main before refs/remotes/origin/main, so a stray local
 # branch or tag of that name would stand in for the remote.
@@ -396,7 +396,7 @@ def reap(apply, runner=run, cwd=None, size=dir_size, which=shutil.which,
 
 
 def main(argv, runner=run, cwd=None, size=dir_size, which=shutil.which):
-    """`python3 reap_worktrees.py [--apply | --no-fetch]` — exit 0 clean,
+    """`python3 tools/reap_worktrees.py [--apply | --no-fetch]` — exit 0 clean,
     1 with problems, 2 on usage. `--no-fetch` is the offline dry run;
     with `--apply` the fetch is mandatory, so the two never combine."""
     if argv not in ([], ["--apply"], ["--no-fetch"]):

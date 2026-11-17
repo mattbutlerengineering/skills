@@ -34,7 +34,7 @@ import subprocess
 TIMINGS = Path("tests") / "timings.json"
 # unittest's own summary line, the one fact a child reports about size.
 RAN = re.compile(r"^Ran (\d+) tests? in [\d.]+s$", re.MULTILINE)
-USAGE = ("usage: python3 run_tests.py [-j N] [--record]\n"
+USAGE = ("usage: python3 tools/run_tests.py [-j N] [--record]\n"
          "  -j N      workers in flight at once (default: os.cpu_count())\n"
          "  --record  rewrite tests/timings.json from this run's timings,"
          " when every module passed")
@@ -158,7 +158,7 @@ def main(argv, spawn=spawn_child, root=None, cpu_count=os.cpu_count):
     unrecorded = sum(module not in timings for module in modules)
     if unrecorded and timings:
         print(f"tests: {unrecorded} module(s) have no recorded timing and"
-              " ran first (python3 run_tests.py --record refreshes"
+              " ran first (python3 tools/run_tests.py --record refreshes"
               " tests/timings.json)")
     print(f"tests: {total} tests across {len(results)} modules in {wall:.1f}s"
           f" on {workers} workers, {len(failed)} problem(s)")

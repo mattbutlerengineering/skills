@@ -14,11 +14,11 @@ about something outside the repo may also declare `checked-against`,
 `checked` and `max-age`; lint ages that declaration against today,
 offline, and reports each malformed one (ADR-0125).
 
-  python3 kb.py index [root]   write the inline index
-  python3 kb.py lint [root]    check the knowledge base
-  python3 kb.py stats [root]   page count, index size, page lengths (JSON)
-  python3 kb.py drift [root]   instruction-file drift (kb_drift.py)
-  python3 kb.py harvest [root] [--days N] [--session ID] [--memory]
+  python3 tools/kb.py index [root]   write the inline index
+  python3 tools/kb.py lint [root]    check the knowledge base
+  python3 tools/kb.py stats [root]   page count, index size, page lengths (JSON)
+  python3 tools/kb.py drift [root]   instruction-file drift (kb_drift.py)
+  python3 tools/kb.py harvest [root] [--days N] [--session ID] [--memory]
                                transcript and memory candidates for
                                ingest (JSON; kb_harvest.py)
 
@@ -405,7 +405,7 @@ USAGE = ("usage: kb.py index|lint|stats|drift [root]\n"
 
 
 def main(argv):
-    """`python3 kb.py <index|lint|stats> [root]`, or `drift [root]`
+    """`python3 tools/kb.py <index|lint|stats> [root]`, or `drift [root]`
     (kb_drift.py), or `harvest`, which takes its own flags
     (kb_harvest.py)."""
     if argv and argv[0] == "harvest":

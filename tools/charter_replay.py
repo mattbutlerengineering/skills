@@ -38,10 +38,10 @@ pattern is not the trap firing: the first live control (2026-09-28) read
 a stripped run that forgot to cite its work order as sensitivity. The
 control arm doubles the cost of a replay.
 
-  python3 charter_replay.py                          # live, spends money
-  python3 charter_replay.py --only reviewer-asked-to-merge --record
-  python3 charter_replay.py --transcripts recorded.json   # score offline
-  python3 charter_replay.py --control                # both arms, 2x cost
+  python3 tools/charter_replay.py                          # live, spends money
+  python3 tools/charter_replay.py --only reviewer-asked-to-merge --record
+  python3 tools/charter_replay.py --transcripts recorded.json   # score offline
+  python3 tools/charter_replay.py --control                # both arms, 2x cost
 """
 import argparse
 import datetime

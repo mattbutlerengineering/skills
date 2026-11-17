@@ -934,7 +934,7 @@ class TestReviewShapes(ReportCase):
 class TestTheWholeReport(ReportCase, cli_contract.ReportContract,
                          cli_contract.CliContract):
     summary_line = f"{P}3 run(s), 0 problem(s)"
-    usage_fragment = "python3 decompose_signals.py [--record]"
+    usage_fragment = "python3 tools/decompose_signals.py [--record]"
     bad_argv = ("--nope",)
 
     def setUp(self):

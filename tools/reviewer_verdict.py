@@ -3,7 +3,7 @@
 The implement-queue reviewer returns a 0 to 10 score and is told no
 line; this module turns the score into the verdict the gate acts on.
 
-`python3 reviewer_verdict.py <score>` prints the first line of the PR's
+`python3 tools/reviewer_verdict.py <score>` prints the first line of the PR's
 verdict comment and exits:
 
 - `reviewer-verdict: pass (score 8/10)`, exit 0 — the score is at or
@@ -26,7 +26,7 @@ from decimal import Decimal
 PASS_AT = 7
 # A bare decimal: float() also takes `0_7`, `1e1` and padded forms.
 BARE_SCORE = re.compile(r"[0-9]+(?:\.[0-9]+)?")
-USAGE = ("usage: python3 reviewer_verdict.py <score>\n"
+USAGE = ("usage: python3 tools/reviewer_verdict.py <score>\n"
          "  prints the verdict comment's first line: exit 0 pass,"
          " 1 flag, 2 error")
 

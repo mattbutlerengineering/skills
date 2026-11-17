@@ -386,7 +386,7 @@ class TestProblemsAndExitCodes(RenderCase):
                 code, lines = self.run_main(argv)
                 self.assertEqual(code, 2)
                 self.assertTrue(lines[0].startswith("eval-trends: "))
-                self.assertIn("python3 eval_trends.py [<repo-root>]",
+                self.assertIn("python3 tools/eval_trends.py [<repo-root>]",
                               "\n".join(lines))
 
     def test_a_refusal_alone_exits_zero(self):

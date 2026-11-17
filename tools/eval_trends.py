@@ -28,7 +28,7 @@ from eval_schema import HARNESSES, parse_results_stem
 LABEL = "eval-trends"
 SURFACES = ("trigger", "charter", "output", "plugin", "decompose-signals")
 NOTE = "docs/research/eval-quality-metrics-2026-10-21.md"
-USAGE = "python3 eval_trends.py [<repo-root>]"
+USAGE = "python3 tools/eval_trends.py [<repo-root>]"
 HEADER = (f"{LABEL}: descriptive only; a REFUSED line means the records "
           "cannot support a trend claim, not that nothing changed")
 NOT_COMPUTED = (f"{LABEL}: not computed from any record: judge drift, "
@@ -580,7 +580,7 @@ def _usage(why):
 
 
 def main(argv):
-    """`python3 eval_trends.py [<repo-root>]` — print the trend view of the
+    """`python3 tools/eval_trends.py [<repo-root>]` — print the trend view of the
     records under the repo root (default: this module's directory). Exit 0
     when no record is malformed (a refusal is data, and a root with no
     records says so in one line), 1 with problems, 2 on a usage error."""

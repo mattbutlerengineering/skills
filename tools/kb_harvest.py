@@ -38,7 +38,7 @@ and given a hash suffix). Claude Code worktrees of the repo
 Run from a linked worktree, the root resolves to the main checkout (the
 parent of git's common dir) first, so the same transcripts are found.
 
-  python3 kb.py harvest [root] [--days N] [--session ID]
+  python3 tools/kb.py harvest [root] [--days N] [--session ID]
                         [--projects-dir DIR] [--memory]
 
 No flag scans the newest top-level session; --days N scans every

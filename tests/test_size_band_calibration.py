@@ -346,7 +346,7 @@ class TestReplanByBand(unittest.TestCase):
 
 
 PREFIX = "size-band-calibration:"
-USAGE = "python3 size_band_calibration.py"
+USAGE = "python3 tools/size_band_calibration.py"
 REPLAN = "re-plan 1/10 over 1 run(s) (0 unmeasurable)"
 
 
