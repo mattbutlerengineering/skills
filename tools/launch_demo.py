@@ -35,7 +35,7 @@ from protocol import frontmatter_end
 
 LABEL = "launch-demo"
 CONFIG = "docs/launch-demo.json"
-USAGE = "usage: python3 launch_demo.py config | probe | render <slug>"
+USAGE = "usage: python3 tools/launch_demo.py config | probe | render <slug>"
 
 # The timeline's constants: the title card's floor, the pause after each
 # narration line, the recorder's typing cadence, the band of recorded ÷
@@ -675,7 +675,7 @@ def _missing_line(entry):
 
 def main(argv, root=None, which=shutil.which, runner=cli.runner,
          platform=sys.platform):
-    """`python3 launch_demo.py config | probe | render <slug>` from the
+    """`python3 tools/launch_demo.py config | probe | render <slug>` from the
     repo root: problems then `launch-demo: N problem(s)` (exit 1), or
     the leg's lines, its verdict word alone, and the zero summary
     (exit 0); unrecognised argv is usage (exit 2)."""

@@ -30,7 +30,7 @@ from factory_config import (SIZES as BANDS, resolve_budget,
 from knowledge_plane import parse_row, repo_root, run_dirs
 
 LABEL = "size-band-calibration"
-USAGE = "python3 size_band_calibration.py"
+USAGE = "python3 tools/size_band_calibration.py"
 
 
 def bands(files, root):
@@ -259,7 +259,7 @@ def _read_breakdowns(root):
 
 
 def main(argv, root=None, run=None, measure=decompose_signals.measure):
-    """`python3 size_band_calibration.py` — print every exclusion and each
+    """`python3 tools/size_band_calibration.py` — print every exclusion and each
     band's interval or refusal beside its cost and re-plan rate. Exit 0
     when nothing failed (refusals and empty bands are data), 1 with
     problems, 2 on any argument."""

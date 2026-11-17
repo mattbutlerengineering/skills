@@ -281,7 +281,7 @@ def grade(breakdown_text, architecture_text, prd_text=""):
             "feedback": feedback}
 
 
-USAGE = (f"{LABEL}: usage: python3 decompose_grade.py <breakdown.md>"
+USAGE = (f"{LABEL}: usage: python3 tools/decompose_grade.py <breakdown.md>"
          " <architecture.md> [<prd.md>]")
 
 
@@ -304,7 +304,7 @@ def _read_all(paths):
 
 
 def main(argv):
-    """`python3 decompose_grade.py <breakdown.md> <architecture.md>
+    """`python3 tools/decompose_grade.py <breakdown.md> <architecture.md>
     [<prd.md>]` — print the summary line and one line per defect. Exit 0
     with no defect, 1 with one or more, 2 on usage, an unreadable input or
     an architecture with no components. Writes nothing."""

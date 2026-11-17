@@ -91,7 +91,7 @@ class MainTest(unittest.TestCase):
                 code, out = run(argv)
                 self.assertEqual(code, 2)
                 self.assertTrue(out.startswith("usage: python3 "
-                                               "reviewer_verdict.py"), out)
+                                               "tools/reviewer_verdict.py"), out)
 
 
 if __name__ == "__main__":

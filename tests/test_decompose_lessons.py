@@ -1355,7 +1355,7 @@ class TestFrontDoor(TempFile):
         self.assertEqual(code, 2)
         self.assertEqual(lines, [
             f"{PREFIX} 'bogus' \u2014 unknown argument", "",
-            "  python3 decompose_lessons.py [update]"])
+            "  python3 tools/decompose_lessons.py [update]"])
 
     def test_the_module_imports_no_network_module(self):
         tree = ast.parse(Path(dl.__file__).read_text(encoding="utf-8"))

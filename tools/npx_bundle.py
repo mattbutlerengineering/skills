@@ -1,6 +1,6 @@
 """npx-bundle: build the tree this repo publishes on its `npx` branch.
 
-    python3 npx_bundle.py build <out-dir>
+    python3 tools/npx_bundle.py build <out-dir>
 
 The third-party skills CLI (`npx skills add`) installs a skill by
 copying its folder alone out of a clone it then deletes (ADR-0120).

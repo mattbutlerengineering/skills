@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from xml.parsers import expat
 
 LABEL = "svg-check"
-USAGE = (f"{LABEL}: usage: python3 svg_check.py <file.svg>"
+USAGE = (f"{LABEL}: usage: python3 tools/svg_check.py <file.svg>"
          " [--embed-width PX]")
 DEFAULT_EMBED = 830.0
 REFUSED = ("refused: the file declares a DTD or an entity (remove the"
@@ -339,7 +339,7 @@ def _usage(argv):
 
 
 def main(argv):
-    """`python3 svg_check.py <file.svg> [--embed-width PX]` — exit 0 clean,
+    """`python3 tools/svg_check.py <file.svg> [--embed-width PX]` — exit 0 clean,
     1 with defects, 2 when the file was not checked (usage, unreadable,
     refused). Writes nothing."""
     parsed = _usage(argv)

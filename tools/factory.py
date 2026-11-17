@@ -15,11 +15,11 @@ the CLI-bearing root modules, so adding or retiring a tool breaks the
 build until the table follows. Any logic that landed here would be logic
 that stopped being testable where it lives now.
 
-  python3 factory.py <verb> [args...]   delegate: args pass through
+  python3 tools/factory.py <verb> [args...]   delegate: args pass through
                                         verbatim (`factory.py gates
                                         --selftest` is `gates.py
                                         --selftest`)
-  python3 factory.py help               the verb index
+  python3 tools/factory.py help               the verb index
 
 Verbs whose main() takes no arguments (lint) refuse extras
 rather than dropping them silently.
@@ -88,7 +88,7 @@ def index():
         doc = importlib.import_module(module_name).__doc__ or ""
         summary = doc.strip().splitlines()[0] if doc.strip() else ""
         lines.append(f"  {verb:<{width}}  {summary}".rstrip())
-    lines += ["", "python3 factory.py <verb> [args...] — args pass"
+    lines += ["", "python3 tools/factory.py <verb> [args...] — args pass"
               " through verbatim"]
     return "\n".join(lines)
 
@@ -102,7 +102,7 @@ def main(argv):
         print(index())
         return 0
     if verb not in VERBS:
-        print(f"factory: unknown verb {verb!r} — `python3 factory.py"
+        print(f"factory: unknown verb {verb!r} — `python3 tools/factory.py"
               " help` lists what exists")
         return 2
     module_name, style = VERBS[verb]

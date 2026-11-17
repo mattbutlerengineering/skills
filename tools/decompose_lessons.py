@@ -32,7 +32,7 @@ import factory_config
 from cli import CLI_FAILURES, detail, read_file, report, runner
 
 LABEL = "decompose-lessons"
-USAGE = "python3 decompose_lessons.py [update]"
+USAGE = "python3 tools/decompose_lessons.py [update]"
 LESSONS_PATH = "docs/factory/decompose-lessons.jsonl"
 # Measured 2026-10-23 (ADR-0116): a worst-case lesson line is 838 bytes and
 # a realistic file about 6.5 KB, with a 5,336-byte header over 41 runs.
@@ -764,7 +764,7 @@ def _status(root, run, measure):
 
 
 def main(argv, root=None, run=None, measure=decompose_signals.measure):
-    """`python3 decompose_lessons.py [update]` \u2014 print the pair count, the
+    """`python3 tools/decompose_lessons.py [update]` \u2014 print the pair count, the
     lessons and the treated-versus-untreated re-plan comparison; `update`
     folds new runs in and writes the file, the one writer. Exit 0 when
     nothing failed (an empty pair set and a refused verdict included), 1

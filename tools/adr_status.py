@@ -55,7 +55,7 @@ def gather(root):
 
 
 def main(argv):
-    """`python3 adr_status.py [root]` — root defaults to the working
+    """`python3 tools/adr_status.py [root]` — root defaults to the working
     directory, the way the review skill invokes it from a target repo."""
     root = argv[0] if argv else "."
     model, problems = gather(root)

@@ -514,12 +514,12 @@ def check(root, run=git_runner):
 
 
 def main(argv):
-    """`python3 one_owner.py` — no options in this cut. Exiting nonzero on
+    """`python3 tools/one_owner.py` — no options in this cut. Exiting nonzero on
     a finding is correct and is wired into no gate: a finding is a
     question for a human, never a reason to colour main red."""
     if argv:
         print(f"one-owner: {' '.join(argv)!r} — this tool takes no"
-              " arguments\n\n  python3 one_owner.py")
+              " arguments\n\n  python3 tools/one_owner.py")
         return 2
     return report("one-owner", check(repo_root()))
 

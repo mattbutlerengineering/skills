@@ -583,7 +583,7 @@ class TestGoodVersusBadCuts(unittest.TestCase):
             self.assertEqual(after["score"], 1.0, check)
 
 
-USAGE = ("decompose-grade: usage: python3 decompose_grade.py <breakdown.md>"
+USAGE = ("decompose-grade: usage: python3 tools/decompose_grade.py <breakdown.md>"
          " <architecture.md> [<prd.md>]")
 GOOD_SUMMARY = ("decompose-grade: score 1.000 (coverage 1.000,"
                 " dependencies 1.000, accept 1.000, sizing 1.000)")

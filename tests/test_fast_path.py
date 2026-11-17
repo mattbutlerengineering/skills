@@ -549,7 +549,7 @@ class TestGateMode(unittest.TestCase):
 
 
 class TestMain(cli_contract.CliContract, unittest.TestCase):
-    usage_fragment = "python3 fast_path.py <base> <head>"
+    usage_fragment = "python3 tools/fast_path.py <base> <head>"
     bad_argv = ("origin/main",)
 
     def run_cli(self, argv):

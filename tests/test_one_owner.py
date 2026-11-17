@@ -644,7 +644,7 @@ class TestMain(cli_contract.CliContract, unittest.TestCase):
     into no gate: the tool is deliberately outside `make check`, so a
     finding never colours main red."""
 
-    usage_fragment = "python3 one_owner.py"
+    usage_fragment = "python3 tools/one_owner.py"
 
     def run_cli(self, argv):
         return cli_contract.capture(one_owner.main, argv)

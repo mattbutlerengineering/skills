@@ -29,7 +29,7 @@ another repository or any exception is exit 0, and CI's B still judges
 that PR. Heredoc bodies and comments are never read as commands.
 Root-only (not mirrored).
 
-  python3 pr_body_preflight.py < payload.json
+  python3 tools/pr_body_preflight.py < payload.json
 """
 import collections
 import json

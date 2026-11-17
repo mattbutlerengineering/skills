@@ -31,7 +31,7 @@ false, never a matter of style:
 A file excuses a token it means to name with `<!-- drift-ignore: a b -->`
 (the token as written, whitespace separated).
 
-  python3 kb.py drift [root]
+  python3 tools/kb.py drift [root]
 """
 import fnmatch
 import os

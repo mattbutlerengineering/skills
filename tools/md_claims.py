@@ -21,8 +21,8 @@ Three claim kinds, each checked against the tree and never executed:
 A line carrying `<!-- md-claims: ignore -->`, and the line after it, are
 skipped; on the line before a fence it skips the whole block.
 
-  python3 md_claims.py check [root] [path ...]    problem strings
-  python3 md_claims.py extract [root] [path ...]  every claim, as JSON
+  python3 tools/md_claims.py check [root] [path ...]    problem strings
+  python3 tools/md_claims.py extract [root] [path ...]  every claim, as JSON
 
 Root defaults to the working directory. Paths (docs or directories,
 relative to root) replace the default set: README and the other root
@@ -417,7 +417,7 @@ def _verify_package(root, cwd, program, args):
 
 
 def main(argv):
-    """`python3 md_claims.py <check|extract> [root] [path ...]`."""
+    """`python3 tools/md_claims.py <check|extract> [root] [path ...]`."""
     if not argv or argv[0] not in ("check", "extract"):
         print(USAGE)
         return 2

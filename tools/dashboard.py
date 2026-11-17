@@ -11,11 +11,11 @@ never re-derives it. Operator-level, never stamped (the console
 observes stamped repos from one seat; it is not in factory_init.MIRRORS
 and no product repo runs it in CI).
 
-  python3 dashboard.py gather <repo-path>   one repo's state dict as
+  python3 tools/dashboard.py gather <repo-path>   one repo's state dict as
                                             JSON on stdout — the
                                             testable seam and the
                                             scripting hook
-  python3 dashboard.py serve [--port N] [--config PATH]
+  python3 tools/dashboard.py serve [--port N] [--config PATH]
                                             the localhost console:
                                             binds 127.0.0.1 only,
                                             GET / serves the page,
