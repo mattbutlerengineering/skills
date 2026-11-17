@@ -136,6 +136,9 @@ def main(argv):
     clean, 1 on any slop, 2 on usage or an unreadable input. Writes
     nothing."""
     from cli import report
+    if argv and argv[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
     if not argv:
         print(USAGE)
         return 2

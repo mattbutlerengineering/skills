@@ -54,9 +54,15 @@ def gather(root):
     return {"adrs": [_entry(root, record) for record in records]}, []
 
 
+USAGE = "adr-status: usage: python3 tools/adr_status.py [root]"
+
+
 def main(argv):
     """`python3 tools/adr_status.py [root]` — root defaults to the working
     directory, the way the review skill invokes it from a target repo."""
+    if argv and argv[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
     root = argv[0] if argv else "."
     model, problems = gather(root)
     if problems:

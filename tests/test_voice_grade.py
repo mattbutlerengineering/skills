@@ -248,6 +248,11 @@ class TestFrontDoor(unittest.TestCase):
     def test_no_argument_prints_usage_and_exits_two(self):
         self.assertEqual(self.run_main(), (2, [USAGE]))
 
+    def test_help_flag_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                self.assertEqual(self.run_main(flag), (0, [USAGE]))
+
     def test_a_clean_file_prints_its_count_and_exits_zero(self):
         path = self.write("clean.md", "Run the reset, then push again.")
         self.assertEqual(self.run_main(path), (0, [

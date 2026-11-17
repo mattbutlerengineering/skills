@@ -54,6 +54,9 @@ def derive(score):
 
 
 def main(argv):
+    if argv and argv[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
     if len(argv) != 1:
         print(USAGE)
         return 2
