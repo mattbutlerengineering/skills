@@ -42,7 +42,7 @@ branch.
 
 4. **Launch brief.** Ask the tool that owns the repo's launch-demo
    config; never read the config yourself. From the repo root run
-   `python3 <this skill's directory>/../../launch_demo.py config`. If it
+   `python3 <this skill's directory>/../../tools/launch_demo.py config`. If it
    prints the verdict `SHIP`, load the `launch-demo` skill through the
    harness's skill-loading mechanism (a skill tool where one exists,
    otherwise a read of the skill file), run it for this run, commit what

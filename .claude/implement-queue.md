@@ -44,7 +44,7 @@ file changes only by a PR: its commit is the consent record.
 
 ## fast-path
 
-    python3 fast_path.py origin/main <sha>
+    python3 tools/fast_path.py origin/main <sha>
 
 `<sha>` is the recorded head (gate step 1), never the checkout's
 `HEAD`, which can lag the pushed head. Get it locally first: `git fetch
@@ -66,7 +66,7 @@ dispatch every specialist.
 
 ## verdict
 
-    python3 reviewer_verdict.py <score>
+    python3 tools/reviewer_verdict.py <score>
 
 Run on the universal reviewer's `score` (ADR-0123), passed as one
 quoted argument and only once it reads as a bare finite number from 0
@@ -89,7 +89,7 @@ returns itself is ignored.
 
 ## changed-files
 
-    python3 fast_path.py gate origin/main <sha>
+    python3 tools/fast_path.py gate origin/main <sha>
 
 The source of the `gate_paths` check. `<sha>` is the recorded head
 (gate step 1), never the checkout's `HEAD`. Get it locally first: `git
@@ -208,7 +208,7 @@ the `check` run on the new head is `completed` with conclusion
 
 ## reap
 
-The hook is `python3 reap_worktrees.py --apply` (no flag: a dry run that
+The hook is `python3 tools/reap_worktrees.py --apply` (no flag: a dry run that
 removes no worktree or branch; `--no-fetch` makes the dry run offline);
 that tool implements this section, and the rules below are its
 definition. It runs `git fetch origin --prune` first, which prunes

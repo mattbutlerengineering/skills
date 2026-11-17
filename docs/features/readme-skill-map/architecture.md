@@ -41,9 +41,9 @@ with `animated-diagram` — loses below under (a).
 ```tree-claims
 # What this design edits or reads, as it stands in this worktree on 2026-10-07.
 exists: README.md
-exists: lint.py
-exists: protocol.py
-exists: cli.py
+exists: tools/lint.py
+exists: tools/protocol.py
+exists: tools/cli.py
 exists: tests/test_lint.py
 # The three architecture-diagram files below were removed in #1749 (detector D reads these claims against the tree).
 absent: skills/architecture-diagram/SKILL.md

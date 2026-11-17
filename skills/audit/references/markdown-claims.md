@@ -17,8 +17,8 @@ The tool never runs a documented command — it reads the Makefile,
 `package.json` and the script's source. Run it from the repo root, with
 the plugin checkout's path in place of the placeholder:
 
-    python3 <this skill's directory>/../../md_claims.py check [root] [path ...]
-    python3 <this skill's directory>/../../md_claims.py extract [root] [path ...]
+    python3 <this skill's directory>/../../tools/md_claims.py check [root] [path ...]
+    python3 <this skill's directory>/../../tools/md_claims.py extract [root] [path ...]
 
 `check` prints one problem per contradicted claim and
 `md-claims: N problem(s) across M doc(s)`, exiting 1 when N > 0.

@@ -63,7 +63,7 @@ Add `--all` to skip the prompts, `-a claude-code` (or another agent) to
 pick the agent, and `-g` to install for every project. The CLI copies each
 skill's folder alone, so the branch adds one support skill,
 `idea-to-prod-runtime`, holding the pipeline protocol, the factory payload
-and the root tools, and points every other skill at it. Keep it installed
+and the `tools/` scripts, and points every other skill at it. Keep it installed
 beside them. Two plugin features are absent from this install: the
 `/idea-to-prod:<skill>` names (use `/<skill>`) and the house-voice output
 style. The branch is rebuilt by `npx_bundle.py` on every release and never
@@ -200,11 +200,11 @@ conventions) live in [`docs/pipeline-protocol.md`](docs/pipeline-protocol.md).
 - [`CONTEXT.md`](CONTEXT.md) — canonical vocabulary
 - [`docs/adr/`](docs/adr/) — architecture decision records and their status
 - [`LEDGER.md`](LEDGER.md) — per-skill maturity (draft / used-once / battle-tested)
-- `python3 lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](lint.py) is the authoritative list); runs in CI on every PR and every push to main
-- `python3 kb.py drift` — instruction-file drift: dangling paths, skill and agent tables, and slash commands in `CLAUDE.md`, `AGENTS.md` and `.claude/rules` ([`kb_drift.py`](kb_drift.py)); runs in CI on every PR and every push to main
-- `python3 gates.py && python3 gates.py --selftest` — factory drift detectors (the roster is [`gates.py`](gates.py)'s module docstring); runs in CI on every PR and every push to main
-- `python3 run_tests.py` — the full offline suite, one process per test module in parallel: pipeline protocol, eval seams, and the factory tools, mostly against fixture trees plus pins on the real repo; runs in CI on every PR and every push to main (`python3 -m unittest discover tests` is the same suite serially)
-- `python3 trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
+- `python3 tools/lint.py` — structural lint of the install, router, and eval surface (the `CHECKERS` tuple in [`lint.py`](tools/lint.py) is the authoritative list); runs in CI on every PR and every push to main
+- `python3 tools/kb.py drift` — instruction-file drift: dangling paths, skill and agent tables, and slash commands in `CLAUDE.md`, `AGENTS.md` and `.claude/rules` ([`kb_drift.py`](tools/kb_drift.py)); runs in CI on every PR and every push to main
+- `python3 tools/gates.py && python3 tools/gates.py --selftest` — factory drift detectors (the roster is [`gates.py`](tools/gates.py)'s module docstring); runs in CI on every PR and every push to main
+- `python3 tools/run_tests.py` — the full offline suite, one process per test module in parallel: pipeline protocol, eval seams, and the factory tools, mostly against fixture trees plus pins on the real repo; runs in CI on every PR and every push to main (`python3 -m unittest discover tests` is the same suite serially)
+- `python3 tools/trigger_eval.py --record` — routing eval: which skill fires for each query in [`evals/routing.json`](evals/routing.json) (needs the `claude` CLI; costs real runs)
 - [`docs/output-evals.md`](docs/output-evals.md) — on-demand output evals grading skill artifacts against expectations
 
 ## License

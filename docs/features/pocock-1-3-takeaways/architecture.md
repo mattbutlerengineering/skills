@@ -32,9 +32,9 @@ ADR-0052 was written to end) and adds two skills PRD-0007 puts out of scope.
 
 ```tree-claims
 # The files this design edits, as they stand in this worktree on 2026-10-06.
-exists: protocol.py
-exists: lint.py
-exists: trigger_eval.py
+exists: tools/protocol.py
+exists: tools/lint.py
+exists: tools/trigger_eval.py
 exists: factory/templates/tools/factory/protocol.py
 exists: factory/manifest.json
 exists: tests/test_protocol_frontmatter.py

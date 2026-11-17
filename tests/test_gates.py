@@ -1762,7 +1762,7 @@ class TestLabelWiring(unittest.TestCase):
             return any(isinstance(node, ast.Constant) and node.value == ready
                        for node in ast.walk(tree))
 
-        naming = sorted(path.name for path in self.REPO.glob("*.py")
+        naming = sorted(path.name for path in (self.REPO / "tools").glob("*.py")
                         if names_it(path))
         self.assertEqual(naming, gates.declared_labels(self.REPO)[ready])
 
@@ -3468,26 +3468,26 @@ class TestLockstep(unittest.TestCase):
                                   / "workflows" / "assembler.yml")
     MAKEFILE = REPO / "Makefile"
     TEMPLATE_MAKEFILE = REPO / "factory" / "templates" / "Makefile"
-    ASSEMBLER_TARGET = ["python3 assembler.py resolve"]
+    ASSEMBLER_TARGET = ["python3 tools/assembler.py resolve"]
     COST_REPORT_WORKFLOW = (REPO / ".github" / "workflows"
                             / "cost-report.yml")
     PAYLOAD_COST_REPORT_WORKFLOW = (REPO / "factory" / "templates"
                                     / ".github" / "workflows"
                                     / "cost-report.yml")
-    COST_REPORT_TARGET = ["python3 cost_report.py report"]
+    COST_REPORT_TARGET = ["python3 tools/cost_report.py report"]
     GATE_DIGEST_WORKFLOW = (REPO / ".github" / "workflows"
                             / "gate-digest.yml")
     PAYLOAD_GATE_DIGEST_WORKFLOW = (REPO / "factory" / "templates"
                                     / ".github" / "workflows"
                                     / "gate-digest.yml")
-    GATE_DIGEST_TARGET = ["python3 gate_digest.py daily"]
+    GATE_DIGEST_TARGET = ["python3 tools/gate_digest.py daily"]
     TOOLSMITH_MINE_WORKFLOW = (REPO / ".github" / "workflows"
                                / "toolsmith-mine.yml")
     PAYLOAD_TOOLSMITH_MINE_WORKFLOW = (REPO / "factory" / "templates"
                                        / ".github" / "workflows"
                                        / "toolsmith-mine.yml")
-    TOOLSMITH_MINE_TARGET = ["python3 rejection_mining.py mine"]
-    RECORD_TARGET = ["python3 budget_guard.py record-run $(WO) $(RUN_ID)"
+    TOOLSMITH_MINE_TARGET = ["python3 tools/rejection_mining.py mine"]
+    RECORD_TARGET = ["python3 tools/budget_guard.py record-run $(WO) $(RUN_ID)"
                      " $(MODEL) $(FILE) $(OUTCOME)"]
 
     # The one canonical check set. `lint.py` is the plugin's structural lint
@@ -3496,19 +3496,19 @@ class TestLockstep(unittest.TestCase):
     # Makefile runs them. The parallel runner is root-only too, but
     # product_form respells its line to the serial discover command rather
     # than dropping it (#904).
-    CANONICAL_CHECK = ["python3 gates.py",
-                       "python3 gates.py --selftest",
-                       "python3 run_tests.py"]
-    ROOT_ONLY_CHECK = ["python3 lint.py", "python3 kb.py drift"]
+    CANONICAL_CHECK = ["python3 tools/gates.py",
+                       "python3 tools/gates.py --selftest",
+                       "python3 tools/run_tests.py"]
+    ROOT_ONLY_CHECK = ["python3 tools/lint.py", "python3 tools/kb.py drift"]
     VALIDATOR_TARGETS = {
-        "review": ["python3 validator.py review --findings $(FINDINGS)"
+        "review": ["python3 tools/validator.py review --findings $(FINDINGS)"
                    " --status $(STATUS)"],
         # One verb per leg: the label and the uncited rule (ADR-0057) are
         # the verb's, pinned in tests/test_validator_legs.py (#859).
-        "wo-merged": ["python3 validator.py pr-merged"],
-        "wo-in-progress": ["python3 validator.py claim $(ISSUE)"],
-        "wo-needs-review": ["python3 validator.py pr-opened"],
-        "wo-failed": ["python3 validator.py fail $(ISSUE)"],
+        "wo-merged": ["python3 tools/validator.py pr-merged"],
+        "wo-in-progress": ["python3 tools/validator.py claim $(ISSUE)"],
+        "wo-needs-review": ["python3 tools/validator.py pr-opened"],
+        "wo-failed": ["python3 tools/validator.py fail $(ISSUE)"],
     }
 
     def recipes(self, path, target):
@@ -3903,10 +3903,10 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
         "sweeps.yml": (
             # this-repo-only sweep tools — same reason charter-replay is
             # exempt: never mirrored into a stamped repo's CI
-            "python3 sweeps.py ensure-labels",
-            "python3 sweeps.py label-drift",
-            "python3 sweeps.py reconcile",
-            "python3 sweeps.py sentry --payload sentry.json",
+            "python3 tools/sweeps.py ensure-labels",
+            "python3 tools/sweeps.py label-drift",
+            "python3 tools/sweeps.py reconcile",
+            "python3 tools/sweeps.py sentry --payload sentry.json",
             # shell glue: names the missing-secret cause, then fetches the
             # Sentry payload with the token passed on stdin, never argv
             'if [ -z "${SENTRY_TOKEN}" ]; then',
@@ -3926,7 +3926,7 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
         "npx-branch.yml": (
             # this-repo-only, never mirrored, like sweeps: the build tool
             # ships in no stamped repo, so it has no make target
-            'python3 npx_bundle.py build "$RUNNER_TEMP/npx"',
+            'python3 tools/npx_bundle.py build "$RUNNER_TEMP/npx"',
             # git mutation glue (ADR-0120): commits and force-pushes the
             # tree the build step just wrote (the tool computes, the YAML
             # mutates)
@@ -3936,7 +3936,7 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # this-repo-only, never mirrored, like npx-branch: it publishes
             # this repo's own page, a build rather than a check, so it has
             # no make target
-            "python3 assembly_line.py . --publish _site",
+            "python3 tools/assembly_line.py . --publish _site",
         ),
         "gate-digest.yml": (
             # git mutation glue: commits the ledger rows `make gate-digest`
@@ -4037,7 +4037,7 @@ class TestSelftest(unittest.TestCase):
         change it."""
         repo = Path(__file__).resolve().parent.parent
         result = subprocess.run(
-            [sys.executable, str(repo / "gates.py"), "--selftest"],
+            [sys.executable, str(repo / "tools" / "gates.py"), "--selftest"],
             cwd=repo, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(result.stdout, "selftest: ok\n")
@@ -4049,7 +4049,7 @@ class TestSelftest(unittest.TestCase):
         for argv in (["--selftst"], ["--verbose"], ["x", "--selftest"]):
             with self.subTest(argv=argv):
                 result = subprocess.run(
-                    [sys.executable, str(repo / "gates.py"), *argv],
+                    [sys.executable, str(repo / "tools" / "gates.py"), *argv],
                     cwd=repo, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 2, result.stdout)
                 self.assertNotIn("problem(s)", result.stdout)

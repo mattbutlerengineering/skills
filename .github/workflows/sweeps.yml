@@ -53,11 +53,11 @@ jobs:
       - name: Ensure the triage labels exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 sweeps.py ensure-labels
+        run: python3 tools/sweeps.py ensure-labels
       - name: Label-drift sweep
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 sweeps.py label-drift
+        run: python3 tools/sweeps.py label-drift
 
   # ADR-0032's cross-plane reconciliation: the breakdown rows against the
   # live wo:* labels. A sweep and never a merge gate — the check is a
@@ -75,11 +75,11 @@ jobs:
       - name: Ensure the triage labels exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 sweeps.py ensure-labels
+        run: python3 tools/sweeps.py ensure-labels
       - name: Reconcile sweep
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 sweeps.py reconcile
+        run: python3 tools/sweeps.py reconcile
 
   # Skips entirely until the repo is configured for Sentry (the vars context,
   # unlike secrets, is readable in a job-level if). Every unresolved error
@@ -98,7 +98,7 @@ jobs:
       - name: Ensure the triage labels exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 sweeps.py ensure-labels
+        run: python3 tools/sweeps.py ensure-labels
       - name: Fetch unresolved Sentry issues
         env:
           SENTRY_TOKEN: ${{ secrets.SENTRY_TOKEN }}
@@ -129,4 +129,4 @@ jobs:
       - name: Stamp Sentry intake issues
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: python3 sweeps.py sentry --payload sentry.json
+        run: python3 tools/sweeps.py sentry --payload sentry.json

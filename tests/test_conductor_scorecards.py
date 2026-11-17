@@ -276,8 +276,8 @@ class TestConductClosesWithARetro(unittest.TestCase):
     def test_close_ends_by_reading_the_trend_and_the_calibration(self):
         text = self.text()
         self.assertIn("### 7. Read the batch back", text)
-        self.assertIn("python3 conductor.py scorecards 5", text)
-        self.assertIn("python3 conductor.py calibrate", text)
+        self.assertIn("python3 tools/conductor.py scorecards 5", text)
+        self.assertIn("python3 tools/conductor.py calibrate", text)
         self.assertIn("name the metric that moved", text)
 
     def test_the_retro_names_where_each_finding_goes(self):

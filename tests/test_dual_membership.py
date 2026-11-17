@@ -3,7 +3,7 @@
 ADR-0091 records which mirrored modules root-only tools import, and the
 one mirrored module that imports a root-only tool. Three earlier ADRs
 quoted that set by hand and every number drifted. This test derives it
-from the tree (an AST walk over every root *.py against
+from the tree (an AST walk over every tools/*.py against
 factory_init.MIRRORS) and pins it, so a change to the set fails here
 and has to be recorded rather than discovered by the next review.
 """
@@ -14,6 +14,7 @@ from pathlib import Path
 import factory_init
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+TOOLS = "tools"
 
 # ADR-0091's table as (root-only importer, mirrored module) pairs:
 # 63 pairs over nine mirrored modules (ADR-0097 added fast_path to the
@@ -67,7 +68,7 @@ MIRRORED_IMPORTS_ROOT_ONLY = frozenset({("conductor_merge", "factory_init")})
 def mirrored_modules():
     """Module names of the root .py files MIRRORS ships into the payload."""
     return {Path(name).stem for name, _, _ in factory_init.MIRRORS
-            if name.endswith(".py") and "/" not in name}
+            if name.endswith(".py") and name.startswith(TOOLS + "/")}
 
 
 def sibling_imports(path, modules):
@@ -85,7 +86,7 @@ def sibling_imports(path, modules):
 def crossing_pairs():
     """(importer, imported) pairs that cross the mirror boundary, split
     by direction: root-only -> mirrored, and mirrored -> root-only."""
-    paths = sorted(REPO_ROOT.glob("*.py"))
+    paths = sorted((REPO_ROOT / TOOLS).glob("*.py"))
     modules = {path.stem for path in paths}
     mirrored = mirrored_modules()
     inward, outward = set(), set()
@@ -104,7 +105,7 @@ class DualMembershipPinned(unittest.TestCase):
 
     def test_every_mirrored_source_is_a_root_file(self):
         missing = sorted(m for m in mirrored_modules()
-                         if not (REPO_ROOT / f"{m}.py").is_file())
+                         if not (REPO_ROOT / TOOLS / f"{m}.py").is_file())
         self.assertEqual(missing, [])
 
     def test_root_only_tools_import_exactly_the_pinned_mirrored_modules(self):

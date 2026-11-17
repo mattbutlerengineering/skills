@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "tools"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fake_gh import FakeGh  # noqa: E402
@@ -28,7 +28,7 @@ import git_repo  # noqa: E402
 # Loaded by path: the stdlib has a `trace` module, and a plain import
 # would take whichever one sys.path or sys.modules reached first.
 _SPEC = importlib.util.spec_from_file_location("trace_view",
-                                               ROOT / "trace.py")
+                                               ROOT / "tools" / "trace.py")
 trace_view = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(trace_view)
 
@@ -410,7 +410,7 @@ class TestCli(Repo):
     def cli(self, *argv):
         env = {**os.environ, "CI": "true"}
         return subprocess.run(
-            [sys.executable, str(ROOT / "trace.py"), *argv,
+            [sys.executable, str(ROOT / "tools" / "trace.py"), *argv,
              "--root", str(self.root)],
             capture_output=True, text=True, env=env)
 

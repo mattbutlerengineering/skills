@@ -59,7 +59,7 @@ jobs:
           args=(--model "$MODEL" --record)
           if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
           if [ "$CONTROL" = "true" ]; then args+=(--control); fi
-          python3 charter_replay.py "${args[@]}"
+          python3 tools/charter_replay.py "${args[@]}"
       - name: Upload the replay snapshot
         if: always()
         uses: actions/upload-artifact@v4

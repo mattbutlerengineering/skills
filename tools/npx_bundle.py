@@ -5,7 +5,7 @@
 The third-party skills CLI (`npx skills add`) installs a skill by
 copying its folder alone out of a clone it then deletes (ADR-0120).
 Most skills here read the plugin root: the pipeline protocol, CONTEXT.md,
-factory/ and the root tools. So the branch adds one more skill,
+factory/ and the tools/ scripts. So the branch adds one more skill,
 `idea-to-prod-runtime`, holding those files at their root-relative
 paths, and rewrites every skill's plugin-root path to name that sibling
 folder, which installs beside it. main never holds the copy; the
@@ -31,11 +31,12 @@ RUNTIME = "idea-to-prod-runtime"
 LABEL = "npx-bundle"
 NOTE_HEADING = "## Installed by the skills CLI"
 
-# What the runtime holds: every root Python tool, the root files a skill
+# What the runtime holds: every Python tool under tools/, the root files a skill
 # or tool reads, and the payload trees. Paths keep their root-relative
 # shape, because the tools find their payload beside themselves.
-ROOT_FILES = frozenset({"CONTEXT.md", "LICENSE", "NOTICE", "assembly_line.html",
-                        "dashboard.html"})
+ROOT_FILES = frozenset({"CONTEXT.md", "LICENSE", "NOTICE"})
+TOOLS_DIR = "tools/"
+TOOL_SUFFIXES = (".py", ".html")
 NESTED_FILES = frozenset({".claude-plugin/plugin.json",
                           "docs/pipeline-protocol.md", "docs/standards.json"})
 TREES = ("factory/", "licenses/", "output-styles/", "vendor/")
@@ -56,9 +57,9 @@ NOTE = f"""
 
 This copy came from this repo's `npx` branch. The plugin root these
 steps name is the sibling folder `../{RUNTIME}/`, which holds the
-pipeline protocol, `CONTEXT.md`, `factory/` and every root tool. Where a
+pipeline protocol, `CONTEXT.md`, `factory/` and every tool under `tools/`. Where a
 step runs a tool from the plugin root or the factory repo checkout, run
-`python3 <this skill's directory>/../{RUNTIME}/<tool>.py`. A stamped
+`python3 <this skill's directory>/../{RUNTIME}/tools/<tool>.py`. A stamped
 repo's `tools/factory/` copy still wins wherever a step says so. Two
 plugin features are absent: the `/idea-to-prod:<skill>` names (use
 `/<skill>`) and the house-voice output style.
@@ -76,8 +77,8 @@ metadata:
 Built from idea-to-prod {version}. The skills CLI copies each skill's
 folder alone, so this folder carries the plugin root the other skills
 read. Its files keep their root-relative paths: `docs/pipeline-protocol.md`,
-`CONTEXT.md`, `factory/`, `.claude-plugin/plugin.json` and every root
-`*.py` tool. Nothing here is meant to be invoked as a skill.
+`CONTEXT.md`, `factory/`, `.claude-plugin/plugin.json` and every
+`tools/*.py` tool. Nothing here is meant to be invoked as a skill.
 """
 
 BRANCH_README = """# idea-to-prod, as installed by the skills CLI
@@ -111,8 +112,10 @@ def rewrite(text, slugs):
 def bundled(tracked):
     """The tracked root-relative paths the runtime holds, sorted."""
     return sorted(path for path in tracked
-                  if ("/" not in path
-                      and (path.endswith(".py") or path in ROOT_FILES))
+                  if path in ROOT_FILES
+                  or (path.startswith(TOOLS_DIR)
+                      and "/" not in path[len(TOOLS_DIR):]
+                      and path.endswith(TOOL_SUFFIXES))
                   or path in NESTED_FILES or path.startswith(TREES))
 
 
@@ -250,7 +253,7 @@ def main(argv):
     if len(argv) != 2 or argv[0] != "build":
         print(__doc__.strip())
         return 2
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parent.parent
     tracked, problem = tracked_files(root)
     problems = [problem] if problem else build(root, Path(argv[1]), tracked)
     return report(LABEL, problems)

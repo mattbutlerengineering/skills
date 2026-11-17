@@ -86,9 +86,9 @@ def product_form(command):
     serial: the root's parallel runner (run_tests.py) is root-only, so
     its line becomes the discover command a stamped repo always ran."""
     for name, rel, _ in MIRRORS:
-        if "/" not in name and rel != name:
+        if rel != name:
             command = command.replace(f"python3 {name}", f"python3 {rel}")
-    command = command.replace("python3 run_tests.py",
+    command = command.replace("python3 tools/run_tests.py",
                               "python3 -m unittest discover tests")
     return command.replace("unittest discover tests",
                            "unittest discover -q tests")
@@ -118,7 +118,8 @@ PRODUCT_MAKEFILE_HEADER = (
 # instruction-file drift check (kb.py, ADR-0078) have no product-repo
 # counterpart — neither tool is in MIRRORS — so product_makefile drops
 # them rather than respelling them.
-ROOT_ONLY_LINES = ("\tpython3 lint.py\n", "\tpython3 kb.py drift\n")
+ROOT_ONLY_LINES = ("\tpython3 tools/lint.py\n",
+                   "\tpython3 tools/kb.py drift\n")
 
 
 def product_makefile(text):
@@ -248,39 +249,39 @@ def product_codeowners(text):
 # sibling they import already ships. conductor_merge reaches the
 # root-only factory_init only in this repo, behind factory_source.
 MIRRORS = (
-    ("gates.py", "tools/factory/gates.py", identity),
-    ("gates_selftest.py", "tools/factory/gates_selftest.py", identity),
-    ("protocol.py", "tools/factory/protocol.py", identity),
-    ("knowledge_plane.py", "tools/factory/knowledge_plane.py", identity),
-    ("cli.py", "tools/factory/cli.py", identity),
-    ("factory_config.py", "tools/factory/factory_config.py", identity),
-    ("cost_ledger.py", "tools/factory/cost_ledger.py", identity),
-    ("label_sync.py", "tools/factory/label_sync.py", identity),
-    ("validator.py", "tools/factory/validator.py", identity),
-    ("assembler.py", "tools/factory/assembler.py", identity),
-    ("budget_guard.py", "tools/factory/budget_guard.py", identity),
-    ("handoff.py", "tools/factory/handoff.py", identity),
-    ("orientation_pack.py", "tools/factory/orientation_pack.py", identity),
-    ("cost_report.py", "tools/factory/cost_report.py", identity),
-    ("human_gates.py", "tools/factory/human_gates.py", identity),
-    ("gate_digest.py", "tools/factory/gate_digest.py", identity),
-    ("rejection_mining.py", "tools/factory/rejection_mining.py", identity),
-    ("work_queue.py", "tools/factory/work_queue.py", identity),
-    ("standards_index.py", "tools/factory/standards_index.py", identity),
-    ("conductor.py", "tools/factory/conductor.py", identity),
-    ("conductor_plan.py", "tools/factory/conductor_plan.py", identity),
-    ("conductor_flow.py", "tools/factory/conductor_flow.py", identity),
-    ("conductor_run.py", "tools/factory/conductor_run.py", identity),
-    ("conductor_merge.py", "tools/factory/conductor_merge.py", identity),
-    ("conductor_close.py", "tools/factory/conductor_close.py", identity),
-    ("conductor_consent.py", "tools/factory/conductor_consent.py",
+    ("tools/gates.py", "tools/factory/gates.py", identity),
+    ("tools/gates_selftest.py", "tools/factory/gates_selftest.py", identity),
+    ("tools/protocol.py", "tools/factory/protocol.py", identity),
+    ("tools/knowledge_plane.py", "tools/factory/knowledge_plane.py", identity),
+    ("tools/cli.py", "tools/factory/cli.py", identity),
+    ("tools/factory_config.py", "tools/factory/factory_config.py", identity),
+    ("tools/cost_ledger.py", "tools/factory/cost_ledger.py", identity),
+    ("tools/label_sync.py", "tools/factory/label_sync.py", identity),
+    ("tools/validator.py", "tools/factory/validator.py", identity),
+    ("tools/assembler.py", "tools/factory/assembler.py", identity),
+    ("tools/budget_guard.py", "tools/factory/budget_guard.py", identity),
+    ("tools/handoff.py", "tools/factory/handoff.py", identity),
+    ("tools/orientation_pack.py", "tools/factory/orientation_pack.py", identity),
+    ("tools/cost_report.py", "tools/factory/cost_report.py", identity),
+    ("tools/human_gates.py", "tools/factory/human_gates.py", identity),
+    ("tools/gate_digest.py", "tools/factory/gate_digest.py", identity),
+    ("tools/rejection_mining.py", "tools/factory/rejection_mining.py", identity),
+    ("tools/work_queue.py", "tools/factory/work_queue.py", identity),
+    ("tools/standards_index.py", "tools/factory/standards_index.py", identity),
+    ("tools/conductor.py", "tools/factory/conductor.py", identity),
+    ("tools/conductor_plan.py", "tools/factory/conductor_plan.py", identity),
+    ("tools/conductor_flow.py", "tools/factory/conductor_flow.py", identity),
+    ("tools/conductor_run.py", "tools/factory/conductor_run.py", identity),
+    ("tools/conductor_merge.py", "tools/factory/conductor_merge.py", identity),
+    ("tools/conductor_close.py", "tools/factory/conductor_close.py", identity),
+    ("tools/conductor_consent.py", "tools/factory/conductor_consent.py",
      identity),
-    ("conductor_calibrate.py", "tools/factory/conductor_calibrate.py",
+    ("tools/conductor_calibrate.py", "tools/factory/conductor_calibrate.py",
      identity),
-    ("conductor_spend.py", "tools/factory/conductor_spend.py", identity),
-    ("conductor_next.py", "tools/factory/conductor_next.py", identity),
-    ("conductor_landed.py", "tools/factory/conductor_landed.py", identity),
-    ("trace.py", "tools/factory/trace.py", identity),
+    ("tools/conductor_spend.py", "tools/factory/conductor_spend.py", identity),
+    ("tools/conductor_next.py", "tools/factory/conductor_next.py", identity),
+    ("tools/conductor_landed.py", "tools/factory/conductor_landed.py", identity),
+    ("tools/trace.py", "tools/factory/trace.py", identity),
     (".github/workflows/validator.yml",
      ".github/workflows/validator.yml", identity),
     (".github/workflows/assembler.yml",
@@ -340,7 +341,7 @@ def update_manifest(root):
     plugin_meta = root / ".claude-plugin" / "plugin.json"
     if not plugin_meta.is_file():
         problems.append("factory-init: missing .claude-plugin/plugin.json")
-    problems += [f"factory-init: missing {name} at repo root"
+    problems += [f"factory-init: missing {name}"
                  for name, _, _ in MIRRORS if not (root / name).is_file()]
     if problems:
         return problems
@@ -738,7 +739,7 @@ def _report_adr_skips(source, target):
 
 
 def main(argv):
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parent.parent
     stamping, updating = _target(argv, "stamp"), _target(argv, "update")
     keeping = (Path(argv[2]) if argv[:2] == ["stamp", "--keep-existing"]
                and len(argv) == 3 else None)

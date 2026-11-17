@@ -21,7 +21,7 @@ Work these steps in order.
 Run the shipped tool — it lives two directories above this skill's
 directory in the same checkout:
 
-    python3 <this skill's directory>/../../assembly_line.py [repo root]
+    python3 <this skill's directory>/../../tools/assembly_line.py [repo root]
 
 The repo root defaults to the working directory. The tool writes the
 page to a new file in the system temp directory, outside the repo's

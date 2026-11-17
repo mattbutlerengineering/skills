@@ -59,9 +59,10 @@ class TestRewrite(unittest.TestCase):
 
 
 class TestBundled(unittest.TestCase):
-    def test_the_runtime_takes_the_root_tools_and_payload_only(self):
-        tracked = ["board.py", "CONTEXT.md", "LICENSE", "NOTICE",
-                   "dashboard.html", "assembly_line.html",
+    def test_the_runtime_takes_the_tools_dir_and_payload_only(self):
+        tracked = ["tools/board.py", "CONTEXT.md", "LICENSE", "NOTICE",
+                   "tools/dashboard.html", "tools/assembly_line.html",
+                   "tools/factory/gates.py", "board.py", "stray.html",
                    ".claude-plugin/plugin.json",
                    ".claude-plugin/marketplace.json",
                    "factory/templates/Makefile", "factory/agents/a.md",
@@ -73,11 +74,11 @@ class TestBundled(unittest.TestCase):
                    ".github/workflows/validator.yml", "README.md"]
         self.assertEqual(npx_bundle.bundled(tracked), [
             ".claude-plugin/plugin.json", "CONTEXT.md", "LICENSE", "NOTICE",
-            "assembly_line.html", "board.py", "dashboard.html",
             "docs/pipeline-protocol.md", "docs/standards.json",
             "factory/agents/a.md", "factory/templates/Makefile",
             "licenses/x.txt", "output-styles/house-voice.md",
-            "vendor/three/three.core.js"])
+            "tools/assembly_line.html", "tools/board.py",
+            "tools/dashboard.html", "vendor/three/three.core.js"])
 
 
 def write(path, text):
@@ -101,13 +102,13 @@ class FixtureTest(unittest.TestCase):
         write(self.root / "CONTEXT.md", "terms\n")
         write(self.root / "LICENSE", "license\n")
         write(self.root / "docs" / "pipeline-protocol.md", "spec\n")
-        write(self.root / "kb.py", "print('kb')\n")
+        write(self.root / "tools" / "kb.py", "print('kb')\n")
         write(self.root / "skills" / "idea" / "SKILL.md",
               skill("idea", "Read `../../docs/pipeline-protocol.md`."))
         write(self.root / "skills" / "lean" / "SKILL.md",
               skill("lean", "Argue for less."))
         write(self.root / "skills" / "lean" / "references" / "ladder.md",
-              "Run `<this skill's directory>/../../kb.py`.\n")
+              "Run `<this skill's directory>/../../tools/kb.py`.\n")
 
     def tracked(self):
         return sorted(path.relative_to(self.root).as_posix()
@@ -132,7 +133,7 @@ class TestBuild(FixtureTest):
         self.build()
         text = (self.out / "skills" / "lean" / "references"
                 / "ladder.md").read_text(encoding="utf-8")
-        self.assertIn(f"/../{RUNTIME}/kb.py", text)
+        self.assertIn(f"/../{RUNTIME}/tools/kb.py", text)
 
     def test_every_skill_gets_the_install_note_once(self):
         self.build()
@@ -144,7 +145,7 @@ class TestBuild(FixtureTest):
     def test_the_runtime_holds_the_root_files_at_their_root_paths(self):
         self.build()
         runtime = self.out / "skills" / RUNTIME
-        for rel in ("kb.py", "CONTEXT.md", "docs/pipeline-protocol.md",
+        for rel in ("tools/kb.py", "CONTEXT.md", "docs/pipeline-protocol.md",
                     ".claude-plugin/plugin.json"):
             self.assertTrue((runtime / rel).is_file(), rel)
 
@@ -271,7 +272,7 @@ class TestRealRepo(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             target = git_repo.init(Path(temp) / "product")
             run = subprocess.run(
-                [sys.executable, str(runtime / "factory_init.py"), "stamp",
+                [sys.executable, str(runtime / "tools" / "factory_init.py"), "stamp",
                  str(target)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertTrue((target / "tools" / "factory" / "gates.py")
@@ -280,7 +281,7 @@ class TestRealRepo(unittest.TestCase):
     def test_the_bundled_conductor_reports_its_version(self):
         runtime = self.out / "skills" / RUNTIME
         run = subprocess.run(
-            [sys.executable, str(runtime / "conductor.py"), "--version"],
+            [sys.executable, str(runtime / "tools" / "conductor.py"), "--version"],
             capture_output=True, text=True, cwd=runtime)
         self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
 
@@ -290,7 +291,7 @@ class TestRealRepo(unittest.TestCase):
             (Path(temp) / "docs").mkdir()
             page = Path(temp) / "page.html"
             run = subprocess.run(
-                [sys.executable, str(runtime / "assembly_line.py"), temp,
+                [sys.executable, str(runtime / "tools" / "assembly_line.py"), temp,
                  "--out", str(page)], capture_output=True, text=True)
             self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
             self.assertNotIn("__THREE_", page.read_text(encoding="utf-8"))

@@ -120,12 +120,12 @@ And underneath, an unusually strict verification culture for an agent tool
 
 Much of rea's discipline is already here, often stricter:
 
-- Evidence honesty in verification: gate detector H in [`gates.py`](../../gates.py)
+- Evidence honesty in verification: gate detector H in [`gates.py`](../../tools/gates.py)
   fails a verdict that leads with PASS without fenced output, and
   [ADR-0063](../adr/0063-a-terminal-verdict-requires-having-looked.md) forbids a
   terminal verdict without having looked. The verify skill already requires a
   "Not verified" section.
-- Eval isolation: [`trigger_eval.py`](../../trigger_eval.py) runs each query
+- Eval isolation: [`trigger_eval.py`](../../tools/trigger_eval.py) runs each query
   in a fresh temp project with `--setting-sources project`, the equivalent of
   rea's disposable HOME.
 - Negative routing cases: [`evals/routing.json`](../../evals/routing.json)
@@ -153,7 +153,7 @@ above).
      the prompt, and checks each cited path and line exists and contains the
      quoted text. Missing, extra, duplicate or uncited claims fail. Scenarios
      without an oracle report `not_assessed`.
-   - *Lands:* a new record kind in [`eval_schema.py`](../../eval_schema.py)
+   - *Lands:* a new record kind in [`eval_schema.py`](../../tools/eval_schema.py)
      (the eval seam owns eval shapes), oracle fixtures under `evals/fixtures/`,
      and [`docs/output-evals.md`](../output-evals.md). Today's grader there is
      a model judging expectations; this adds a mode that cannot be talked into
@@ -210,7 +210,7 @@ above).
      `.claude-plugin/plugin.json`'s version unchanged against the base; (b)
      `doctor` reports the installed plugin cache version beside the repo
      version and prints the reinstall command when they differ.
-   - *Lands:* [`gates.py`](../../gates.py) (or `lint.py` with a base ref) and
+   - *Lands:* [`gates.py`](../../tools/gates.py) (or `lint.py` with a base ref) and
      the `doctor` skill. Mind the parallel-PR case: several green PRs each
      bumping to the same version collide; the check should accept "version
      greater than base", not an exact value.
@@ -221,7 +221,7 @@ above).
    - *Adopt:* rea's setup shows every write before applying it. Add a
      read-only `stamp --plan <target>` that prints each file it would create,
      each it would keep, and each collision that would refuse the stamp.
-   - *Lands:* [`factory_init.py`](../../factory_init.py) and the
+   - *Lands:* [`factory_init.py`](../../tools/factory_init.py) and the
      `factory-init` skill.
    - *Effort:* S. *Confidence:* medium-low — stamp already refuses overwrites,
      so the gain is predictability in consumer repos, not safety.

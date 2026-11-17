@@ -75,7 +75,7 @@ way.
 
 ## Plan the batch, never by hand
 
-    python3 work_queue.py plan          # or tools/factory/work_queue.py
+    python3 tools/work_queue.py plan          # or tools/factory/work_queue.py
 
 This replaces Phase 1's issue list, priority sort and `max_workers`. The
 planner owns every selection rule: eligibility across both planes,
@@ -195,7 +195,7 @@ overlap rather than pretending the batch was disjoint.
 
 Then record that spend, once per work order:
 
-    python3 budget_guard.py record <WO-####> <run-id> <model> <tokens> <cost>
+    python3 tools/budget_guard.py record <WO-####> <run-id> <model> <tokens> <cost>
 
 The numbers come from the harness's own report of that worker's usage.
 Never estimate them, never round them to something plausible, and never

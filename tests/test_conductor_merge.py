@@ -234,7 +234,7 @@ SEED = {".gitattributes": "docs/factory/costs.jsonl merge=union\n",
         ".claude-plugin/plugin.json": '{\n  "name": "p",\n'
                                       '  "version": "0.7.3"\n}\n',
         "factory/manifest.json": '{"files": "seed"}\n',
-        "README.md": "readme\n", "factory_init.py": "# stand-in\n",
+        "README.md": "readme\n", "tools/factory_init.py": "# stand-in\n",
         "docs/adr/README.md": "# ADRs\n\nThe index.\n\n- ADR-0001 a\n"
                               "- ADR-0002 b\n- ADR-0003 c\n"}
 GREEN_RUN = {"name": "validate", "status": "completed",
@@ -361,7 +361,7 @@ class TurnCase(unittest.TestCase):
                 raise subprocess.CalledProcessError(
                     2, args, stderr="make: *** [check] Error 1\n")
             if "update-manifest" in args:
-                (Path(args[1]).parent / "factory/manifest.json").write_text(
+                (Path(args[1]).parent.parent / "factory/manifest.json").write_text(
                     '{"files": "regenerated"}\n')
             return subprocess.CompletedProcess(args, 0, "", "")
         return run

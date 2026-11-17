@@ -55,13 +55,13 @@ nothing.
 
 ```tree-claims
 # What this design reads or edits, as it stands in this worktree on 2026-10-08.
-exists: protocol.py
-exists: cli.py
-exists: factory_config.py
-exists: factory_init.py
-exists: board.py
-exists: lint.py
-exists: gates.py
+exists: tools/protocol.py
+exists: tools/cli.py
+exists: tools/factory_config.py
+exists: tools/factory_init.py
+exists: tools/board.py
+exists: tools/lint.py
+exists: tools/gates.py
 exists: skills/ship/SKILL.md
 exists: skills/ship/TEMPLATE.md
 exists: skills/next/SKILL.md

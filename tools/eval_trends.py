@@ -586,7 +586,7 @@ def main(argv):
     records says so in one line), 1 with problems, 2 on a usage error."""
     if len(argv) > 1 or any(a.startswith("-") for a in argv):
         return _usage(f"{' '.join(argv)!r} — unknown argument")
-    root = Path(argv[0]) if argv else Path(__file__).resolve().parent
+    root = Path(argv[0]) if argv else Path(__file__).resolve().parent.parent
     if not root.is_dir():
         return _usage(f"{str(root)!r} is not a directory")
     rows, problems = load_rows(root)

@@ -6,8 +6,8 @@ names them and points here; read a tool's entry before running it.
 On demand only (real model runs, costs money, never CI; all three need
 the `claude` CLI):
 
-- `python3 trigger_eval.py` — routing eval
-- `python3 charter_replay.py` — charter regression suite: golden fixture
+- `python3 tools/trigger_eval.py` — routing eval
+- `python3 tools/charter_replay.py` — charter regression suite: golden fixture
   work orders replayed against the role charters. Its scoring seam is pure
   and injected, so CI covers degradation detection offline with recorded
   transcripts; only the live replay costs money. `--control` also replays
@@ -28,7 +28,7 @@ the `claude` CLI):
 Also on demand, but free and needing nothing installed — a review
 pre-pass, deliberately **not** a gate:
 
-- `python3 one_owner.py` — which facts this repo's own Python modules
+- `python3 tools/one_owner.py` — which facts this repo's own Python modules
   state twice (the same value in two modules, or two functions reading
   the same payload keys), as `one-owner:` problem strings. It is outside
   `make check` and outside every workflow, so a finding never colours
@@ -36,7 +36,7 @@ pre-pass, deliberately **not** a gate:
   recorded with a `# one-owner:` marker at the definition it excuses
   (ADR-0061), and the pass re-derives that carve-out in both directions
   on every run.
-- `python3 decompose_signals.py` — Decompose outcome signals (re-plan,
+- `python3 tools/decompose_signals.py` — Decompose outcome signals (re-plan,
   design gaps routed to Architect, review-traced findings) per run and in
   aggregate, read from the git refs the clone already holds, each
   boundary labelled observed or inferred (ADR-0109). Free and outside
@@ -45,7 +45,7 @@ pre-pass, deliberately **not** a gate:
   '+refs/pull/*/head:refs/remotes/pr/*'`. `--record` writes the result
   append-only to `evals/results/decompose-signals-<date>[-N].json`, on a
   clean `docs/` only; factory evidence, never LEDGER evidence.
-- `python3 eval_trends.py` — a per-surface pass-rate trend view over the
+- `python3 tools/eval_trends.py` — a per-surface pass-rate trend view over the
   records the repo already holds (`evals/results/`, `plugin-evals/records/`),
   grouped by comparable suite and case set, each rate with a Wilson 95
   percent interval, and cost per pass where a plugin record carries a cost
@@ -56,14 +56,14 @@ pre-pass, deliberately **not** a gate:
   record, 2 distinct days) it prints an inventory and `REFUSED` lines in
   place of a trend, and a refusal exits 0 (it is data); only a malformed
   record exits 1. It measures recorded history only and moves no LEDGER
-  maturity. `python3 factory.py eval-trends` is the same tool.
-- `python3 size_band_calibration.py` — each S/M/L band's past cost
+  maturity. `python3 tools/factory.py eval-trends` is the same tool.
+- `python3 tools/size_band_calibration.py` — each S/M/L band's past cost
   error against its budget, from the cost ledger joined at read time to
   the breakdown row's `size:`, beside its cost and re-plan rate. Free,
   outside every gate and making no network call, like
   `decompose_signals.py`. It refuses a band below the calibrate floor and
   says so, and excludes unmetered rows with a count, never an estimate.
-- `python3 decompose_lessons.py` — the Decompose lessons ledger (ADR-0113):
+- `python3 tools/decompose_lessons.py` — the Decompose lessons ledger (ADR-0113):
   contrast pairs of a hit run and a clean run, from the three outcome
   signals only, collapsed to voted, sourced lessons in
   `docs/factory/decompose-lessons.jsonl`, plus a treated-versus-untreated
@@ -72,7 +72,7 @@ pre-pass, deliberately **not** a gate:
   `update` is the one writer and the Owner runs it. No command takes
   lesson text from a person, and the tool ships no lesson.
   <!-- drift-ignore: docs/factory/decompose-lessons.jsonl -->
-- `python3 decompose_grade.py <breakdown.md> <architecture.md> [<prd.md>]` —
+- `python3 tools/decompose_grade.py <breakdown.md> <architecture.md> [<prd.md>]` —
   scores a produced Decompose breakdown against the architecture it was
   drafted from and prints one line per defect (a component no item names, a
   dangling `Blocked by`, an uncheckable `Accept` line, an item spanning more
@@ -82,23 +82,23 @@ pre-pass, deliberately **not** a gate:
   not a retroactive audit of shipped runs. Its harness counterpart,
   `plugin-evals/decompose/`, is authored and has never been run; there is no
   LEDGER change.
-- `python3 voice_grade.py <reply.md> [<reply.md> ...]` — prints each
+- `python3 tools/voice_grade.py <reply.md> [<reply.md> ...]` — prints each
   reply's proxy token count and one line per house-voice slop pattern
   found outside code, exit 0 clean, 1 on any slop, 2 on bad input
   (ADR-0119). Free and offline, outside every gate and outside `make
   check`, like the three above. The count is a proxy, not Claude's
   tokenizer: it is valid only for comparing two replies to the same
-  prompt. `python3 factory.py voice-grade` is the same tool.
-- `python3 svg_check.py <file.svg> [--embed-width PX]` — refuses a DTD or
+  prompt. `python3 tools/factory.py voice-grade` is the same tool.
+- `python3 tools/svg_check.py <file.svg> [--embed-width PX]` — refuses a DTD or
   entity without expanding it, names every duplicate id, dangling
   `url(#…)` or `href`, external link and missing root `width`/`height` in
   a diagram SVG, and reports its smallest text size at the embed width
   (default 830px). Exit 0 clean, 1 with defects, 2 when the file was not
   checked. Free and offline, outside every gate and outside `make check`,
   like the four above. The size is a report, never a failure.
-  `animated-diagram`'s step 7 runs it. `python3 factory.py svg-check` is the
+  `animated-diagram`'s step 7 runs it. `python3 tools/factory.py svg-check` is the
   same tool.
-- `python3 reap_worktrees.py [--apply | --no-fetch]` — reaps merged, idle
+- `python3 tools/reap_worktrees.py [--apply | --no-fetch]` — reaps merged, idle
   worktrees under `.claude/worktrees/` by the four tests in
   `.claude/implement-queue.md` `## reap`. A dry run unless `--apply`: it
   removes no worktree or branch, but it fetches and prunes remote-tracking

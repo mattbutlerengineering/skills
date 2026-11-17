@@ -29,7 +29,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Build the branch tree
-        run: python3 npx_bundle.py build "$RUNNER_TEMP/npx"
+        run: python3 tools/npx_bundle.py build "$RUNNER_TEMP/npx"
       - name: Force-push it to the npx branch
         working-directory: ${{ runner.temp }}/npx
         env:

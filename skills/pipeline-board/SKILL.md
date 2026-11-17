@@ -32,7 +32,7 @@ Work these steps in order.
 Run the shipped tool — it lives two directories above this skill's
 directory in the same checkout:
 
-    python3 <this skill's directory>/../../board.py [repo root]
+    python3 <this skill's directory>/../../tools/board.py [repo root]
 
 The repo root defaults to the working directory. The tool prints one
 JSON document: `generated`, `repo`, `runs` (pre-sorted; each with

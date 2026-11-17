@@ -54,10 +54,10 @@ exists: docs/factory/improvement-routine.md
 exists: docs/factory/queue-groomer-routine.md
 exists: docs/factory/retro-reflect-routine.md
 exists: evals/README.md
-exists: gates.py
-exists: lint.py
-exists: protocol.py
-exists: orientation_pack.py
+exists: tools/gates.py
+exists: tools/lint.py
+exists: tools/protocol.py
+exists: tools/orientation_pack.py
 exists: tests/test_lint.py
 exists: tests/test_protocol_conformance.py
 exists: docs/adr/README.md

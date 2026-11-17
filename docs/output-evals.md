@@ -10,7 +10,7 @@ there is no always-on gate. Trigger/routing evals are separate: see
 
 - `evals/output/<slug>.json` — the eval set for one skill:
   `{"skill_name": "<slug>", "evals": [...]}`. The required per-record
-  fields are owned by [`eval_schema.py`](../eval_schema.py)
+  fields are owned by [`eval_schema.py`](../tools/eval_schema.py)
   (`OUTPUT_FIELDS`); the structural lint validates every set through it.
   Each expectation is an objectively verifiable statement about the
   produced artifact or response.

@@ -84,7 +84,7 @@ Check in order; the first hit sets the run mode.
 5. The latest `check` runs on `main`.
 6. The issue queue, `gh issue list --state open` (ADR-0083).
 7. `docs/backlog.md`, the advisory seed inbox (ADR-0029).
-8. `python3 one_owner.py` — read-only intel. Its findings are report
+8. `python3 tools/one_owner.py` — read-only intel. Its findings are report
    material only: ADR-0061 makes each one a question for a human, so
    none is ever this routine's pick.
 
@@ -94,8 +94,8 @@ Run the verify suite at the repo root, exactly:
 
 ```
 python3 -m unittest discover tests
-python3 lint.py
-python3 gates.py && python3 gates.py --selftest
+python3 tools/lint.py
+python3 tools/gates.py && python3 tools/gates.py --selftest
 ```
 
 Classify `main`: **green**; **red-on-main**; or **environment-broken**

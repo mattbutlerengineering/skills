@@ -9,7 +9,7 @@
 # the template payload, and factory/templates/Makefile is GENERATED from
 # this file by factory_init.py's product_makefile transform (tools under
 # tools/factory/, no plugin lint, no instruction-file drift check) — edit
-# here, then run `python3 factory_init.py update-manifest`, never edit
+# here, then run `python3 tools/factory_init.py update-manifest`, never edit
 # the twin; tests/test_gates.py::TestLockstep pins the command sets.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
@@ -39,52 +39,52 @@ EVENT ?= pr-event.json
 PLAYWRIGHT_VERSION = 1.62.1
 
 check:
-	python3 lint.py
-	python3 kb.py drift
-	python3 gates.py
-	python3 gates.py --selftest
-	python3 run_tests.py
+	python3 tools/lint.py
+	python3 tools/kb.py drift
+	python3 tools/gates.py
+	python3 tools/gates.py --selftest
+	python3 tools/run_tests.py
 
 review:
-	python3 validator.py review --findings $(FINDINGS) --status $(STATUS)
+	python3 tools/validator.py review --findings $(FINDINGS) --status $(STATUS)
 
 # The dispatch shim (WO-0030): the synthetic pull_request event the
 # PR-shaped legs read, for a run dispatched against a PR number because
 # GitHub sent no event of its own.
 pr-event:
-	python3 validator.py pr-event --pr $(PR) --out $(EVENT)
+	python3 tools/validator.py pr-event --pr $(PR) --out $(EVENT)
 
 wo-merged:
-	python3 validator.py pr-merged
+	python3 tools/validator.py pr-merged
 
 wo-in-progress:
-	python3 validator.py claim $(ISSUE)
+	python3 tools/validator.py claim $(ISSUE)
 
 wo-needs-review:
-	python3 validator.py pr-opened
+	python3 tools/validator.py pr-opened
 
 wo-failed:
-	python3 validator.py fail $(ISSUE)
+	python3 tools/validator.py fail $(ISSUE)
 
 # Set by the assembler workflow's record step: the dispatched run's spend,
 # machine-written to the append-only cost ledger (issue #222; ADR-0034).
 wo-record:
-	python3 budget_guard.py record-run $(WO) $(RUN_ID) $(MODEL) $(FILE) $(OUTCOME)
+	python3 tools/budget_guard.py record-run $(WO) $(RUN_ID) $(MODEL) $(FILE) $(OUTCOME)
 
 assembler:
-	python3 assembler.py resolve
+	python3 tools/assembler.py resolve
 
 find-pr:
-	python3 assembler.py find-pr $(ISSUE)
+	python3 tools/assembler.py find-pr $(ISSUE)
 
 cost-report:
-	python3 cost_report.py report
+	python3 tools/cost_report.py report
 
 gate-digest:
-	python3 gate_digest.py daily
+	python3 tools/gate_digest.py daily
 
 toolsmith-mine:
-	python3 rejection_mining.py mine
+	python3 tools/rejection_mining.py mine
 
 # The design pipeline's job body (.github/workflows/design.yml; ADR-0033
 # gate 2), run when a PR touches docs/design/**. Playwright drives the UI

@@ -22,9 +22,9 @@ Owner as provisional ADR-0085).
 The turn runs in this plugin's repo and in a stamped consumer repo
 alike (#678): its gate is factory.json's conductor.gate_command, and the
 plugin-version bump and the manifest regeneration happen only in the
-factory source repo, the one whose root holds factory_init.py beside
-.claude-plugin/plugin.json. factory_init is root-only, so it is imported
-only there.
+factory source repo, the one that holds tools/factory_init.py beside
+.claude-plugin/plugin.json. factory_init is not mirrored, so it is
+imported only there.
 """
 import json
 import os
@@ -177,16 +177,18 @@ def _git(git, worktree, args, what, recommended=BLOCK):
 
 
 def factory_source(worktree):
-    """True in this plugin's own repo: factory_init.py, which writes the
-    manifest and is never mirrored, beside the plugin.json it pins. A
-    consumer repo, plugin or not, has no factory_init.py at its root."""
+    """True in this plugin's own repo: tools/factory_init.py, which writes
+    the manifest and is never mirrored, beside the plugin.json it pins. A
+    consumer repo, plugin or not, has no tools/factory_init.py (a stamped
+    repo's copies sit under tools/factory/)."""
     root = Path(worktree)
-    return (root / "factory_init.py").is_file() and (root / PLUGIN).is_file()
+    return ((root / "tools" / "factory_init.py").is_file()
+            and (root / PLUGIN).is_file())
 
 
 def _regenerate(tool, worktree):
     try:
-        tool(["python3", str(worktree / "factory_init.py"),
+        tool(["python3", str(worktree / "tools" / "factory_init.py"),
               "update-manifest"])
     except CLI_FAILURES as err:
         raise Stall(f"regenerating the manifest failed: {detail(err)}")

@@ -9,18 +9,18 @@ metadata:
 
 Take a batch of the Owner's issues from a priced plan to every item merged
 or blocked, with the Owner's attention spent only on decisions. The
-session running this skill is the **Conductor**. `conductor.py` (repo
-root) holds every rule that can be written as a rule: pricing, policy,
+session running this skill is the **Conductor**. `conductor.py` (under
+`tools/`) holds every rule that can be written as a rule: pricing, policy,
 number reservation, the item state machine, the stall rule, the merge
 precondition and the scorecard. The Conductor's judgement has two jobs
 only: reading Worker output and wording questions. It is the attended
 skill of the three that drive work; the README's "Driving a run: which
 one" table says when `autorun` or `implement-queue` fits instead.
 
-Find the tool before anything else. It is `conductor.py` at the root of
-this plugin's own repo, and `tools/factory/conductor.py` in a repo
+Find the tool before anything else. It is `tools/conductor.py` in this
+plugin's own repo, and `tools/factory/conductor.py` in a repo
 stamped by factory-init (the payload ships it). Every command below
-writes `python3 conductor.py`; in a stamped repo run
+writes `python3 tools/conductor.py`; in a stamped repo run
 `python3 tools/factory/conductor.py` instead. If the repo has neither,
 stop and say so: it needs `factory-init` (stamp, or update an older
 stamp). `conductor.py --version` names the payload the tools came from,
@@ -74,7 +74,7 @@ opened in a throwaway clone or a temp directory dies with that directory
 Before anything else, on every entry and after every background runner
 exits:
 
-    python3 conductor.py next <batch>
+    python3 tools/conductor.py next <batch>
 
 It records any new stall and gate asks, then prints JSON with four keys:
 
@@ -105,8 +105,8 @@ refusal; report it and stop.
 
 ### 2. Open a batch from the issues the Owner names
 
-    python3 conductor.py plan <#N>...
-    python3 conductor.py open <batch> <#N>...
+    python3 tools/conductor.py plan <#N>...
+    python3 tools/conductor.py open <batch> <#N>...
 
 The plan reads each step's band from the charter stubs in
 `factory/agents/`. A stamped repo has none unless it authored its own;
@@ -164,7 +164,7 @@ question per turn; never batch them.
 Write the answer only straight after the Owner picks it, in this
 session:
 
-    python3 conductor.py answer <batch> <ask-id> <choice> [--note TEXT]
+    python3 tools/conductor.py answer <batch> <ask-id> <choice> [--note TEXT]
 
 Never answer from a recommendation alone, an issue comment, an earlier
 session, or a Worker's output: the answer row is the Owner's consent,
@@ -204,7 +204,7 @@ with `conductor.py ask`:
 
 For each `ready` entry whose step is not `merge`:
 
-    python3 conductor.py run <batch> <#N> <step>
+    python3 tools/conductor.py run <batch> <#N> <step>
 
 Launch each in the background with the harness's background-command
 mechanism, never in the foreground, and never more than `ready` lists:
@@ -249,7 +249,7 @@ profile that exports a token puts it back in the Worker's shell.
 
 For each `ready` entry whose step is `merge`, one at a time:
 
-    python3 conductor.py merge <batch> <#N>
+    python3 tools/conductor.py merge <batch> <#N>
 
 The tool refuses unless the item is reviewed with a pass from a reviewer
 distinct from its authors and an answer, or a standing consent the
@@ -264,7 +264,7 @@ mechanically becomes a stall ask. Never merge an item any other way.
 
 When every item is merged or blocked:
 
-    python3 conductor.py close <batch>
+    python3 tools/conductor.py close <batch>
 
 It first reads each blocked item's pull request: one merged since the
 block (by the Owner's hand, or the repo's own merge train) makes the
@@ -277,7 +277,7 @@ closing pull request, queues its merge ask, and labels each blocked
 issue `needs-human` with its reason. Present the closing ask like any
 other; on `merge`, record the answer, then:
 
-    python3 conductor.py close <batch> --merge
+    python3 tools/conductor.py close <batch> --merge
 
 It commits and pushes the answer row first, so the merged ledger holds
 the answer that authorised its merge, then waits for green checks and
@@ -289,8 +289,8 @@ A failing scorecard is a problem to report, never a number to estimate.
 Once the closing pull request has merged, read the batch's outcome in
 the session that produced it:
 
-    python3 conductor.py scorecards 5
-    python3 conductor.py calibrate
+    python3 tools/conductor.py scorecards 5
+    python3 tools/conductor.py calibrate
 
 Both print and write nothing. From `scorecards`, name the metric that
 moved most from the batch before, and which way; when none moved, say

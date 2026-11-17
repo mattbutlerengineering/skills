@@ -103,7 +103,7 @@ reported, never edited.
 
 Knowledge-base pages under `docs/kb/` go stale by the
 [knowledge-base](../../skills/knowledge-base/SKILL.md) skill's own rule:
-`python3 kb.py lint` flags a page whose cited source changed since its
+`python3 tools/kb.py lint` flags a page whose cited source changed since its
 `verified` date. A stale or broken-source line it prints is a Survey
 finding, and a fix is proposed as that skill's itemised page edit, never
 applied by this routine. A finding of any kind counts only once

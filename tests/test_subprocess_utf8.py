@@ -53,7 +53,7 @@ class TestAdaptersReadUtf8UnderAnAsciiLocale(unittest.TestCase):
         env = {**os.environ, "PYTHONUTF8": "0",
                "PYTHONCOERCECLOCALE": "0", "LC_ALL": "C", "LANG": "C"}
         env.pop("PYTHONIOENCODING", None)
-        run = subprocess.run([sys.executable, "-c", PROBE, str(ROOT)],
+        run = subprocess.run([sys.executable, "-c", PROBE, str(ROOT / "tools")],
                              capture_output=True, env=env)
         self.assertEqual(run.returncode, 0, run.stderr.decode("utf-8", "replace"))
         got = json.loads(run.stdout.decode("ascii"))

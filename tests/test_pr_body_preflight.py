@@ -171,7 +171,7 @@ class TestNotACandidate(unittest.TestCase):
             "import sys, json, pr_body_preflight\n"
             "p = json.dumps({'tool_input': {'command': 'ls -la'}})\n"
             "print(pr_body_preflight.preflight(p), 'gates' in sys.modules)\n")
-        out = subprocess.run([sys.executable, "-c", script], cwd=REPO_ROOT,
+        out = subprocess.run([sys.executable, "-c", script], cwd=REPO_ROOT / "tools",
                              capture_output=True, text=True, check=True)
         self.assertEqual(out.stdout.strip(), "(0, []) False")
 
