@@ -112,6 +112,15 @@ class TestMain(unittest.TestCase):
             model = json.loads(out.getvalue())
             self.assertEqual(model["runs"], [])
 
+    def test_help_flag_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = board.main([flag])
+                self.assertEqual(code, 0)
+                self.assertEqual(out.getvalue().strip(), board.USAGE)
+
     def test_failure_prints_problems_and_exits_nonzero(self):
         with tempfile.TemporaryDirectory() as tmp:
             out = io.StringIO()

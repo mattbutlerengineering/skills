@@ -25,6 +25,14 @@ def run(argv):
     return code, out.getvalue()
 
 
+class HelpTest(unittest.TestCase):
+    def test_help_flag_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                self.assertEqual(run([flag]),
+                                 (0, reviewer_verdict.USAGE + "\n"))
+
+
 class DeriveTest(unittest.TestCase):
     def test_only_a_bare_decimal_is_a_score(self):
         # float() takes underscores and rounds 6.999... up to 7.0.

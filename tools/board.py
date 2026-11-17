@@ -96,9 +96,15 @@ def gather(root, clock=None):
     return model, []
 
 
+USAGE = "board: usage: python3 tools/board.py [root]"
+
+
 def main(argv):
     """`python3 tools/board.py [root]` — root defaults to the working
     directory, the way the skill invokes it from a target repo."""
+    if argv and argv[0] in ("-h", "--help"):
+        print(USAGE)
+        return 0
     root = argv[0] if argv else "."
     model, problems = gather(root)
     if problems:

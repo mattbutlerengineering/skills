@@ -120,6 +120,15 @@ class TestMain(unittest.TestCase):
         [entry] = json.loads(out.getvalue())["adrs"]
         self.assertEqual(entry["standing"], "provisional")
 
+    def test_help_flag_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                out = io.StringIO()
+                with contextlib.redirect_stdout(out):
+                    code = adr_status.main([flag])
+                self.assertEqual(code, 0)
+                self.assertEqual(out.getvalue().strip(), adr_status.USAGE)
+
     def test_missing_root_exits_nonzero_with_the_problem(self):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
