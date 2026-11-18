@@ -434,6 +434,14 @@ class TestBrief(unittest.TestCase):
         self.assertIn("$3.00", text)
         self.assertIn("ROW AND PACK", text)
 
+    def test_the_brief_says_when_skipping_hooks_is_acceptable(self):
+        """#2059: HUSKY=0 / --no-verify only when a hook cannot run in
+        the worktree, and the PR body then names what was skipped."""
+        text = self.brief("build")
+        self.assertIn("HUSKY=0", text)
+        self.assertIn("skipped", text)
+        self.assertIn("by hand", text)
+
     def test_only_a_spec_brief_carries_the_issue_body(self):
         self.assertIn("ISSUE TEXT", self.brief("spec", "ISSUE TEXT"))
         self.assertIn("stop-after: decompose",
