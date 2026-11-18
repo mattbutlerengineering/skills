@@ -222,6 +222,9 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         f"Work only in {worktree}. New PRD, ADR and WO ids come only from"
         f" this item's reserved block ({reserved}); if it runs out, stop"
         " and say so. never edit .claude-plugin/plugin.json's version.",
+        "Run the repo's git hooks. Skip them (HUSKY=0, --no-verify) only"
+        " when a hook cannot run in this worktree; then name each skipped"
+        f" hook in {PR_BODY_FILE} and list the checks you ran by hand.",
         "",
         "## Context budget", "",
         "The run directory on this branch, and:", *inputs,
