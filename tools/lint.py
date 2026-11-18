@@ -1140,6 +1140,9 @@ def main():
 
 
 if __name__ == "__main__":
+    if sys.argv[1:] in (["-h"], ["--help"]):
+        print("usage: python3 tools/lint.py (takes no arguments)")
+        sys.exit(0)
     if sys.argv[1:]:
         # Same refusal factory.py makes for the routed verb: an argument
         # silently dropped would look as if it applied.

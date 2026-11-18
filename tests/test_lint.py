@@ -2084,6 +2084,16 @@ class TestEntryPointRefusesArguments(unittest.TestCase):
         self.assertNotIn("problem(s)", result.stdout)
         self.assertIn("takes no arguments", result.stderr)
 
+    def test_help_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                result = subprocess.run(
+                    [sys.executable, str(ROOT / "tools" / "lint.py"), flag],
+                    cwd=ROOT, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("usage: python3 tools/lint.py", result.stdout)
+                self.assertNotIn("problem(s)", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
