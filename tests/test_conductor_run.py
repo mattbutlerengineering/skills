@@ -194,6 +194,46 @@ class RunCase(unittest.TestCase):
         return rows
 
 
+class TestOwnHooks(RunCase):
+    """#2057: a linked worktree's core.hooksPath is shared config, so a
+    path into the main checkout makes a branch run main's hooks."""
+
+    def git_with_hooks(self, hooks, built=True):
+        git = Git(self.tmp.name)
+        git.answers[("-C",)] = lambda args: (
+            hooks + "\n" if "core.hooksPath" in args and "--get" in args
+            else "")
+
+        def add(args):
+            add_worktree(args)
+            if built:
+                Path(args[4], ".husky/_").mkdir(parents=True)
+            return ""
+        git.answers[("worktree", "add")] = add
+        return git
+
+    def test_a_hooks_path_into_the_main_checkout_is_made_the_worktrees(self):
+        git = self.git_with_hooks(f"{self.tmp.name}/.husky/_")
+        self.run_step("#12", "spec", Harness(act=pr_body), git=git)
+        wt = str(self.worktree("#12"))
+        self.assertIn(["-C", wt, "config", "extensions.worktreeConfig",
+                       "true"], git.calls)
+        self.assertIn(["-C", wt, "config", "--worktree", "core.hooksPath",
+                       ".husky/_"], git.calls)
+
+    def test_a_hooks_path_outside_the_main_checkout_is_left_alone(self):
+        git = self.git_with_hooks("/elsewhere/hooks")
+        self.run_step("#12", "spec", Harness(act=pr_body), git=git)
+        self.assertEqual(git.called("-C", str(self.worktree("#12")),
+                                    "config", "--worktree"), [])
+
+    def test_a_hooks_dir_the_worktree_lacks_is_left_alone(self):
+        git = self.git_with_hooks(f"{self.tmp.name}/.husky/_", built=False)
+        self.run_step("#12", "spec", Harness(act=pr_body), git=git)
+        self.assertEqual(git.called("-C", str(self.worktree("#12")),
+                                    "config", "--worktree"), [])
+
+
 class TestHarnessCommand(unittest.TestCase):
     def test_every_flag_is_composed_in_one_place(self):
         cmd = conductor_run.harness_command("Brief", "sonnet", "medium",
