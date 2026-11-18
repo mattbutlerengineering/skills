@@ -108,7 +108,8 @@ file's Rules section.
    replaces this one. A PR whose `Driver:` line names another driver
    is that driver's, which claimed its issue through
    [the claim step](references/claim.md). A PR the evidence says must
-   not merge (the third cause below) is never gated, re-run toward green
+   not merge (the third cause below) or that is
+   [parked on merge denial](#merge-policy) is never gated, re-run toward green
    or merged by this queue
    in any CI state, a revert someone else re-ran to green included; it
    is reported. Unfinished PRs come before new issues: green ones go to
@@ -283,6 +284,16 @@ Claude Code sessions`, or `spawn gh ENOENT`, is a capability gap, not a
 refusal: [run the twin](references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal).
 Any other 403 is a refusal.
 
+**Parked on a refusal (#2056).** The refusal outlives the session: end
+that comment with `<!-- merge-denied: <head-sha> -->`, the gated head.
+A later session reading the PR in Phase 0 treats a PR whose newest such
+marker names its current head as **parked on merge denial**: it is not
+gated again and its merge is not re-attempted, by any route, and the
+report counts it ("N PRs parked on merge denial") instead of listing a
+fresh attempt. A new head SHA, a changed `hold_labels` or label set, or
+the Owner's word that the runtime now allows the merge ends the park;
+the PR then goes through the gate as any other.
+
 ## Phase 3: Merge train
 
 Its steps and lock release: [merge-train.md](references/merge-train.md).
@@ -298,6 +309,9 @@ Its steps and lock release: [merge-train.md](references/merge-train.md).
   [loop-and-cleanup.md](references/loop-and-cleanup.md#empty-worktrees).
 - Persist the telemetry the session appended:
   [loop-and-cleanup.md](references/loop-and-cleanup.md#telemetry-persistence).
+- No ready issue and every open PR of this queue parked on merge
+  denial → nothing can move: stop and report the parked count, before
+  any worker or gate spends a model run.
 - More ready issues and budget left → Phase 0. Three consecutive failures
   (workers or train) → release locks, stop and report. The evidence
   outcome (a worker's issue left `needs-review` with its evidence
