@@ -121,8 +121,9 @@ MAX_INTAKE = 10
 # a full window is reported rather than trusted (known_keys). Matches the
 # LIST_WINDOW every other gh-reading module uses (dashboard, gate_digest,
 # rejection_mining, assembler, label_sync) — sweeps alone sat at 500 and hit
-# it for real once the repo passed 500 issues of all states.
-LIST_WINDOW = 1000
+# it for real once the repo passed 500 issues of all states, then all six hit
+# 1000 together once the repo passed 1000 (2026-11-18).
+LIST_WINDOW = 2000
 
 MARKER = "intake-key:"
 

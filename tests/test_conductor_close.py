@@ -17,6 +17,7 @@ import conductor
 import conductor_close as close
 import conductor_flow as flow
 import conductor_spend
+import label_sync
 import rejection_mining
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -363,7 +364,7 @@ BLOCKED_SPEND = [spend("conductor-b1-13-spec-1", 0.5, "#13"),
 CARD = '{"batch": "b0"}\n'
 LABEL_LIST = ("label", "list")
 LABEL_LIST_CALL = ["label", "list", "--json", "name,color,description",
-                   "--limit", "1000"]
+                   "--limit", str(label_sync.LIST_WINDOW)]
 HAS_NEEDS_HUMAN = json.dumps([{"name": "bug"}, {"name": "needs-human"}])
 # The read close makes of each blocked item's branch first (#938): a
 # merged PR there is the item merged outside the batch.

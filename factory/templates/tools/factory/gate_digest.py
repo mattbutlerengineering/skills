@@ -117,8 +117,12 @@ def compose_digest(queues, as_of, listing_truncated):
 
 # How far back the issue listing can see. cli.gh_read owns the window —
 # the limit it sends gh and the truncation it reports are the same
-# number, so the two can no longer drift apart.
-LIST_WINDOW = 1000
+# number, so the two can no longer drift apart. Matches the sibling
+# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) — bumped
+# with the rest once the repo passed 1000 issues of all states
+# (2026-11-18); the daily digest and its gate-latency capture were
+# failing on main (run 117, 118).
+LIST_WINDOW = 2000
 
 
 def upsert_marked_issue(title, marker, body, label, run):

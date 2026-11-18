@@ -118,8 +118,11 @@ def plan(current, desired):
 
 # How far back the label listing can see. cli.gh_read owns the window —
 # the limit it sends gh and the truncation it reports are the same
-# number, so the two can no longer drift apart.
-LIST_WINDOW = 1000
+# number, so the two can no longer drift apart. Matches the sibling
+# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) — bumped
+# with the rest once the repo passed 1000 issues of all states
+# (2026-11-18).
+LIST_WINDOW = 2000
 LIST_ARGS = ("label", "list", "--json", "name,color,description")
 
 
