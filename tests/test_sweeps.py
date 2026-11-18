@@ -845,11 +845,29 @@ class TestReconcileSweep(unittest.TestCase):
 
     def test_the_window_matches_its_sibling_gh_read_callers(self):
         # dashboard, gate_digest, rejection_mining, assembler and
-        # label_sync all read "gh issue list"/"gh pr list" with
-        # LIST_WINDOW = 1000; sweeps alone sat at 500 and hit it for
-        # real once the repo passed 500 issues of all states — the
-        # scheduled reconcile sweep started failing on main.
-        self.assertEqual(sweeps.LIST_WINDOW, 1000)
+        # label_sync all read "gh issue list"/"gh pr list" with the same
+        # LIST_WINDOW; sweeps alone sat at 500 and hit it for real once
+        # the repo passed 500 issues of all states (the scheduled
+        # reconcile sweep started failing on main), and was bumped to
+        # match. All six then hit 1000 together once the repo passed
+        # 1000 issues of all states (2026-11-18) — gate-digest, the
+        # reconcile sweep and the toolsmith mine all failed or under-read
+        # the same week. Checked against the siblings' live values,
+        # not a hand-copied number, so a lone drift fails here too.
+        import assembler
+        import dashboard
+        import gate_digest
+        import label_sync
+        import rejection_mining
+        siblings = {
+            "assembler": assembler.LIST_WINDOW,
+            "dashboard": dashboard.LIST_WINDOW,
+            "gate_digest": gate_digest.LIST_WINDOW,
+            "label_sync": label_sync.LIST_WINDOW,
+            "rejection_mining": rejection_mining.LIST_WINDOW,
+            "sweeps": sweeps.LIST_WINDOW,
+        }
+        self.assertEqual(siblings, {name: 2000 for name in siblings})
 
     def test_a_failing_gh_is_a_problem_not_a_filed_signal(self):
         with tempfile.TemporaryDirectory() as tmp:

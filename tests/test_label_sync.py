@@ -326,7 +326,7 @@ class TestSync(unittest.TestCase):
          "description": "Budget class S (~$5)"},
     ]
     LIST_CALL = ["label", "list", "--json", "name,color,description",
-                 "--limit", "1000"]
+                 "--limit", str(label_sync.LIST_WINDOW)]
 
     def tree_with_template(self, tmp):
         tree = FixtureTree(tmp)
