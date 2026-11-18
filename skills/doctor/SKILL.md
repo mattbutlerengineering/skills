@@ -55,6 +55,20 @@ still gets a real verdict; silence would read as a pass.
    A repo with no artifacts at all is not a problem — it is a greenfield
    repo, and Idea is the honest answer.
 
+3a. **No linked worktree runs another checkout's hooks.** A linked
+   worktree shares the main checkout's git config, so a `core.hooksPath`
+   that is absolute and points outside the worktree (husky's
+   `<main>/.husky/_` is the usual one) makes a branch that edits a hook
+   run the main checkout's old hooks instead (#2057). Skip this when
+   the directory is not a git repository or has no linked worktree. Otherwise read
+   `git worktree list --porcelain`, and for each linked worktree read
+   `git -C <worktree> config --get core.hooksPath`. Report each one
+   whose value is absolute and not under that worktree, naming the
+   worktree and the path. Fix: a per-worktree relative path, `git -C
+   <worktree> config extensions.worktreeConfig true` then `git -C
+   <worktree> config --worktree core.hooksPath <relative-dir>`. Print
+   the commands; never run them.
+
 ### Tier 1 — stamped repo (`tools/factory/` present)
 
 Skip this whole tier if `tools/factory/` is absent, and say so: the repo is
