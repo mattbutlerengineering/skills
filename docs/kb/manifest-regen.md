@@ -1,13 +1,13 @@
 ---
 summary: update-manifest hashes every file under factory/templates/; delete stray .orig/.rej first or they get checksum-pinned.
 sources: tools/gates.py, tools/factory_init.py
-verified: 2662204530eb3405c719fadaf45721c9c60e5bf2
+verified: 08d76611b2b5ca5496e6aedefa4607df50100e35
 related: gates-scan-every-doc
 ---
 
 # Regenerating the template manifest
 
-`gates.manifest_files` is the one walk both sides use: `factory_init.py
+`gates.manifest_files` is the one walk both sides use: `tools/factory_init.py
 update-manifest` writes its result to `factory/manifest.json` and
 detector E diffs the manifest against it. It hashes **every** file under
 `factory/templates/` except `__pycache__/`.
