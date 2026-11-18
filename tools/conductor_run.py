@@ -304,6 +304,39 @@ def _setup(setup, argv, worktree, minutes):
     return None
 
 
+def _own_hooks(git, worktree):
+    """The stall reason when the item worktree cannot be given its own
+    hooks, else None (#2057). A linked worktree shares the main
+    checkout's config, so a core.hooksPath that points into the main
+    checkout (husky's absolute `<main>/.husky/_`) makes a branch that
+    edits a hook run main's old hooks. When the worktree has the same
+    directory, a per-worktree relative path points it there; a path
+    outside the main checkout, an unset one, or a directory the worktree
+    lacks is left as it is."""
+    wt = str(worktree)
+    try:
+        hooks = git(["-C", wt, "config", "--get",
+                     "core.hooksPath"]).stdout.strip()
+        common = git(["rev-parse", "--path-format=absolute",
+                      "--git-common-dir"]).stdout.strip()
+    except CLI_FAILURES:
+        return None  # no hooksPath set: git's own default is per-worktree
+    if not hooks or not os.path.isabs(hooks):
+        return None
+    try:
+        rel = Path(hooks).relative_to(Path(common).parent)
+    except ValueError:
+        return None
+    if not (worktree / rel).is_dir():
+        return None
+    try:
+        git(["-C", wt, "config", "extensions.worktreeConfig", "true"])
+        git(["-C", wt, "config", "--worktree", "core.hooksPath", str(rel)])
+    except CLI_FAILURES as err:
+        return f"worktree hooks path `{rel}` not set: {detail(err)}"
+    return None
+
+
 def _harness(harness, cmd, worktree, minutes, batch):
     """(result event or None, how it ended): completed, timeout,
     missing (no process ever started) or unaccounted (no result)."""
@@ -616,6 +649,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     (worktree / PR_BODY_FILE).unlink(missing_ok=True)
     minutes = flow.WALL_CLOCK_MINUTES[entry["size"]]
     stall = setup_argv and _setup(setup, setup_argv, worktree, minutes)
+    stall = stall or _own_hooks(git, worktree)
     if stall:
         recommended, why = flow.worker_advice(ctx["rows"], entry, step,
                                               band, stall)
