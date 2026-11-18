@@ -4055,6 +4055,19 @@ class TestSelftest(unittest.TestCase):
                 self.assertNotIn("problem(s)", result.stdout)
                 self.assertIn("unknown argument", result.stderr)
 
+    def test_help_prints_usage_and_exits_zero(self):
+        """`gates.py --help` is a request, not a mistyped flag: usage on
+        stdout, exit 0, and the real gates do not run."""
+        repo = Path(__file__).resolve().parent.parent
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                result = subprocess.run(
+                    [sys.executable, str(repo / "tools" / "gates.py"), flag],
+                    cwd=repo, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("usage: gates.py [--selftest]", result.stdout)
+                self.assertNotIn("problem(s)", result.stdout)
+
     def test_selftest_passes(self):
         self.assertEqual(fixtures.selftest(), 0)
 

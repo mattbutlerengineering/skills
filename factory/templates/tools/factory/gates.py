@@ -1941,6 +1941,9 @@ def run_all(root, env=None):
 
 
 def main(argv):
+    if argv in (["-h"], ["--help"]):
+        print("usage: gates.py [--selftest]")
+        return 0
     if argv not in ([], ["--selftest"]):
         # A mistyped flag must not fall through to the real gates and
         # exit 0: the check the caller asked for would silently not run.
