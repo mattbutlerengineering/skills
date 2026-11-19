@@ -583,6 +583,9 @@ def main(argv, root=None, run=None):
     signals and the aggregate; with --record, also write them as an
     append-only snapshot. Exit 0 when nothing failed (unmeasurable runs
     included), 1 with problems, 2 on an unknown argument."""
+    if argv in (["-h"], ["--help"]):
+        print(f"usage: {USAGE}")
+        return 0
     if argv not in ([], ["--record"]):
         print(f"{LABEL}: {' '.join(argv)!r} — unknown argument\n\n"
               f"  {USAGE}")

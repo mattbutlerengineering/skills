@@ -418,6 +418,9 @@ def _verify_package(root, cwd, program, args):
 
 def main(argv):
     """`python3 tools/md_claims.py <check|extract> [root] [path ...]`."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     if not argv or argv[0] not in ("check", "extract"):
         print(USAGE)
         return 2

@@ -517,6 +517,9 @@ def main(argv):
     """`python3 tools/one_owner.py` — no options in this cut. Exiting nonzero on
     a finding is correct and is wired into no gate: a finding is a
     question for a human, never a reason to colour main red."""
+    if argv in (["-h"], ["--help"]):
+        print("usage: python3 tools/one_owner.py (takes no arguments)")
+        return 0
     if argv:
         print(f"one-owner: {' '.join(argv)!r} — this tool takes no"
               " arguments\n\n  python3 tools/one_owner.py")

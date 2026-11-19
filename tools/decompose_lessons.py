@@ -769,6 +769,9 @@ def main(argv, root=None, run=None, measure=decompose_signals.measure):
     folds new runs in and writes the file, the one writer. Exit 0 when
     nothing failed (an empty pair set and a refused verdict included), 1
     with problems, 2 on an unknown argument."""
+    if argv in (["-h"], ["--help"]):
+        print(f"usage: {USAGE}")
+        return 0
     if argv not in ([], ["update"]):
         print(f"{LABEL}: {' '.join(argv)!r} \u2014 unknown argument\n\n"
               f"  {USAGE}")
