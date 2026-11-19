@@ -263,6 +263,9 @@ def main(argv, root=None, run=None, measure=decompose_signals.measure):
     band's interval or refusal beside its cost and re-plan rate. Exit 0
     when nothing failed (refusals and empty bands are data), 1 with
     problems, 2 on any argument."""
+    if argv in (["-h"], ["--help"]):
+        print(f"usage: {USAGE}")
+        return 0
     if argv:
         print(f"{LABEL}: {' '.join(argv)!r} — unknown argument\n\n"
               f"  {USAGE}")

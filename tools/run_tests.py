@@ -139,6 +139,9 @@ def main(argv, spawn=spawn_child, root=None, cpu_count=os.cpu_count):
     reported as `tests: <module> failed` followed by its own output, so
     the failure reads as it would have under discover; the last line
     carries the total test count in the summary grammar."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     parsed = parse_args(argv, cpu_count)
     if parsed is None:
         print(USAGE)

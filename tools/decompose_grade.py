@@ -309,6 +309,9 @@ def main(argv):
     with no defect, 1 with one or more, 2 on usage, an unreadable input or
     an architecture with no components. Writes nothing."""
     from cli import report
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     if len(argv) not in (2, 3):
         print(USAGE)
         return 2
