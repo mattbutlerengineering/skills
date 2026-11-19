@@ -108,6 +108,9 @@ def main(argv):
     module_name, style = VERBS[verb]
     module = importlib.import_module(module_name)
     if style == "bare":
+        if rest in (["-h"], ["--help"]):
+            print(f"usage: python3 tools/factory.py {verb} (takes no arguments)")
+            return 0
         if rest:
             print(f"factory: {verb} takes no arguments"
                   f" (got {' '.join(rest)!r})")
