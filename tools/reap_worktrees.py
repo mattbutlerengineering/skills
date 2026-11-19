@@ -399,6 +399,9 @@ def main(argv, runner=run, cwd=None, size=dir_size, which=shutil.which):
     """`python3 tools/reap_worktrees.py [--apply | --no-fetch]` — exit 0 clean,
     1 with problems, 2 on usage. `--no-fetch` is the offline dry run;
     with `--apply` the fetch is mandatory, so the two never combine."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     if argv not in ([], ["--apply"], ["--no-fetch"]):
         print(USAGE)
         return 2

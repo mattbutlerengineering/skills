@@ -342,6 +342,9 @@ def main(argv):
     """`python3 tools/svg_check.py <file.svg> [--embed-width PX]` — exit 0 clean,
     1 with defects, 2 when the file was not checked (usage, unreadable,
     refused). Writes nothing."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     parsed = _usage(argv)
     if parsed is None:
         print(USAGE)

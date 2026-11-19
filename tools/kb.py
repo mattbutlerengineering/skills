@@ -408,6 +408,9 @@ def main(argv):
     """`python3 tools/kb.py <index|lint|stats> [root]`, or `drift [root]`
     (kb_drift.py), or `harvest`, which takes its own flags
     (kb_harvest.py)."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     if argv and argv[0] == "harvest":
         return kb_harvest.main(argv[1:], KB_DIR)
     if argv and argv[0] == "drift":

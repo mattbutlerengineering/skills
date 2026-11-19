@@ -126,6 +126,9 @@ def gate_main(argv, git):
 
 
 def main(argv, git=cli.runner("git")):
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     if argv[:1] == ["gate"] and len(argv) == 3:
         return gate_main(argv[1:], git)
     if len(argv) != 2:

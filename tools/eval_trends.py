@@ -584,6 +584,9 @@ def main(argv):
     records under the repo root (default: this module's directory). Exit 0
     when no record is malformed (a refusal is data, and a root with no
     records says so in one line), 1 with problems, 2 on a usage error."""
+    if argv in (["-h"], ["--help"]):
+        print(f"usage: {USAGE}")
+        return 0
     if len(argv) > 1 or any(a.startswith("-") for a in argv):
         return _usage(f"{' '.join(argv)!r} — unknown argument")
     root = Path(argv[0]) if argv else Path(__file__).resolve().parent.parent
