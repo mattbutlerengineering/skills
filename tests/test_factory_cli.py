@@ -181,6 +181,17 @@ class TestDispatch(unittest.TestCase):
         fake.assert_not_called()
         self.assertIn("factory: lint takes no arguments", out.getvalue())
 
+    def test_a_bare_verb_answers_help_with_usage_and_exit_zero(self):
+        """`factory.py lint --help` is a question, not a refused argument."""
+        for flag in ("-h", "--help"):
+            with mock.patch("lint.main") as fake:
+                out = io.StringIO()
+                with redirect_stdout(out):
+                    code = factory.main(["lint", flag])
+            self.assertEqual(code, 0)
+            fake.assert_not_called()
+            self.assertIn("usage: python3 tools/factory.py lint", out.getvalue())
+
     def test_trigger_eval_gets_its_arguments_not_the_process_argv(self):
         """#1894: routed bare, its main read sys.argv (holding the verb)
         and argparse rejected `trigger-eval`; extras were refused too."""
