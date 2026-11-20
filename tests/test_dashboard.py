@@ -294,7 +294,7 @@ class TestQueues(unittest.TestCase):
             gh = queue_gh(failing=["issue", "list"])
             state = dashboard.gather(tmp, run=gh, git=git_remote(),
                                      clock=clock)
-        self.assertEqual(state["queues"], [])
+        self.assertIsNone(state["queues"])
         self.assertEqual(state["problems"],
                          ["dashboard: gh issue list failed: boom"])
         self.assertEqual(len(state["runs"]), 1)
@@ -351,7 +351,7 @@ class TestQueues(unittest.TestCase):
             state = dashboard.gather(tmp, run=gh, git=git, clock=clock)
         self.assertEqual(gh.calls, [])
         self.assertIsNone(state["repo"]["remote"])
-        self.assertEqual(state["queues"], [])
+        self.assertIsNone(state["queues"])
         self.assertEqual(state["problems"], [
             f"dashboard: {tmp} has no readable remote.origin.url"])
 
@@ -978,6 +978,9 @@ console.log(JSON.stringify({
   needsYouEmpty: renderNeedsYou([]),
   needsYouPending: renderNeedsYou([], {pending: 1, failed: 0}),
   needsYouFailed: renderNeedsYou([], {pending: 0, failed: 2}),
+  needsYouUnreadQueues: renderNeedsYou(
+    [{name: "alpha", payload: {queues: null, drift: []}}],
+    {pending: 0, failed: 0}),
   metricsPending: renderMetrics([], {pending: 1, failed: 0}),
   outputUnavailable: renderOutput([{name: "beta", payload: {
     output: [], problems: ["dashboard: gh issue list failed"]}}]),
@@ -1098,6 +1101,12 @@ console.log(JSON.stringify({
         self.assertIn("2 repo(s) could not be read", got["needsYouFailed"])
         self.assertIn("Nothing waits on you", got["needsYouFailed"])
         self.assertIn("Nothing waits on you", got["needsYouEmpty"])
+
+    def test_unread_gate_queues_are_not_an_all_clear(self):
+        """gather leaves queues null when its gh listing failed; the
+        page rendered that answering repo as 'Nothing waits on you'."""
+        got = self.rendered()["needsYouUnreadQueues"]
+        self.assertIn("1 repo(s) could not be read", got)
 
     def test_empty_output_with_problems_does_not_claim_no_factory(self):
         """A failed gh listing left output [] and the page said 'No
