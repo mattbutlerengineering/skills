@@ -856,7 +856,35 @@ def main(argv):
     else:
         print(__doc__.strip())
         return 2
+    target = keeping or (stamping[0] if stamping and not stamping[1]
+                         else None)
+    if target is not None and not problems:
+        for step in next_steps(target):
+            print(f"factory-init: next: {step}")
     return report("factory-init", problems)
+
+
+def next_steps(target):
+    """What a full stamp still leaves the user to do before `make check`
+    passes: the two follow-ups docs/setup.md section 4 lists, named only
+    while they are still owed. A bare stamp otherwise says '0 problem(s)'
+    and the next make check fails on an unimportable tests/ — which
+    reads like a broken tool."""
+    steps = []
+    tests = Path(target) / "tests"
+    if not any(tests.glob("test*.py")):
+        steps.append("add tests/ holding at least one test_*.py — make"
+                     " check runs `python3 -m unittest discover -q tests`,"
+                     " which fails on a missing or empty tests/")
+    owners = Path(target) / ".github" / "CODEOWNERS"
+    try:
+        placeholder = "@<owner>" in owners.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        placeholder = False
+    if placeholder:
+        steps.append("replace every @<owner> in .github/CODEOWNERS with a"
+                     " GitHub handle or team that has write access")
+    return steps
 
 
 if __name__ == "__main__":
