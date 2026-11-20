@@ -1,6 +1,6 @@
 # Factory dispatch plane
 
-- Status: superseded in part by ADR-0083 (the beads clause; amended by ADR-0035)
+- Status: superseded in part by ADR-0083 (the beads clause; amended by ADR-0035 and ADR-0134)
 - Date: 2026-07-11
 
 The software factory (PRD-0001) needs unattended agents to pick up work.
@@ -44,8 +44,9 @@ plus orthogonal families `size:S/M/L`, `risk:low/med/high`,
 `type:feature/defect/chore/sweep/support`,
 `source:validator/sentry/human/sweep`, and flags (`budget-exhausted`,
 `needs-human`, `blueprint-drift`). Only the repo owner may apply
-`wo:ready-for-agent`, enforced by an actor check in the dispatch
-workflow, not by convention — a label applied by anyone or anything else
+`wo:ready-for-agent` (in an organization-owned repo, the login the
+`FACTORY_OWNER_LOGIN` variable names — ADR-0134), enforced by an actor
+check in the dispatch workflow, not by convention — a label applied by anyone or anything else
 is inert. The dispatched agent's prompt substrate is the repo-controlled
 breakdown row, never the raw issue body (prompt-injection boundary).
 

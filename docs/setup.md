@@ -101,6 +101,18 @@ pristine mirror it was stamped from. `factory/manifest.json` is the authority.
       target, GitHub silently ignores the entry and the code-owner gate goes
       inert.
 - [ ] `.github/factory.json` budgets and caps reviewed for this repo
+- [ ] **Organization-owned repo: `FACTORY_OWNER_LOGIN` set.** Only the repo
+      owner's `wo:ready-for-agent` label dispatches (ADR-0032). The
+      assembler compares the labeler against
+      `vars.FACTORY_OWNER_LOGIN || github.repository_owner`, and an
+      organization repo's `repository_owner` is the org, which never applies
+      a label. Unset there, every ready label is skipped with no claim, no
+      comment and no red run. Set the repository variable to the login of
+      the person who owns the factory:
+      `gh variable set FACTORY_OWNER_LOGIN --body <login>`. Set it on the
+      repository, not the org: the local work-order planner
+      (`work_queue.py plan`) reads it with `gh variable list`, which sees
+      repository variables only. A personal repo leaves it unset.
 
 Substituting the owner and tuning the budgets are *expected* edits — the gates
 do not compare them against the payload. The executable half (`tools/factory/`
@@ -357,7 +369,9 @@ Unattended dispatch stays off until explicitly opted into:
   assembler's agent step skips gracefully (either credential runs it);
   nothing is dispatched and nothing is faked.
 - `wo:ready-for-agent` is inert unless applied by the repo owner — enforced by
-  an actor check, not by convention.
+  an actor check, not by convention. In an organization-owned repo the owner
+  is the `FACTORY_OWNER_LOGIN` repository variable (section 4); unset, an org
+  repo never dispatches.
 - `sweeps.yml` is factory-repo-only and is **not** stamped, so a product repo
   gets no Sentry intake, no label-drift sweep, and no cross-plane reconcile.
   Those stay here.

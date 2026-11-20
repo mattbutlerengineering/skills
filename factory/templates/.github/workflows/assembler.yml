@@ -54,9 +54,14 @@ jobs:
     # circuit breaker has not tripped (cost-report.yml sets FACTORY_PAUSED on
     # a cap breach — ADR-0034; this term is its one reader). A label from
     # anyone or anything else is inert — the job simply never runs.
+    # "The repo owner" is vars.FACTORY_OWNER_LOGIN when set, else
+    # github.repository_owner: an organization-owned repo's owner is the
+    # org, which never applies a label, so an org repo must name the
+    # owning person's login in that variable or it never dispatches
+    # (#2105). A personal repo leaves it unset.
     if: >-
       github.event.label.name == 'wo:ready-for-agent'
-      && github.event.sender.login == github.repository_owner
+      && github.event.sender.login == (vars.FACTORY_OWNER_LOGIN || github.repository_owner)
       && vars.FACTORY_PAUSED != 'true'
     runs-on: ubuntu-latest
     # The claim is the one write this job makes; no agent code has run yet.
@@ -98,7 +103,7 @@ jobs:
       - name: Resolve the work order from its breakdown row
         id: resolve
         env:
-          FACTORY_REPO_OWNER: ${{ github.repository_owner }}
+          FACTORY_REPO_OWNER: ${{ vars.FACTORY_OWNER_LOGIN || github.repository_owner }}
         run: make assembler
       # Claim the order: ready -> in-progress (ADR-0032's state machine,
       # advanced by machinery, not memory). transitioned=false means a

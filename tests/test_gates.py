@@ -3888,13 +3888,33 @@ class TestLockstep(unittest.TestCase):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("github.event.label.name == 'wo:ready-for-agent'", text)
         self.assertIn(
-            "github.event.sender.login == github.repository_owner", text)
+            "github.event.sender.login =="
+            " (vars.FACTORY_OWNER_LOGIN || github.repository_owner)", text)
         self.assertIn(
             "(env.ANTHROPIC_API_KEY != '' ||"
             " env.CLAUDE_CODE_OAUTH_TOKEN != '')", text)
         self.assertIn(
             "claude_code_oauth_token:"
             " ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}", text)
+
+    def test_the_assembler_owner_is_the_override_or_the_repo_owner(self):
+        """#2105: an org-owned repo's github.repository_owner is the org,
+        which never applies a label, so the job gate and the owner fed to
+        assembler.actor_is_owner both read vars.FACTORY_OWNER_LOGIN first
+        and fall back to the repo owner — in the root workflow and the
+        payload a stamped repo runs. A bare repository_owner comparison
+        left anywhere would leave an org repo never dispatching."""
+        expression = "vars.FACTORY_OWNER_LOGIN || github.repository_owner"
+        for workflow in (self.ASSEMBLER_WORKFLOW,
+                         self.PAYLOAD_ASSEMBLER_WORKFLOW):
+            with self.subTest(workflow=workflow):
+                text = workflow.read_text(encoding="utf-8")
+                self.assertIn(
+                    f"github.event.sender.login == ({expression})", text)
+                self.assertIn(
+                    f"FACTORY_REPO_OWNER: ${{{{ {expression} }}}}", text)
+                self.assertNotIn("== github.repository_owner", text)
+                self.assertNotIn("${{ github.repository_owner }}", text)
 
     def test_the_assembler_gate_honors_the_circuit_breaker(self):
         """ADR-0034's monthly breaker: cost-report.yml sets the

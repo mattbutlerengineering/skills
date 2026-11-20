@@ -185,9 +185,28 @@ installed plugin. Equal versions are not a problem. A difference is one
     anything is useless on a plane, so this tier stays off by default and
     its absence is stated in the report, never implied.
 
+10. In the same opt-in pass on a full stamp (skip it on a tools-only stamp,
+    which has no `assembler.yml`), check who the assembler treats as the
+    owner. It dispatches only on a `wo:ready-for-agent` label whose labeler
+    equals `vars.FACTORY_OWNER_LOGIN || github.repository_owner` (ADR-0032).
+    An organization-owned repo's `repository_owner` is the org, which never
+    applies a label, so with the variable unset the assembler never
+    dispatches and says nothing: no claim, no comment, no red run. Read both
+    facts, read-only:
+
+        gh repo view --json owner,isInOrganization
+        gh variable list --json name,value
+
+    `isInOrganization` true and no non-blank `FACTORY_OWNER_LOGIN` among the
+    repository variables is one `DOCTOR [tier 2]` line. Fix: `gh variable
+    set FACTORY_OWNER_LOGIN --body <login>` with the owning person's login,
+    set on the repository so the local planner (`work_queue.py`) sees it
+    too. Print it; never run it. A personal repo needs no variable, and
+    either read failing is reported as not run, never as clean.
+
 ### Report
 
-10. One label-prefixed line per problem, each naming the fix, then a tiered
+11. One label-prefixed line per problem, each naming the fix, then a tiered
     summary — the same shape the repo's own checkers use:
 
         DOCTOR [tier 1]: no tests/ directory — `make check` runs

@@ -27,6 +27,10 @@ and that graph is a planning judgment, not an observation of a run.
 
 Only the repo owner may apply `wo:ready-for-agent`, enforced by an actor check
 in the dispatch workflow. A label applied by anyone or anything else is inert.
+The owner is the `FACTORY_OWNER_LOGIN` repository variable when it is set, and
+the repo's owner login otherwise. An organization-owned repo must set it: its
+owner login is the organization, which never applies a label, so with the
+variable unset nothing ever dispatches.
 
 ## Consequences
 

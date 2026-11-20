@@ -52,7 +52,7 @@ the canonical vocabulary.
 | [0029](0029-backlog-seed-inbox.md) | A derived, advisory backlog (seed inbox) | accepted |
 | [0030](0030-incident-fastlane-and-tracker-intake.md) | Incident fast lane and tracker intake | accepted (Decision 2; Decision 1 remains provisional) |
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
-| [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035) |
+| [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035 and ADR-0134) |
 | [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0087 (and earlier by ADR-0036) |
 | [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0084 (and earlier by ADR-0041) |
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | superseded in part by ADR-0083 (the beads carve-out) |
@@ -154,3 +154,4 @@ the canonical vocabulary.
 | [0131](0131-the-repos-python-tools-live-in-tools.md) | The repo's Python tools live in tools/, not at the root | provisional |
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
+| [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |

@@ -55,6 +55,9 @@ IN_FLIGHT_ARGS = ["issue", "list", "--label", CLAIM_LABEL,
 UNKNOWN_LABELER = (f"carries {assembler.READY_LABEL}, but who applied it"
                    " could not be read — held back until it can be"
                    " (ADR-0032)")
+# The repository variable naming the owner login for an org-owned repo
+# (#2105); assembler.yml reads it as vars.FACTORY_OWNER_LOGIN.
+OWNER_VARIABLE = "FACTORY_OWNER_LOGIN"
 # How far back the ready listing can see. cli.gh_read owns the window —
 # the limit it sends gh and the truncation it reports are the same
 # number — so it can only be typed once, and the duplicate literal this
@@ -292,9 +295,37 @@ def _open_numbers(args, noun, args_name, run):
             and isinstance(item.get("number"), int)}, []
 
 
+def owner_override(run):
+    """(the FACTORY_OWNER_LOGIN repository variable's value or None,
+    problems), failing closed — None with no problem means it is unset.
+
+    An organization-owned repo's github.repository_owner is the org, which
+    never labels anything, so assembler.yml compares the labeler against
+    `vars.FACTORY_OWNER_LOGIN || github.repository_owner` (#2105). The
+    planner reads the same repository variable so it agrees with the
+    workflow; a variable set only at the org level is invisible to
+    `gh variable list` here, so set it on the repository."""
+    read = gh_read(["variable", "list", "--json", "name,value"],
+                   "gh variable list", label="wq", run=run)
+    if read.value is None:
+        return None, read.problems
+    for item in read.value:
+        if isinstance(item, dict) and item.get("name") == OWNER_VARIABLE:
+            value = item.get("value")
+            if isinstance(value, str) and value.strip():
+                return value.strip(), []
+    return None, []
+
+
 def repo_owner(run):
-    """(the repo owner's login, problems), failing closed — the login
-    assembler.yml compares against as github.repository_owner."""
+    """(the owner's login, problems), failing closed — the login
+    assembler.yml compares against: the FACTORY_OWNER_LOGIN repository
+    variable when set, else github.repository_owner."""
+    override, problems = owner_override(run)
+    if problems:
+        return None, problems
+    if override is not None:
+        return override, []
     read = gh_read(["repo", "view", "--json", "owner"], "gh repo view",
                    label="wq", run=run, expect=dict)
     if read.value is None:
@@ -310,7 +341,9 @@ def owner_holds(numbers, run=None):
     problems) when the owner cannot be named. NETWORK.
 
     ADR-0032: only the repo owner may apply wo:ready-for-agent, and a
-    label from anyone else is inert. The latest labeled event's actor
+    label from anyone else is inert. The owner is repo_owner's: the
+    FACTORY_OWNER_LOGIN repository variable when set, else the repo's
+    owner login. The latest labeled event's actor
     (human_gates.read_labelers) is judged by assembler.actor_is_owner, the
     workflow's own authority. A timeline that could not be read, or holds
     no such event, fails closed: the issue is held back with a problem,
