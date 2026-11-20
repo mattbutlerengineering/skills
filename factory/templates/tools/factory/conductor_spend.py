@@ -159,6 +159,63 @@ def commit_spend(git, worktree, run_id):
     return None
 
 
+def unspent_runs(rows, item, entries):
+    """The run ids of the item's finished runs (its `run` rows) with no
+    spend row among `entries`: the ones whose row may still sit,
+    uncommitted, in its worktree (held_spend). A run with no run row yet
+    is in flight, and its ceiling is counted instead."""
+    spent = {entry["run_id"] for entry in entries}
+    return [row["run_id"] for row in item_view(rows, item)["runs"]
+            if row["run_id"] not in spent]
+
+
+def held_spend(git, batch, item, run_ids):
+    """({run id: [spend rows]} the item worktree holds for `run_ids`,
+    problems a retry may fix, problems it cannot): the per-run files a
+    runner wrote and never committed, as when its spend commit failed
+    (#939). No run ids, no git call; a worktree that is gone holds
+    none. A malformed file is never read as empty."""
+    if not run_ids:
+        return {}, [], []
+    worktree, problems = worktree_path(git, batch, item)
+    if problems:
+        return None, problems, []
+    held = {}
+    for run_id in run_ids:
+        path = worktree / cost_ledger.run_ledger_path(run_id)
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError) as err:
+            return None, [f"cd: cannot read {path}: {err}"], []
+        held[run_id] = []
+        for lineno, entry, suffixes in cost_ledger.parse(text):
+            if suffixes:
+                return None, [], [f"cd: {path}:{lineno} {suffixes[0]}"]
+            held[run_id].append(entry)
+    return held, [], []
+
+
+def commit_held(git, batch, item, run_ids):
+    """(problems): commit every spend file of `run_ids` the item
+    worktree still holds (held_spend), the half a failed spend commit
+    left undone, through commit_spend as record_lost commits one."""
+    held, unread, malformed = held_spend(git, batch, item, run_ids)
+    if unread or malformed:
+        return unread + malformed
+    if not held:
+        return []
+    worktree, problems = worktree_path(git, batch, item)
+    if problems:
+        return problems
+    for run_id in held:
+        failed = commit_spend(git, worktree, run_id)
+        if failed:
+            return [f"cd: {item}: {failed}"]
+    return []
+
+
 def record_lost(git, batch, rows, writes, now):
     """(problems): a spend row for every lost run among `writes` — a run
     row whose outcome is LOST, which `next` writes for a runner found
