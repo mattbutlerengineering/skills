@@ -172,7 +172,9 @@ class TestMergeTurnStalls(TurnCase):
                                   moved("#12", "merging", "stalled"),
                                   stall_ask("ask-3", "#12"),
                                   answered("ask-3", "retry", "#12")]
-        ready, _, _ = flow.survey(rows, NOW, 3, lambda pid: True, {})
+        # Its cover is read from its gate blobs, as the turn re-checks it.
+        ready, _, _ = flow.survey(rows, NOW, 3, lambda pid: True,
+                                  {"#12": {"gate_blobs": {}}})
         self.assertIn({"item": "#12", "step": "merge"}, ready)
         self.assertEqual(merge.merge_problems(rows, "#12", {}), [])
 

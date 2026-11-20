@@ -470,7 +470,10 @@ class TestSurveyWrites(unittest.TestCase):
     def test_a_dead_merge_turn_stalls_and_resumes_as_a_merge(self):
         # Review finding: an interrupted merge turn left the item at
         # `merging` with no stall, no ready step and no way out.
+        merge_ask = dict(stall_ask("ask-2", "#14", ("merge", "block")),
+                         ask_kind="merge")
         rows = [launch("#14", "planned", "build"), ran("#14", "build"),
+                merge_ask, answered("ask-2", "merge", "#14"),
                 moved("#14", "ship", "merging", pid=4242)]
         self.assertEqual(self.writes(rows), [])
         writes = self.writes(rows, probe=dead)
@@ -483,7 +486,9 @@ class TestSurveyWrites(unittest.TestCase):
                          ("stall", "retry"))
         resumed = rows + writes + [answered(writes[1]["id"], "retry",
                                             "#14")]
-        ready, _, _ = flow.survey(START + resumed, NOW, 3, dead, {})
+        # Its own merge answer still covers it, read from its gate blobs.
+        ready, _, _ = flow.survey(START + resumed, NOW, 3, dead,
+                                  {"#14": {"gate_blobs": {}}})
         self.assertIn({"item": "#14", "step": "merge"}, ready)
 
     def test_a_dead_merge_turn_offers_no_retry_up(self):

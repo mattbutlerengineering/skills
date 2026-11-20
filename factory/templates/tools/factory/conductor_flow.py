@@ -60,17 +60,29 @@ def shipped_items(rows):
             and read["items"][entry["item"]]["completed"]]
 
 
+def stalled_merges(rows):
+    """The plan's items stalled in a merge turn (from `merging`), in plan
+    order: a retry resumes them as a merge, which needs its cover read
+    like a shipped item's — a renumbered gate file can leave a train
+    item owing its own merge ask."""
+    read = view(rows)
+    return [entry["item"] for entry in (read["plan"] or {}).get("items", [])
+            if read["items"][entry["item"]]["state"] == "stalled"
+            and read["items"][entry["item"]]["last"]["from"] == "merging"]
+
+
 def merge_due(rows, facts, policy=None):
-    """The shipped items that wait for a merge ask the Conductor words:
-    conductor_consent.cover reads them OWED, and no ask is pending,
-    whether the item's own or a train listing it. `facts` maps an item
-    to its branch facts; a shipped item with no gate_blobs read yet is
-    not judged. PURE."""
+    """The shipped items, and the items stalled in a merge turn, that
+    wait for a merge ask the Conductor words: conductor_consent.cover
+    reads them OWED, and no ask is pending, whether the item's own (a
+    stall's included) or a train listing it. `facts` maps an item to its
+    branch facts; an item with no gate_blobs read yet is not judged.
+    PURE."""
     given = answers(rows)
     pending = [row for row in rows if row["kind"] == "ask"
                and row["ask_kind"] == "merge" and row["id"] not in given]
     due = []
-    for item in shipped_items(rows):
+    for item in shipped_items(rows) + stalled_merges(rows):
         blobs = facts.get(item, {}).get("gate_blobs")
         if blobs is None or item_view(rows, item)["pending"] is not None \
                 or any(item in row.get("covers", []) for row in pending):
@@ -659,7 +671,14 @@ def _step(rows, now, entry, alive, facts, policy):
         # a merge turn that stalled resumes as a merge, not a step.
         if found["retry"] and delivered_run(rows, found) is None:
             resume = RESUMES.get(launched["from"], launched["from"])
-            return ("merge" if resume == "merging" else resume), False, []
+            if resume != "merging":
+                return resume, False, []
+            # The turn re-checks the cover, so a merge it would refuse
+            # waits for the merge ask merge_due raises.
+            blobs = facts.get(entry["item"], {}).get("gate_blobs")
+            covered = blobs is not None and consent.cover(
+                rows, entry["item"], blobs, policy)[0] == consent.COVERED
+            return ("merge" if covered else None), False, []
         return None, False, []
     if found["pending"] is not None:
         return None, False, []
