@@ -336,17 +336,32 @@ def _refused(problems):
             for problem in problems]
 
 
-def carry_blocked_spend(git, root, batch, blocked):
+def carry_blocked_spend(git, root, batch, blocked, rows):
     """Copy onto the batch branch, as per-run files, every spend row a
     blocked item's branch holds for its runs: so all spend reaches main
     without another writer of the shared aggregate. The rows are read by
     conductor_spend.ref_rows, where an absent ledger holds none (#708,
     #772), and land through cost_ledger.record_isolated, which skips a
     row the batch branch already holds (row_key, ADR-0049), so a re-run
-    never writes a row twice."""
+    never writes a row twice. A run of the ledger's `rows` with no row
+    on the branch or the batch branch has its row committed on the
+    branch first when the item worktree still holds it (a failed spend
+    commit, #939): one spend row per run, always. An unreadable batch
+    ledger is left to the scorecard, which refuses it."""
+    carried, _ = cost_ledger.read(root)
     for item in blocked:
+        branch = flow.item_branch(batch, item)
         found, unread, malformed = conductor_spend.ref_rows(
-            _at(git, root), flow.item_branch(batch, item))
+            _at(git, root), branch)
+        missing = [] if unread or malformed \
+            else conductor_spend.unspent_runs(rows, item, found + carried)
+        if missing:
+            problems = conductor_spend.commit_held(_at(git, root), batch,
+                                                   item, missing)
+            if problems:
+                return _refused(problems)
+            found, unread, malformed = conductor_spend.ref_rows(
+                _at(git, root), branch)
         if unread or malformed:
             return _refused(unread) + malformed
         for entry in found:
@@ -621,7 +636,8 @@ def close_batch(root, batch, clock, git, gh):
         if problems:
             return None, problems
     problems = (update_from_main(git, root, batch_branch(batch))
-                or carry_blocked_spend(git, root, batch, finals["blocked"]))
+                or carry_blocked_spend(git, root, batch, finals["blocked"],
+                                       rows))
     if problems:
         return None, problems
     branches, problems = sort_blocked_branches(git, root, batch,

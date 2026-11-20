@@ -34,8 +34,8 @@ from conductor import RUNS, WORKER_ENV, answers, append, ask_row, \
 from conductor import run_id as make_run_id
 from conductor_plan import span
 from conductor_next import deliver
-from conductor_spend import CEILING_OUTCOME, record_spend, ref_rows, \
-    run_commits, spend_run, worktree_path
+from conductor_spend import CEILING_OUTCOME, held_spend, record_spend, \
+    ref_rows, run_commits, spend_run, unspent_runs, worktree_path
 from knowledge_plane import WO_TOKEN, work_orders
 from orientation_pack import orientation_pack
 from protocol import read_frontmatter
@@ -445,7 +445,9 @@ def month_spend(git, rows, batch, now):
     (cost_ledger.row_key), selected by cost_ledger.dispatched, the
     breaker's one row rule. The batch worktree's own costs.jsonl is a
     snapshot from the batch's open, and item spend stays on item
-    branches until it merges."""
+    branches until it merges. A finished run with no row on either is
+    looked for in its item worktree (held_spend), where a failed spend
+    commit leaves it (#939)."""
     read = view(rows)
     launched = [entry["item"] for entry in read["plan"]["items"]
                 if any("run_id" in row
@@ -458,6 +460,13 @@ def month_spend(git, rows, batch, now):
             return None, problems, malformed
         entries.update((cost_ledger.row_key(entry), entry)
                        for entry in found)
+    for item in launched:
+        held, problems, malformed = held_spend(
+            git, batch, item, unspent_runs(rows, item, entries.values()))
+        if problems or malformed:
+            return None, problems, malformed
+        entries.update((cost_ledger.row_key(entry), entry)
+                       for found in held.values() for entry in found)
     month = now.strftime("%Y-%m")
     return sum(entry["cost"] for entry in cost_ledger.dispatched(
         list(entries.values()), month)), [], []

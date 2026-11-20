@@ -82,7 +82,8 @@ It records any new stall and gate asks, then prints JSON with four keys:
 - `ready`: steps to launch now, already capped by `wip_cap`, each
   `{"item", "step"}`;
 - `recorded`: the ids of asks it just wrote;
-- `merge_due`: shipped items waiting for a merge question you word.
+- `merge_due`: shipped items, and items whose stalled merge turn you
+  answered retry, waiting for a merge question you word.
 
 When the repo's `factory.json` turns on `conductor.standing_consent`
 (ADR-0086; off by default), `next` itself records standing consent for
