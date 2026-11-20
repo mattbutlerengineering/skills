@@ -133,7 +133,7 @@ jobs:
           ref: <plugin-ref>
           path: .idea-to-prod
       - name: Mechanical claims (links, paths, commands)
-        run: python3 .idea-to-prod/md_claims.py check .
+        run: python3 .idea-to-prod/tools/md_claims.py check .
 
   judgement:
     runs-on: ubuntu-latest
@@ -160,9 +160,9 @@ jobs:
           claude -p "Read .idea-to-prod/skills/audit/SKILL.md and
             .idea-to-prod/skills/audit/references/markdown-claims.md and run
             the audit claims scope on this repository in headless mode. The
-            tool is at .idea-to-prod/md_claims.py." \
+            tool is at .idea-to-prod/tools/md_claims.py." \
             --allowedTools "Read" "Grep" "Glob" \
-              "Bash(python3 .idea-to-prod/md_claims.py *)" \
+              "Bash(python3 .idea-to-prod/tools/md_claims.py *)" \
               "Bash(git log *)" "Bash(git show *)" \
             --max-budget-usd 2 \
             | tee report.md
