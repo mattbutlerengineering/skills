@@ -113,15 +113,21 @@ def read_runs(root, notes):
     runs = []
     for entry in parse_run(root)["runs"]:
         path = entry["path"]
-        artifacts = {}
+        artifacts, refused = {}, False
         for name, _ in artifact_sections():
             text, problem = read_file(
                 path / name, (path / name).relative_to(root).as_posix(), str)
             if problem:
                 notes.append(problem)
+                refused = True
             elif text is not None:
                 lines = text.splitlines()
                 artifacts[name] = {"lines": lines, "ids": _tokens(lines)}
+        if not artifacts and not refused:
+            # A candidate directory with no run artifact (docs/ in a repo
+            # with no product run) is no run: its key must fall through
+            # to "names no run directory", not an empty view and exit 0.
+            continue
         runs.append({"path": path, "ref": run_ref(root, path),
                      "prd": entry["prd_id"], "breakdown": entry["breakdown"],
                      "artifacts": artifacts})

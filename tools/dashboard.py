@@ -386,6 +386,9 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                                 state["problems"])
     mirror = mirror_map(root)
     if mirror:
+        # None until the listing is read: an unread queue is not an empty
+        # one, and the page must not render it as "Nothing waits on you".
+        state["queues"] = None
         slug, remote_problems = remote_slug(root, git)
         state["repo"]["remote"] = slug
         state["problems"].extend(remote_problems)

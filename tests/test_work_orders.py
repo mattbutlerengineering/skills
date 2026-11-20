@@ -50,6 +50,23 @@ class TestRowBlock(unittest.TestCase):
         text = f"{ROW_1}\n\n## Milestone B\n\n  - Accept: stray.\n"
         self.assertEqual(blocks(text)["WO-0001"], ROW_1)
 
+    def test_a_nested_sub_task_box_does_not_end_the_block(self):
+        # The sub-task cut the block at its bullet: Accept: and Blocked
+        # by: were lost, and dispatch ran before the dependency.
+        text = (f"{ROW_1}\n  - [ ] write tests first\n"
+                "  - Accept: export.py emits CSV\n  - Blocked by: WO-0002\n"
+                f"{ROW_2}\n")
+        self.assertEqual(blocks(text)["WO-0001"], (
+            f"{ROW_1}\n  - [ ] write tests first\n"
+            "  - Accept: export.py emits CSV\n  - Blocked by: WO-0002"))
+
+    def test_an_indented_fence_does_not_end_the_block(self):
+        text = (f"{ROW_1}\n  ```text\n  - [ ] **WO-0002** example row\n"
+                "  ```\n  - Accept: one.\n")
+        self.assertEqual(blocks(text)["WO-0001"], (
+            f"{ROW_1}\n  ```text\n  - [ ] **WO-0002** example row\n"
+            "  ```\n  - Accept: one."))
+
     def test_an_indented_row_is_a_row_not_a_sub_bullet(self):
         text = f"{ROW_1}\n  {ROW_2}\n"
         self.assertEqual(blocks(text)["WO-0001"], ROW_1)
