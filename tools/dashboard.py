@@ -41,13 +41,14 @@ import json
 import re
 import statistics
 import sys
+import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
 from cli import CLI_FAILURES, gh_read, gh_runner, label_names
-from cli import json_lines, read_file, report, runner
+from cli import json_lines, read_file, report, runner, write_atomic
 import cost_ledger
 import cost_report
 import factory_config
@@ -420,6 +421,10 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
 BACKLOG = "docs/backlog.md"
 _STALE = "dashboard: backlog changed underneath; refresh"
 
+# One save at a time: ThreadingHTTPServer runs requests concurrently,
+# and two saves interleaving their read and write would drop one.
+_SAVE_LOCK = threading.Lock()
+
 
 def backlog_hash(text):
     """The optimistic-concurrency token: gather stamps it, the Save
@@ -552,11 +557,22 @@ def respond_post(target, body, repos_fn):
         # outside every configured repo.
         return 400, {"problems": [
             f"dashboard: {BACKLOG} resolves outside its repo"]}
+    with _SAVE_LOCK:
+        return _save_backlog(path, posted_hash, order)
+
+
+def _save_backlog(path, posted_hash, order):
+    """respond_post's read-reorder-write, under _SAVE_LOCK. Producers
+    append seeds with no lock (ADR-0029), so the file is read again just
+    before the write: a seed that landed after the hash check makes the
+    save stale (409) instead of being overwritten, and the write itself
+    is atomic, so a reader never sees a truncated backlog."""
     # Hand-written rather than cli.read_file (ADR-0075): an absent
     # backlog is an OSError message here, where read_file gives
     # (None, None).
     try:
-        text = path.read_bytes().decode("utf-8")
+        raw = path.read_bytes()
+        text = raw.decode("utf-8")
     except (OSError, UnicodeDecodeError) as err:
         return 500, {"problems": [
             f"dashboard: cannot read {BACKLOG}: {err}"]}
@@ -566,7 +582,9 @@ def respond_post(target, body, repos_fn):
         status = 409 if reorder_problems == [_STALE] else 400
         return status, {"problems": reorder_problems}
     try:
-        path.write_bytes(new_text.encode("utf-8"))
+        if path.read_bytes() != raw:
+            return 409, {"problems": [_STALE]}
+        write_atomic(path, new_text)
     except OSError as err:
         return 500, {"problems": [
             f"dashboard: cannot write {BACKLOG}: {err}"]}
