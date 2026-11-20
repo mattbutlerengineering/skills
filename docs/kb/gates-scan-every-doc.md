@@ -1,7 +1,7 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
 sources: tools/gates.py, tools/knowledge_plane.py
-verified: 63608e4be39def1cb11f8b353944d5361f592455
+verified: 940c074b3b862e4a8d06662ea84abdc436121619
 related: pr-body-contract, manifest-regen
 ---
 
