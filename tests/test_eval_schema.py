@@ -14,6 +14,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -503,6 +504,28 @@ class TestWriteSnapshot(unittest.TestCase):
                                             "charter")
         self.assertNotEqual(first, second)
         self.assertTrue(first.is_file() and second.is_file())
+
+    def test_a_name_claimed_between_the_check_and_the_write_is_kept(self):
+        """A concurrent recorder can take the name results_path just
+        found free; the write must not truncate that snapshot — the
+        directory is append-only — but claim the next free name."""
+        self.results.mkdir(parents=True)
+        taken = self.results / "charter-2026-07-02.json"
+        real = eval_schema.results_path
+
+        def racing(*args, **kwargs):
+            path = real(*args, **kwargs)
+            if not taken.exists():
+                taken.write_text("the other run\n", encoding="utf-8")
+            return path
+        with mock.patch.object(eval_schema, "results_path", racing):
+            path = eval_schema.write_snapshot(self.output, self.results,
+                                              "charter")
+        self.assertEqual(taken.read_text(encoding="utf-8"),
+                         "the other run\n")
+        self.assertEqual(path, self.results / "charter-2026-07-02-2.json")
+        self.assertEqual(path.read_text(encoding="utf-8"),
+                         json.dumps(self.output, indent=2) + "\n")
 
     def test_a_directory_shaped_kind_is_refused(self):
         # results_path("output", ...) names a DIRECTORY. Writing a file
