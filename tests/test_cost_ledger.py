@@ -632,6 +632,26 @@ class TestLoad(unittest.TestCase):
 
 
 class TestRead(unittest.TestCase):
+    def test_a_run_recorded_in_both_files_counts_once_and_is_reported(self):
+        # One run recorded through budget_guard (the aggregate) on one
+        # branch and record_isolated (its run file) on another: every
+        # caller summed it twice (cost_report $12 under a $10 cap) while
+        # the Conductor's month_spend counted it once.
+        row = entry("WO-0001", "run-7", "m", 10, 6.0, "merged",
+                    "2026-11-19")
+        with tempfile.TemporaryDirectory() as tmp:
+            self.ledger(tmp, json.dumps(row) + "\n")
+            # The merge of two branches: each writer refused a second
+            # copy on its own branch, so the run file is written directly.
+            run_file = Path(tmp) / cost_ledger.RUNS_DIR / "run-7.jsonl"
+            run_file.parent.mkdir(parents=True)
+            run_file.write_text(json.dumps(row) + "\n", encoding="utf-8")
+            entries, problems = cost_ledger.read(tmp)
+        self.assertEqual(entries, [row])
+        self.assertEqual(problems, [
+            f"ledger: {cost_ledger.RUNS_DIR}/run-7.jsonl:1 repeats run"
+            " 'run-7' of WO-0001, already recorded; counted once"])
+
     def ledger(self, tmp, text):
         path = Path(tmp) / cost_ledger.COST_LEDGER
         path.parent.mkdir(parents=True, exist_ok=True)

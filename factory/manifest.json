@@ -37,7 +37,7 @@
     "templates/tools/factory/conductor_plan.py": "a2eb71fd8b2fd59e33b8ef824798e1ac33a5394b173f89ad71231454960477b5",
     "templates/tools/factory/conductor_run.py": "be30ca4ad54afba0863206ae13b42f23e580116f98c41477a4a5c5eb09ef031d",
     "templates/tools/factory/conductor_spend.py": "7c457b14802338c9192c4d847603a1099b440d37f26d1d22303927a8a129e3d7",
-    "templates/tools/factory/cost_ledger.py": "9e8cb41f73f49cd6a148624ef01e776b5134496994a5fcb828441119832d0631",
+    "templates/tools/factory/cost_ledger.py": "2a2adfbb729aef069444984e29dfa1d49ff865072196c43a94d1752c7f822243",
     "templates/tools/factory/cost_report.py": "59faf0a7f67ae5d3da1ae8156d7cbc9088b605a2f6afa980a94e7eb550bccac1",
     "templates/tools/factory/factory_config.py": "0ee9273f1525788df4a87255143508c3e3c6be3b690dde07705384bee286e54f",
     "templates/tools/factory/gate_digest.py": "183c4495e2041d4253718adf24cb6018d15c73e67a088d2586398485413e09ca",

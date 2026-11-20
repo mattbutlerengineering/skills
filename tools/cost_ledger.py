@@ -480,9 +480,22 @@ def read(root, ledger_path=None):
     semantic rules over a row: row_key (identity), in_month (window),
     gate_wait (gate rows), wo_token (typed token)."""
     rows, problems = load(root, "ledger", ledger_path=ledger_path)
-    entries = []
-    for _, record, located, _shown in rows or ():
+    entries, seen = [], set()
+    for lineno, record, located, shown in rows or ():
         problems.extend(located)
-        if record is not None and not located:
-            entries.append(record)
+        if record is None or located:
+            continue
+        # record() refuses a second row for one run ("recording it twice
+        # would double-count the run against the monthly cap"); a repeat
+        # already in the ledger (one run recorded on two branches, in the
+        # aggregate file and in its per-run file) is held to the same
+        # rule here, so every caller counts it once and is told.
+        key = row_key(record)
+        if key in seen:
+            problems.append(f"ledger: {shown}:{lineno} repeats run"
+                            f" {key[1]!r} of {key[0]}, already recorded;"
+                            " counted once")
+            continue
+        seen.add(key)
+        entries.append(record)
     return entries, problems
