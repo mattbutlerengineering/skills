@@ -41,15 +41,37 @@ def found(*rows):
     return {r["wo"]: r for r in rows}
 
 
-def listing(*numbers):
+OWNER = "the-owner"
+
+
+def labeled_by(login):
+    return {"event": "labeled", "label": {"name": "wo:ready-for-agent"},
+            "created_at": "2026-08-01T00:00:00Z", "actor": {"login": login}}
+
+
+def listing(*numbers, in_flight=(), labelers=None, owner=OWNER):
     """A gh whose ready listing answers with these issue numbers.
 
-    work_queue makes exactly one gh call (`work_queue.LIST_ARGS`, an
-    `issue list`), so keying the answer on that prefix says everything
-    this suite needs gh to say.
+    work_queue's reads, each keyed on its own argv prefix: the ready
+    listing (`work_queue.LIST_ARGS`), the in-flight listing
+    (`work_queue.IN_FLIGHT_ARGS`), the repo owner (`gh repo view`), and
+    each ready issue's timeline. `labelers` maps an issue to the login
+    whose labeled event applied the ready label; an issue it does not
+    name was labelled by `owner` — the only labeler ADR-0032 honours.
     """
-    return FakeGh(answers={("issue", "list"):
-                           json.dumps([{"number": n} for n in numbers])})
+    labelers = labelers or {}
+
+    def timeline(args):
+        number = int(args[1].split("/")[-2])
+        return json.dumps([[labeled_by(labelers.get(number, owner))]])
+
+    return FakeGh(answers={
+        tuple(work_queue.LIST_ARGS[:4]):
+            json.dumps([{"number": n} for n in numbers]),
+        tuple(work_queue.IN_FLIGHT_ARGS[:4]):
+            json.dumps([{"number": n} for n in in_flight]),
+        ("repo", "view"): json.dumps({"owner": {"login": owner}}),
+        ("api",): timeline})
 
 
 def unreachable():
@@ -124,6 +146,26 @@ class TestEligible(unittest.TestCase):
         self.assertEqual(deferred, [
             "WO-0002: blocked by 'Export API', which names no work order,"
             " so its dependency cannot be checked"])
+
+
+    def test_a_ready_label_the_owner_did_not_apply_holds_the_row_back(self):
+        """ADR-0032: only the repo owner may apply wo:ready-for-agent;
+        anyone else's label is inert, here as in assembler.yml."""
+        candidates, deferred = work_queue.eligible(
+            found(row("WO-0002", issue=7)), {7},
+            held={7: "carries wo:ready-for-agent applied by drive-by, not"
+                     " the owner — inert (ADR-0032)"})
+        self.assertEqual(candidates, [])
+        self.assertEqual(deferred, [
+            "WO-0002: issue #7 carries wo:ready-for-agent applied by"
+            " drive-by, not the owner — inert (ADR-0032)"])
+
+    def test_an_order_already_in_flight_is_not_a_candidate_again(self):
+        candidates, deferred = work_queue.eligible(
+            found(row("WO-0002", issue=7)), {7}, in_flight={7})
+        self.assertEqual(candidates, [])
+        self.assertEqual(deferred, [
+            "WO-0002: issue #7 is already in flight on wo:in-progress"])
 
 
 class TestPriced(unittest.TestCase):
@@ -228,6 +270,128 @@ class TestPlanBatch(unittest.TestCase):
             found(row("WO-0001", issue=1)), {1},
             dict(CONFIG, wip_cap=True), spent_usd=0)
         self.assertIn("wip_cap must be a positive integer", problems[0])
+
+
+class TestInFlight(unittest.TestCase):
+    """Orders already on wo:in-progress hold wip slots and budget money
+    that the ledger has not recorded yet — the Conductor survey's
+    wip_cap-minus-in-flight rule, applied to the work-order planner."""
+
+    def test_in_flight_orders_take_wip_slots(self):
+        rows = found(*[row(f"WO-000{n}", issue=n) for n in range(1, 4)],
+                     row("WO-0009", issue=9))
+        batch, deferred, problems = work_queue.plan_batch(
+            rows, {1, 2, 3}, CONFIG, spent_usd=0, in_flight={9})
+        self.assertEqual([r["wo"] for r in batch], ["WO-0001", "WO-0002"])
+        self.assertEqual(deferred, [
+            "WO-0003: over the wip_cap of 3 this round (1 already in"
+            " flight)",
+            "WO-0009: issue #9 is already in flight on wo:in-progress"])
+        self.assertEqual(problems, [])
+
+    def test_a_full_house_in_flight_plans_nothing(self):
+        rows = found(row("WO-0001", issue=1),
+                     *[row(f"WO-000{n}", issue=n) for n in range(7, 10)])
+        batch, deferred, _ = work_queue.plan_batch(
+            rows, {1}, CONFIG, spent_usd=0, in_flight={7, 8, 9})
+        self.assertEqual(batch, [])
+        self.assertEqual(deferred, [
+            "WO-0001: over the wip_cap of 3 this round (3 already in"
+            " flight)",
+            *[f"WO-000{n}: issue #{n} is already in flight on"
+              " wo:in-progress" for n in range(7, 10)]])
+
+    def test_in_flight_budgets_count_against_the_monthly_cap(self):
+        rows = found(row("WO-0001", size="M", issue=1),
+                     row("WO-0009", size="L", issue=9))
+        batch, deferred, problems = work_queue.plan_batch(
+            rows, {1}, CONFIG, spent_usd=250, in_flight={9})
+        self.assertEqual(batch, [])
+        self.assertEqual(deferred, [
+            "WO-0001: would put the month over its $300.00 cap ($250.00"
+            " spent, $40.00 budgeted in flight, $0.00 already planned,"
+            " size:M budgets $15.00)",
+            "WO-0009: issue #9 is already in flight on wo:in-progress"])
+        self.assertEqual(problems, [])
+
+    def test_an_unpriceable_in_flight_order_refuses_the_plan(self):
+        """ADR-0034's fail-closed rule: money already committed at an
+        unknown price is an unknown spend, not a zero one."""
+        rows = found(row("WO-0001", issue=1),
+                     row("WO-0008", size="XL", issue=8, where="b.md:8"))
+        batch, _, problems = work_queue.plan_batch(
+            rows, {1}, CONFIG, spent_usd=0, in_flight={8, 9})
+        self.assertEqual(batch, [])
+        self.assertEqual(problems, [
+            "wq: WO-0008 (b.md:8) config: factory.json names no positive"
+            " budget for size 'XL'",
+            "wq: issue #9 is on wo:in-progress but no breakdown row"
+            " mirrors it, so its budget is unknown",
+            "wq: an order in flight cannot be priced — refusing to plan a"
+            " batch against a spend it cannot know"])
+
+    def test_the_in_flight_listing_asks_for_open_claimed_issues(self):
+        runner = listing(in_flight=(4, 5))
+        numbers, problems = work_queue.in_flight_issue_numbers(runner)
+        self.assertEqual((numbers, problems), ({4, 5}, []))
+        self.assertIn("wo:in-progress", runner.calls[0])
+        self.assertIn("open", runner.calls[0])
+
+    def test_a_full_in_flight_window_is_refused(self):
+        numbers, problems = work_queue.in_flight_issue_numbers(
+            listing(in_flight=range(100)))
+        self.assertIsNone(numbers)
+        self.assertEqual(len(problems), 1)
+        self.assertIn("older in-flight orders are invisible", problems[0])
+
+
+class TestOwnerHolds(unittest.TestCase):
+    """ADR-0032: the ready label is the owner's. The planner asks each
+    ready issue's timeline who applied it last, and treats the owner
+    exactly as assembler.actor_is_owner does."""
+
+    def test_the_owner_s_label_holds_nothing_back(self):
+        self.assertEqual(work_queue.owner_holds([7], listing(7)), ({}, []))
+
+    def test_the_owner_is_matched_case_insensitively(self):
+        run = listing(7, labelers={7: "The-Owner"})
+        self.assertEqual(work_queue.owner_holds([7], run), ({}, []))
+
+    def test_anyone_else_s_label_is_inert(self):
+        run = listing(7, 8, labelers={8: "drive-by"})
+        self.assertEqual(work_queue.owner_holds([7, 8], run), ({
+            8: "carries wo:ready-for-agent applied by drive-by, not the"
+               " owner — inert (ADR-0032)"}, []))
+
+    def test_an_unreadable_timeline_fails_closed(self):
+        run = FakeGh(answers={("repo", "view"):
+                              json.dumps({"owner": {"login": OWNER}})},
+                     failing=["api"])
+        self.assertEqual(work_queue.owner_holds([7], run), ({
+            7: "carries wo:ready-for-agent, but who applied it could not"
+               " be read — held back until it can be (ADR-0032)"},
+            ["wq: gh api timeline for #7 failed: boom"]))
+
+    def test_a_timeline_with_no_labeled_event_fails_closed(self):
+        run = FakeGh(answers={("repo", "view"):
+                              json.dumps({"owner": {"login": OWNER}}),
+                              ("api",): json.dumps([[]])})
+        self.assertEqual(work_queue.owner_holds([7], run), ({
+            7: "carries wo:ready-for-agent, but who applied it could not"
+               " be read — held back until it can be (ADR-0032)"},
+            ["wq: issue #7's timeline holds no event applying"
+             " wo:ready-for-agent, so who applied it is unknown"]))
+
+    def test_an_unknown_owner_trusts_no_label(self):
+        holds, problems = work_queue.owner_holds(
+            [7], FakeGh(failing=["repo"]))
+        self.assertIsNone(holds)
+        self.assertEqual(problems, ["wq: gh repo view failed: boom"])
+
+    def test_no_ready_issue_reads_nothing(self):
+        run = listing()
+        self.assertEqual(work_queue.owner_holds([], run), ({}, []))
+        self.assertEqual(run.calls, [])
 
 
 class TestReadyIssueNumbers(unittest.TestCase):
@@ -506,6 +670,51 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
              " in work_queue.py, not a runtime option, so the fix is"
              " raising it there (or narrowing LIST_ARGS) and redeploying",
              "wq: 1 problem(s)"])
+
+    def test_a_non_owner_ready_label_plans_nothing_and_says_why(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(
+                tmp, "- [ ] **WO-0001** ready — size:S, blocked by: —"
+                " (PRD-0001 §S) (tracker: #7)\n")
+            code, out = self.planned(
+                ["plan"], run=listing(7, labelers={7: "drive-by"}),
+                root=tree.root)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "wq: 0 work order(s) ready to run in parallel (wip_cap 3)",
+            "  deferred WO-0001: issue #7 carries wo:ready-for-agent"
+            " applied by drive-by, not the owner — inert (ADR-0032)",
+            "wq: 0 problem(s)"])
+
+    def test_orders_in_flight_fill_the_wip_cap(self):
+        breakdown = "".join(
+            f"- [ ] **WO-000{n}** order — size:S, blocked by: —"
+            f" (PRD-0001 §S) (tracker: #{n})\n" for n in range(1, 5))
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(tmp, breakdown)
+            code, out = self.planned(
+                ["plan", "--json"], run=listing(1, in_flight=(2, 3, 4)),
+                root=tree.root)
+        payload = json.loads("\n".join(out.splitlines()[:-1]))
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["batch"], [])
+        self.assertEqual(payload["deferred"], [
+            "WO-0001: over the wip_cap of 3 this round (3 already in"
+            " flight)",
+            *[f"WO-000{n}: issue #{n} is already in flight on"
+              " wo:in-progress" for n in range(2, 5)]])
+
+    def test_an_unreadable_in_flight_listing_plans_nothing(self):
+        run = listing(1)
+        run.failing = ["issue", "list", "--label", "wo:in-progress"]
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(
+                tmp, "- [ ] **WO-0001** order — size:S, blocked by: —"
+                " (PRD-0001 §S) (tracker: #1)\n")
+            code, out = self.planned(["plan"], run=run, root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            "wq: gh issue list failed: boom", "wq: 1 problem(s)"])
 
     def test_a_config_failure_ends_with_the_same_summary_line(self):
         with tempfile.TemporaryDirectory() as tmp:
