@@ -390,8 +390,11 @@ WORK_LOG = "feat: the blueprint\n" + COST_ONLY_LOG
 
 
 BRANCH_SHA = "5bed5e"
+# Origin's copy of the branch, behind the local ref by spend commits
+# made locally (record_lost, commit_held): the delete leases on it.
+ORIGIN_SHA = "0a1b2c"
 LEASED_DELETE = ["push", "--force-with-lease=refs/heads/conductor/b1-13:"
-                 f"{BRANCH_SHA}", "origin", ":refs/heads/conductor/b1-13"]
+                 f"{ORIGIN_SHA}", "origin", ":refs/heads/conductor/b1-13"]
 
 
 def head_call(root):
@@ -403,12 +406,24 @@ def ls_call(root):
             "--", COSTS)
 
 
+def ls_remote_call(root):
+    return ("-C", str(root), "ls-remote", "origin",
+            "refs/heads/conductor/b1-13")
+
+
+ON_ORIGIN = f"{ORIGIN_SHA}\trefs/heads/conductor/b1-13\n"
+
+
 def log_call(root):
     return ("-C", str(root), "log", "--format=%s",
             f"origin/main..{BRANCH_SHA}")
 
 
-class TestClose(unittest.TestCase):
+class CloseCase(unittest.TestCase):
+    """close_batch through FakeGit and FakeGh, over a scratch root; no
+    tests of its own, so a facet module reuses it without re-running
+    these."""
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
@@ -424,7 +439,8 @@ class TestClose(unittest.TestCase):
              f"conductor/b1-13:{COSTS}"): lines(branch_costs),
             ls_call(self.root): COSTS + "\n",
             head_call(self.root): BRANCH_SHA + "\n",
-            log_call(self.root): branch_log})
+            log_call(self.root): branch_log,
+            ls_remote_call(self.root): ON_ORIGIN})
         self.gh = gh or FakeGh({**NO_LANDED, LABEL_LIST: HAS_NEEDS_HUMAN})
         return close.close_batch(self.root, "b1", lambda: NOW,
                                  self.git, self.gh)
@@ -443,6 +459,8 @@ class TestClose(unittest.TestCase):
                              if line.strip())
         return found
 
+
+class TestClose(CloseCase):
     def test_close_carries_blocked_spend_scores_commits_and_asks(self):
         summary, problems = self.close(ROWS)
         self.assertEqual(problems, [])
@@ -476,6 +494,9 @@ class TestClose(unittest.TestCase):
                     "docs/factory/costs/runs"],
             here + ["rev-parse", "conductor/b1-13"],
             here + ["log", "--format=%s", f"origin/main..{BRANCH_SHA}"],
+            here + ["ls-remote", "origin", "refs/heads/conductor/b1-13"],
+            here + ["fetch", "origin", "refs/heads/conductor/b1-13"],
+            here + ["merge-base", "--is-ancestor", ORIGIN_SHA, BRANCH_SHA],
             here + ["add", "--", "docs/factory/batches/b1", COSTS,
                     "docs/factory/costs/runs/conductor-b1-13-build-1.jsonl",
                     "docs/factory/costs/runs/conductor-b1-13-spec-1.jsonl",
@@ -498,8 +519,9 @@ class TestClose(unittest.TestCase):
 
     def test_a_blocked_item_whose_pr_merged_is_reconciled_as_merged(self):
         # #938: its PR merged after the block, so #13 is merged outside
-        # the batch: no spend carry, no label, a Closes line, and the
-        # scorecard counts what shipped.
+        # the batch: no label, a Closes line, and the scorecard counts
+        # what shipped. Its branch's spend is still carried: the PR took
+        # only what was pushed, and 13-build-1 is not on main.
         gh = FakeGh(LANDED_GH)
         summary, problems = self.close(ROWS, costs=SPEND, gh=gh)
         self.assertEqual(problems, [])
@@ -513,12 +535,17 @@ class TestClose(unittest.TestCase):
         self.assertEqual(self.ledger()[-1]["id"], "ask-5")
         cards = (self.root / close.SCORECARDS).read_text().splitlines()
         self.assertEqual(json.loads(cards[1]), EXPECTED_LANDED)
-        self.assertEqual(self.run_file_ids(), [])
+        self.assertEqual(self.run_file_ids(), ["conductor-b1-13-build-1"])
         here = ["-C", str(self.root)]
         self.assertEqual(self.git.calls, [
             here + ["fetch", "origin", "main"],
             here + ["merge", "--no-edit", "origin/main"],
+            here + ["ls-tree", "--name-only", "conductor/b1-13", "--", COSTS],
+            here + ["show", f"conductor/b1-13:{COSTS}"],
+            here + ["ls-tree", "-r", "--name-only", "conductor/b1-13", "--",
+                    "docs/factory/costs/runs"],
             here + ["add", "--", "docs/factory/batches/b1", COSTS,
+                    "docs/factory/costs/runs/conductor-b1-13-build-1.jsonl",
                     close.SCORECARDS],
             here + ["commit", "-m", "chore(conductor): close batch b1"],
             here + ["push", "-u", "origin", "conductor/b1"]])
@@ -591,8 +618,8 @@ class TestClose(unittest.TestCase):
             " fatal: rejected"]))
         self.assertEqual(fake.called("-C", str(self.root), "commit"), [])
 
-    def test_the_delete_is_leased_on_the_inspected_sha(self):
-        # A commit on origin's branch that the local ref lacks was never
+    def test_the_delete_is_leased_on_origins_inspected_sha(self):
+        # A commit on origin's branch after close read it was never
         # inspected; the lease makes git refuse the delete then.
         self.close(ROWS)
         self.assertEqual(self.git.called("-C", str(self.root), "push",
@@ -606,7 +633,8 @@ class TestClose(unittest.TestCase):
                          f"conductor/b1-13:{COSTS}"): lines(BLOCKED_SPEND),
                         ls_call(self.root): COSTS + "\n",
                         head_call(self.root): BRANCH_SHA + "\n",
-                        log_call(self.root): COST_ONLY_LOG},
+                        log_call(self.root): COST_ONLY_LOG,
+                        ls_remote_call(self.root): ON_ORIGIN},
                        failing=["-C", str(self.root), *LEASED_DELETE],
                        error=stale)
         summary, problems = self.close(ROWS, git=fake)

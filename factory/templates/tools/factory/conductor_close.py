@@ -336,10 +336,23 @@ def _refused(problems):
             for problem in problems]
 
 
+def merged_outside(rows, merged):
+    """The `merged` items whose merge the Conductor's turn did not make
+    (a merged row not from `merging`, ADR-0105), in their given order.
+    Their PR carried only what was pushed to the branch; spend committed
+    there locally (record_lost, commit_held) never reached main."""
+    return [item for item in merged if any(
+        row["kind"] == "state" and row["item"] == item
+        and row["to"] == "merged" and row["from"] != "merging"
+        for row in rows)]
+
+
 def carry_blocked_spend(git, root, batch, blocked, rows):
     """Copy onto the batch branch, as per-run files, every spend row a
-    blocked item's branch holds for its runs: so all spend reaches main
-    without another writer of the shared aggregate. The rows are read by
+    blocked item's branch holds for its runs (and a merged-outside
+    item's, which close_batch passes in `blocked` too): so all spend
+    reaches main without another writer of the shared aggregate. The
+    rows are read by
     conductor_spend.ref_rows, where an absent ledger holds none (#708,
     #772), and land through cost_ledger.record_isolated, which skips a
     row the batch branch already holds (row_key, ADR-0049), so a re-run
@@ -382,10 +395,10 @@ def sort_blocked_branches(git, root, batch, blocked):
     (conductor_spend.spend_run, run_item), whose rows carry_blocked_spend
     put on the batch branch; it is kept when any commit is something
     else — a Worker's own `chore(cost): ...` commit, or another batch's
-    run, included (#771). The sha is the local ref inspected, which the
-    delete leases on. A branch with nothing beyond origin/main is in
-    neither: it holds nothing to lose or to keep, and may not be on
-    origin at all."""
+    run, included (#771), or a commit on origin's copy the local ref
+    lacks. The sha is origin's (_origin_sha), which the delete leases
+    on. A branch with nothing beyond origin/main, or none on origin, is
+    in neither: it holds nothing to lose or to keep there."""
     sorted_branches = {"delete": [], "keep": []}
     for item in blocked:
         branch = flow.item_branch(batch, item)
@@ -397,12 +410,49 @@ def sort_blocked_branches(git, root, batch, blocked):
             return None, _refused(problems)
         if not subjects:
             continue
-        if all(run_item(batch, conductor_spend.spend_run(subject) or "")
-               == item for subject in subjects):
-            sorted_branches["delete"].append((branch, sha.strip()))
-        else:
+        if not all(run_item(batch, conductor_spend.spend_run(subject) or "")
+                   == item for subject in subjects):
+            sorted_branches["keep"].append(branch)
+            continue
+        origin, problems = _origin_sha(git, root, branch, sha.strip())
+        if problems:
+            return None, _refused(problems)
+        if origin:
+            sorted_branches["delete"].append((branch, origin))
+        elif origin == "":
             sorted_branches["keep"].append(branch)
     return sorted_branches, []
+
+
+def _origin_sha(git, root, branch, local):
+    """(origin's sha of `branch` when the local sha inspected holds it,
+    "" when it does not, None when origin has no such branch; problems).
+    The delete leases on origin's sha, not the local one: the local ref
+    is routinely ahead (spend commits record_lost and commit_held make
+    locally), and a lease on it is rejected as stale. Origin's sha must
+    be an ancestor of the local sha, or origin holds commits close never
+    inspected, and the branch is kept."""
+    ref = f"refs/heads/{branch}"
+    listed, problems = _git(git, root, ["ls-remote", "origin", ref],
+                            f"reading origin's {branch}")
+    if problems:
+        return None, problems
+    shas = [line.split()[0] for line in listed.splitlines()
+            if line.split()[1:] == [ref]]
+    if not shas:
+        return None, []
+    _, problems = _git(git, root, ["fetch", "origin", ref],
+                       f"fetching origin's {branch}")
+    if problems:
+        return None, problems
+    try:
+        git(["-C", str(root), "merge-base", "--is-ancestor", shas[0], local])
+    except CLI_FAILURES as err:
+        if getattr(err, "returncode", None) == 1:
+            return "", []
+        return None, [f"reading whether {branch} holds origin's {shas[0]}"
+                      f" failed: {detail(err, every_line=True)}"]
+    return shas[0], []
 
 
 # A scorecard row's text fields and its cause tables (#814, #819); every
@@ -570,8 +620,9 @@ def _publish(root, batch, git, gh, finals, reasons, branches):
             return [f"cd: close: gh {' '.join(call[:2])} failed:"
                     f" {detail(err)}; finish the PR and the needs-human"
                     " labels by hand"]
-    # Leased on the sha inspected: git refuses the delete when origin's
-    # branch moved past it, so no commit close never read is removed.
+    # Leased on origin's sha as inspected: git refuses the delete when
+    # origin's branch moved past it, so no commit close never read is
+    # removed.
     for branch, sha in branches["delete"]:
         ref = f"refs/heads/{branch}"
         _, problems = _git(git, root, ["push", f"--force-with-lease={ref}:"
@@ -586,8 +637,10 @@ def reconcile_landed(gh, root, batch, now, blocked):
     """(the blocked items whose PR merged after the block, in item
     order, problems): each is moved blocked → merged as merged outside
     the batch (#938, ADR-0105), before the close reads its finals,
-    carries spend or labels anything — its branch merged, so its spend
-    rows reached main on that PR, and it needs no needs-human label.
+    carries spend or labels anything — its branch merged, so it needs
+    no needs-human label, and its pushed spend rows reached main on that
+    PR; carry_blocked_spend still reads its branch, for spend committed
+    there locally and never pushed.
     Every branch is read before any row is written: a read that fails
     refuses the close with nothing written."""
     rows, problems = load(root, batch)
@@ -635,9 +688,11 @@ def close_batch(root, batch, clock, git, gh):
             else _final_items(rows, batch)
         if problems:
             return None, problems
+    carried = sorted(finals["blocked"]
+                     + merged_outside(rows, finals["merged"]),
+                     key=lambda item: int(item[1:]))
     problems = (update_from_main(git, root, batch_branch(batch))
-                or carry_blocked_spend(git, root, batch, finals["blocked"],
-                                       rows))
+                or carry_blocked_spend(git, root, batch, carried, rows))
     if problems:
         return None, problems
     branches, problems = sort_blocked_branches(git, root, batch,

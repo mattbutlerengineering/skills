@@ -205,14 +205,69 @@ def _written(worktree, *paths):
             if (worktree / path).is_file()]
 
 
+def _version_of(text):
+    found = VERSION.search(text)
+    return found.group(2) if found else None
+
+
+def _at_version(text, version):
+    return VERSION.sub(lambda m: m.group(1) + version + m.group(3), text,
+                       count=1)
+
+
+def plugin_resolution(base, ours, theirs):
+    """plugin.json's merged text when the version line is the only
+    conflict, else None. PURE. The version line takes origin/main's
+    (`theirs`) value, which step 3 then bumps; past that line, a side
+    that left the file as `base` takes the other side's edits. A turn
+    that committed its bump and stalled conflicts here once main's
+    version moves, and only here."""
+    if None in (base, ours, theirs) or _version_of(theirs) is None:
+        return None
+    version = _version_of(theirs)
+    base, ours = _at_version(base, version), _at_version(ours, version)
+    if ours in (base, theirs):
+        return theirs
+    return ours if theirs == base else None
+
+
+def _stage(git, worktree, number):
+    """The conflicted plugin.json's text at merge stage `number` (1 base,
+    2 ours, 3 theirs), or None when that side has none."""
+    try:
+        return git(["-C", str(worktree), "show",
+                    f":{number}:{PLUGIN}"]).stdout
+    except CLI_FAILURES:
+        return None
+
+
+def _mechanical(git, worktree, conflicted):
+    """True when the conflicts are mechanical in the factory source repo:
+    the manifest, which regeneration rewrites, and plugin.json when its
+    version line alone conflicts, which this resolves by writing
+    plugin_resolution's text."""
+    if not conflicted or not set(conflicted) <= {MANIFEST, PLUGIN} \
+            or not factory_source(worktree):
+        return False
+    if PLUGIN not in conflicted:
+        return True
+    resolved = plugin_resolution(*(_stage(git, worktree, number)
+                                   for number in (1, 2, 3)))
+    if resolved is None:
+        return False
+    (worktree / PLUGIN).write_text(resolved, encoding="utf-8")
+    return True
+
+
 def update_branch(git, tool, worktree, branch):
     """Steps 1-2: merge origin/main into the item branch. Item branches
     do not edit docs/factory/costs.jsonl — spend is a per-run file — so a
     conflict in that aggregate is a real conflict and aborts. GitHub does
-    not honor a merge=union driver. A conflict in the manifest alone is
-    resolved by regeneration in the factory source repo; any other
-    conflict, or a manifest conflict in a consumer repo, aborts the
-    merge."""
+    not honor a merge=union driver. In the factory source repo a conflict
+    in the manifest is resolved by regeneration, and one in plugin.json's
+    version line by taking origin/main's (plugin_resolution), which step
+    3 bumps again; any other conflict, or either in a consumer repo,
+    aborts the merge."""
     _git(git, worktree, ["fetch", "origin", "main"], "fetching origin/main",
          RETRY)
     try:
@@ -223,7 +278,7 @@ def update_branch(git, tool, worktree, branch):
     conflicted = _git(git, worktree, ["diff", "--name-only",
                                       "--diff-filter=U"],
                       "listing conflicts").split()
-    if conflicted != [MANIFEST] or not factory_source(worktree):
+    if not _mechanical(git, worktree, conflicted):
         if conflicted:
             # A merge git refused before starting (a dirty tracked file,
             # #726) left nothing to abort, and its reason is the stall.
@@ -233,7 +288,8 @@ def update_branch(git, tool, worktree, branch):
                     else f"merging origin/main into {branch} failed:"
                     f" {failure}")
     _regenerate(tool, worktree)
-    _git(git, worktree, ["add", "--", *_written(worktree, MANIFEST)],
+    _git(git, worktree, ["add", "--", *_written(
+        worktree, *dict.fromkeys([MANIFEST, *conflicted]))],
          "staging the regenerated manifest")
     _git(git, worktree, ["commit", "--no-edit"],
          "committing the merge of origin/main")
@@ -263,13 +319,15 @@ def bump_version(git, tool, worktree, branch):
                     " MAJOR.MINOR.PATCH")
     major, minor, patch = parts.groups()
     version = f"{major}.{minor}.{int(patch) + 1}"
-    path = worktree / PLUGIN
-    text = path.read_text(encoding="utf-8")
-    bumped = VERSION.sub(lambda m: m.group(1) + version + m.group(3), text,
-                         count=1)
+    # Judged on the commit, not the worktree: a turn that wrote the bump
+    # and stalled before committing it left the worktree bumped, and its
+    # retry must still regenerate, commit and reserve.
+    text = _git(git, worktree, ["show", f"HEAD:{PLUGIN}"],
+                f"reading HEAD's {PLUGIN}")
+    bumped = _at_version(text, version)
     if bumped == text:
         return None
-    path.write_text(bumped, encoding="utf-8")
+    (worktree / PLUGIN).write_text(bumped, encoding="utf-8")
     _regenerate(tool, worktree)
     _git(git, worktree, ["add", "--",
                          *_written(worktree, PLUGIN, MANIFEST)],
