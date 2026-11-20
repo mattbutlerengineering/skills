@@ -25,6 +25,11 @@ as text: fenced blocks and inline code are not skipped.
   kb drift share since #758: a `"title"` is dropped, an `<angle target>`
   keeps its spaces, and `#fragment` and `?query` are ignored; the path is
   then percent-decoded, so an encoded target names the file it decodes to.
+  The target must match the on-disk name exactly, case included, and stay
+  inside the repo (`knowledge_plane.link_target_problem`): `readme.md`
+  for `README.md` passes `exists()` on macOS and fails on Linux CI, so I
+  calls it `no such path` everywhere, and a `../../` that climbs out of
+  the repo is `outside the repo`.
   A sample layout in a copied research note — a markdown link to an illustrative
   `pages/x.md` — is a stale link, even inside backticks.
 

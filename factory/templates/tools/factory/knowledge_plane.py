@@ -23,6 +23,7 @@ keeps `_scannable_files` (its OWN policy — which directories count as
 parse_run the already-selected path list to read once, alongside
 everything else this function already reads once.
 """
+import os
 import re
 from collections import namedtuple
 from pathlib import Path
@@ -191,6 +192,32 @@ def resolve_link(root, doc, target):
     if path.startswith("/"):
         return Path(root) / path.lstrip("/")
     return Path(doc).parent / path
+
+
+def link_target_problem(root, path):
+    """None when PATH (a resolve_link result) names something inside
+    ROOT whose every component matches an on-disk name exactly, case
+    included; else the reason it does not: "outside the repo" or "no
+    such path". exists() alone is the host's answer, and a
+    case-insensitive filesystem (macOS) finds `readme.md` for
+    `README.md` where Linux CI and GitHub do not."""
+    # Both sides normalised, never resolved: resolving one and not the
+    # other breaks under a symlinked root (macOS's /var -> /private/var).
+    base = Path(os.path.normpath(Path(root).absolute()))
+    try:
+        rel = Path(os.path.normpath(Path(path).absolute())).relative_to(base)
+    except ValueError:
+        return "outside the repo"
+    here = base
+    for part in rel.parts:
+        try:
+            names = os.listdir(here)
+        except OSError:
+            return "no such path"
+        if part not in names:
+            return "no such path"
+        here = here / part
+    return None
 
 
 # A plain repo path: no glob, placeholder, whitespace, quote or URL

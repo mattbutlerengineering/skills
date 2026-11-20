@@ -97,7 +97,8 @@ from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
                              WO_TOKEN,
                              adr_record, breakdown_rows, fenced,
-                             local_link_targets, parse_run, repo_root,
+                             link_target_problem, local_link_targets,
+                             parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
                              work_orders)
 from protocol import frontmatter_end, parse_frontmatter
@@ -796,10 +797,12 @@ def check_staleness(root, parsed=None):
         for lineno, line in enumerate(lines, 1):
             for target in local_link_targets(line):
                 resolved = resolve_link(root, path, target)
-                if resolved is not None and not resolved.exists():
+                why = (None if resolved is None
+                       else link_target_problem(root, resolved))
+                if why:
                     problems.append(
                         f"I: {rel}:{lineno} stale link"
-                        f" {target.split('#', 1)[0]} (no such path)")
+                        f" {target.split('#', 1)[0]} ({why})")
     return problems
 
 
