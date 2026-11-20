@@ -45,7 +45,10 @@ class SeedIndexCase(unittest.TestCase):
     def cli(self, *argv):
         code, out = cli_contract.capture(factory_init.main, list(argv))
         self.assertEqual(code, 0, out)
-        return out.splitlines()
+        # The stamp's "next:" follow-ups are pinned in
+        # test_factory_init_keep.TestNextSteps, not by these seed cases.
+        return [line for line in out.splitlines()
+                if not line.startswith("factory-init: next:")]
 
     def assert_gates_clean(self):
         result = subprocess.run(
