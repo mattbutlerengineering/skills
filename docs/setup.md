@@ -12,7 +12,7 @@ Unattended dispatch is deliberately left off. See the last section.
 
 ## 1. Install the plugin
 
-The three harnesses are covered in the [README](../README.md#install). Any of
+The harnesses are covered in the [README](../README.md#install). Any of
 them works on a bare install — no third-party tools, MCP servers, or other
 plugins.
 
@@ -33,11 +33,16 @@ stamp — because it needs nothing but the installed plugin.
 
 ## 3. Stamp the factory payload
 
-From a checkout of this repo:
+From a clone of this repo (`git clone
+https://github.com/mattbutlerengineering/skills`), or from the installed
+plugin's own directory, which holds the same `tools/`:
 
 ```
 python3 tools/factory_init.py stamp <path-to-target-repo>
 ```
+
+A clean stamp ends with `factory-init: next:` lines naming what step 4
+still needs from you (tests, CODEOWNERS), only while they are owed.
 
 All-or-nothing. It refuses a drifted source payload, a malformed manifest key,
 a destination resolving outside the target, and **any existing file** in the
@@ -81,8 +86,12 @@ pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
 ## 4. Verify the stamp
 
-- [ ] **A `tests/` directory exists.** The stamped `check` target runs
-      `python3 -m unittest discover -q tests` and errors outright without one.
+- [ ] **A `tests/` directory holding at least one test exists.** The
+      stamped `check` target runs `python3 -m unittest discover -q tests`
+      and errors outright without one. An empty `tests/` (or one with only
+      `__init__.py`) fails too: on Python 3.12+ unittest exits 5 on
+      "NO TESTS RAN", and git never tracks an empty directory, so CI sees
+      none at all.
       A fresh stamp into a test-less repo fails its first gate with
       `ImportError: Start directory is not importable: 'tests'` — which reads
       like a broken tool and isn't.
@@ -117,7 +126,9 @@ a factory change that adds one leaves a Makefile that has never heard of it.
 ## 5. Sync the label taxonomy
 
 The 29-label taxonomy backs the work-order lifecycle machine, the gate digest,
-and the sweeps' triage:
+and the sweeps' triage. `label_sync.py` reads and writes labels through the
+`gh` CLI, so it needs `gh auth status` to pass and the target repo pushed to
+GitHub with an `origin` remote:
 
 ```
 python3 tools/factory/label_sync.py            # report drift
@@ -194,7 +205,7 @@ the factory stamp.
   `/ux-writing` owns its `## Voice & terms` section; `polish` and
   `ux-design` read it (ADR-0079).
 
-- [ ] `python3 <plugin>/kb.py lint` prints `kb: 0 problem(s)` once
+- [ ] `python3 <plugin>/tools/kb.py lint` prints `kb: 0 problem(s)` once
       `docs/kb/` exists
 - [ ] The generated block in `CLAUDE.md` stays under its 2 KB budget
 
@@ -303,10 +314,15 @@ gained since is the usual way a consumer's profile goes stale
 **Tools-only (Conductor-only) stamp.** A repo that wants the Conductor and
 none of the CI can install just two pieces: `tools/factory/` and
 `.github/factory.json` with its `conductor` table. Leave out the workflows,
-the `Makefile` and the seeded ADRs, so CI and spend stay as they are. There
-is no stamp flag for this mode. Copy the two pieces from a stamped payload by
-hand, and expect `doctor` (detector E) to report the files left out as
-missing. That finding describes the chosen scope and is not a fault.
+the `Makefile` and the seeded ADRs, so CI and spend stay as they are:
+
+```
+python3 tools/factory_init.py stamp --tools-only <path-to-target-repo>
+```
+
+It lands `.github/factory.json`, `tools/factory/` and a manifest marked
+tools-only, so detector E checks only those keys. A tools tree copied by
+hand is adopted with `update --tools-only <target>`.
 
 - Without a `Makefile`, set `conductor.gate_command`. It must be one command
   with no shell operators, because the Worker's tool allowlist permits that

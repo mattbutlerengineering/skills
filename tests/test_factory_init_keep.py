@@ -108,6 +108,49 @@ class TestKeepableIsDerived(unittest.TestCase):
         self.assertFalse(factory_init.is_keepable(Path("factory/x.md")))
 
 
+NEXT_TESTS = ("factory-init: next: add tests/ holding at least one"
+              " test_*.py — make check runs `python3 -m unittest discover"
+              " -q tests`, which fails on a missing or empty tests/")
+NEXT_OWNERS = ("factory-init: next: replace every @<owner> in"
+               " .github/CODEOWNERS with a GitHub handle or team that has"
+               " write access")
+
+
+class TestNextSteps(unittest.TestCase):
+    """A bare stamp said only '0 problem(s)', and the next make check
+    failed on an unimportable tests/ (docs/setup.md section 4)."""
+
+    def stamp(self, target, *flags):
+        code, out = cli_contract.capture(
+            factory_init.main, ["stamp", *flags, str(target)])
+        self.assertEqual(code, 0, out)
+        return out.splitlines()
+
+    def test_a_fresh_stamp_names_both_follow_ups(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            target.mkdir()
+            self.assertEqual(self.stamp(target), [
+                NEXT_TESTS, NEXT_OWNERS, "factory-init: 0 problem(s)"])
+
+    def test_follow_ups_already_done_are_not_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            FixtureTree(target).write("tests/test_x.py", "")
+            FixtureTree(target).write(".github/CODEOWNERS", MINE)
+            out = self.stamp(target, "--keep-existing")
+            self.assertEqual(out[-1], "factory-init: 0 problem(s)")
+            self.assertEqual(
+                [line for line in out if "next:" in line], [])
+
+    def test_a_tools_only_stamp_names_none(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            target.mkdir()
+            self.assertEqual(self.stamp(target, "--tools-only"),
+                             ["factory-init: 0 problem(s)"])
+
+
 class TestKeepCli(unittest.TestCase):
     def test_each_kept_file_is_a_line(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,7 +161,7 @@ class TestKeepCli(unittest.TestCase):
             self.assertEqual(code, 0, out)
             self.assertEqual(out.splitlines(), [
                 "factory-init: kept .github/CODEOWNERS (yours — the stamp"
-                " did not write it)",
+                " did not write it)", NEXT_TESTS,
                 "factory-init: 0 problem(s)"])
             self.assertEqual((target / ".github/CODEOWNERS").read_text(),
                              MINE)
