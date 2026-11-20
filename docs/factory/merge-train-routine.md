@@ -83,16 +83,35 @@ Implement-queue's pre-flight, run with nothing claimed. One line per
 open PR, with its number, title, and exactly one verdict:
 
 - **merge** — `required_check` present and green on the PR's current
-  head; a review pass from a reviewer distinct from the author, or a
-  `fast-path: low-risk` classification with no specialist matched
-  (ADR-0088); no `gate_paths` file; no `hold_labels` label on the PR
-  or its issue.
+  head; the PR's newest verdict comment from the queue's own account
+  (a `reviewer-verdict:` or `fast-path: low-risk` first line, as the
+  skill's Phase 3 step 1 reads them) is a `reviewer-verdict: pass`
+  from a reviewer distinct from the author with no
+  `specialist-verdict: block` line, or a `fast-path: low-risk`
+  classification with no specialist matched (ADR-0088), and its
+  `Head:` is the current head — a pass recorded at an earlier head, or
+  one a later flag or error comment followed, is not a pass for this
+  head (the skill: "a pass covers only the head the gate recorded");
+  no `gate_paths` file; no `hold_labels` label on the PR or its issue.
 - **review first** — green, no gate path, no hold label, but no review
   pass yet and the fast path says `review (<path>)` or fails closed.
   The reviewer dispatch is implement-queue's Phase 2 gate, which this
-  routine runs for such a PR; a derived `flag` (the orchestrator's `verdict` hook on the reviewer's
-  score; the gate comment's first line carries the score) or a `block`
-  ends in `needs-review` and no merge, per the reviewer contract.
+  routine runs for such a PR; a derived `flag` (the orchestrator's
+  `verdict` hook on the reviewer's score; the gate comment's first line
+  carries the score), a `block` or an `error` ends in no merge.
+- **held at review** — the newest verdict comment at the PR's current
+  head is a flag, a `specialist-verdict: block` or an error. The
+  reviewer contract's follow-up (a worker push, the `needs-review`
+  label, deferred findings filed as an issue) is the queue's to make,
+  and §7 forbids this routine every one of those writes, so the PR is
+  reported and never re-reviewed or merged here until its head
+  changes: re-reviewing an unchanged head would only buy reviews until
+  one passes.
+- **parked** — the PR's newest `<!-- merge-denied: <sha> -->` marker
+  (the skill's "Parked on a refusal") names its current head. Reported
+  in the count "N PRs parked on merge denial"; never gated, reviewed or
+  merged here until a new head, a changed label set or the Owner's word
+  ends the park.
 - **human gate** — changes a `gate_paths` file (a rename counts by its
   old path as well as its new one; a changed-file list that is partial,
   or a `changed-files` hook that fails, is a human gate too), or carries
@@ -119,8 +138,8 @@ In normal mode only, over the PRs whose verdict is **merge**, oldest
 first, one at a time:
 
 1. Compare the PR's current head with its gated head as the skill's
-   Phase 3 step 1 defines (the `Head:` line of the latest verdict
-   comment authored by the queue's own account). A mismatch, or no
+   Phase 3 step 1 defines (the `Head:` line of the latest verdict or
+   `fast-path: low-risk` comment authored by the queue's own account). A mismatch, or no
    gated head, is a failed re-check: run `gh pr merge <N> --disable-auto`,
    merge nothing from the PR, report it as **head moved after review**,
    and go to the next PR.
@@ -135,7 +154,10 @@ first, one at a time:
    review can change while the train waits.
 4. Run the `merge-command` hook, where `<sha>` is the gated head. A merge the runtime denies is
    reported as **awaiting a human merge** with the denial, and is
-   never retried by any other route in this run (ADR-0087). A
+   never retried by any other route (ADR-0087): comment the derived
+   verdict line on the PR ending in `<!-- merge-denied: <gated head> -->`,
+   the skill's park marker, so the next run reads it as **parked**
+   instead of attempting the merge again. A
    capability gap is not a denial: run its twin as the skill's
    [capability-gap section](../../skills/implement-queue/references/cloud-sessions.md#a-capability-gap-is-not-a-permission-refusal)
    says.
