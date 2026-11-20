@@ -223,3 +223,17 @@ class TestWorkflowPermissions(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestCharterReplayCredential(unittest.TestCase):
+    """The replay step hands the claude CLI either credential, as
+    assembler.yml does: this repo holds only CLAUDE_CODE_OAUTH_TOKEN, so
+    the API key alone left every replayed case unauthenticated."""
+
+    def test_the_replay_step_passes_the_oauth_token(self):
+        text = (WORKFLOWS / "charter-replay.yml").read_text(encoding="utf-8")
+        step = text.split("- name: Replay golden fixture", 1)[1].split(
+            "run:", 1)[0]
+        self.assertIn(
+            "CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}",
+            step)
