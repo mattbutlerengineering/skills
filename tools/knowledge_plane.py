@@ -509,10 +509,14 @@ def breakdown_rows(lines):
             continue
         block = _row_block(lines, index)
         # A dependency may sit in the row's sub-bullets (the decompose
-        # template's form), so blockers are read from the whole block.
+        # template's form), so blockers are read from the whole block —
+        # outside its fences: the block keeps an indented fenced example
+        # (#2188), and a `Blocked by:` quoted there is no edge.
+        asserted = "\n".join(text for _, text in unfenced(
+            block.splitlines()))
         out.append({**row, "lineno": index + 1, "block": block,
-                    "blockers": row_blockers(block),
-                    "unreadable": row_unreadable_blockers(block)})
+                    "blockers": row_blockers(asserted),
+                    "unreadable": row_unreadable_blockers(asserted)})
     return out
 
 
