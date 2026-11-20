@@ -431,6 +431,10 @@ def main(argv):
               f" the root, not in its place)\n{USAGE}")
         return 2
     if argv[0] == "extract":
+        _, missing = doc_set(root, paths)
+        if missing:
+            # A mistyped doc path must not read as "no claims".
+            return cli.report(LABEL, missing)
         print(json.dumps(extract(root, paths), indent=2))
         return 0
     docs, _ = doc_set(root, paths)

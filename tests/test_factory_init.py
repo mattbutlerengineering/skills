@@ -486,8 +486,13 @@ class TestTheRespellingHasOneOwner(unittest.TestCase):
         """The same claim from the other end, over the generated file that
         actually ships."""
         text = self.PAYLOAD_MAKEFILE.read_text(encoding="utf-8")
+        # Any .py not under tools/factory/: since ADR-0131 a command the
+        # transform forgot reads `python3 tools/gates.py`, slash and all,
+        # which a no-slash pattern could never match.
+        stray = re.compile(r"python3 (?!tools/factory/)\S+\.py")
+        self.assertTrue(stray.search("\tpython3 tools/gates.py"))
         bare = [command for command in self.recipe_commands(text)
-                if re.search(r"python3 [^/\s]+\.py", command)]
+                if stray.search(command)]
         self.assertEqual(bare, [])
 
 

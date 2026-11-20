@@ -65,7 +65,10 @@ class TestMakeCalls(unittest.TestCase):
         # this repo's own workflows, which say nothing in prose about make
         # outside comments: the new reader must find exactly those calls
         old = re.compile(r"\bmake\s+([a-z][a-z0-9-]*)")
-        for path in sorted((REPO_ROOT / ".github/workflows").glob("*.yml")):
+        workflows = sorted([*(REPO_ROOT / ".github/workflows").glob("*.yml"),
+                            *(REPO_ROOT / ".github/workflows").glob("*.yaml")])
+        self.assertTrue(workflows, "no workflows found to read")
+        for path in workflows:
             text = path.read_text(encoding="utf-8")
             body = "\n".join(line for line in text.splitlines()
                              if not line.lstrip().startswith("#"))

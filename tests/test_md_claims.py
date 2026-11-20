@@ -311,6 +311,14 @@ class Main(Tree):
             {"file": "README.md", "line": 1, "kind": "path",
              "text": "src/a.py"}])
 
+    def test_extract_with_a_missing_doc_reports_it_not_an_empty_list(self):
+        """`extract . no-such.md` printed [] and exited 0, so a typo read
+        as 'no claims'; check already reported the missing doc."""
+        code, out = self.run_main("extract", str(self.root), "no-such.md")
+        self.assertEqual((code, out), (
+            1, "md-claims: no-such.md does not exist\n"
+               "md-claims: 1 problem(s)\n"))
+
     def test_paths_follow_the_root(self):
         write(self.root / "CLAUDE.md", "`a/gone.md`\n")
         code, out = self.run_main("check", str(self.root), "CLAUDE.md")

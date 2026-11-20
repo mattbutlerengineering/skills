@@ -167,8 +167,12 @@ class Disk:
         return (self.root / token).exists() or (base / token).exists()
 
     def _manifest_name(self, plugin_root):
-        data, _ = cli.read_file(plugin_root / ".claude-plugin" /
-                                "plugin.json", "plugin.json", dict)
+        data, problem = cli.read_file(plugin_root / ".claude-plugin" /
+                                      "plugin.json", "plugin.json", dict)
+        if problem:
+            # Reported, then the directory name stands in (the caller's
+            # fallback), so one bad manifest doesn't stop the drift run.
+            self.problems.append(f"{LABEL}: {problem}")
         return (data or {}).get("name")
 
     def _plugin_roots(self):
