@@ -75,6 +75,16 @@ class TestOperateCompletesOnThePopulationLine(unittest.TestCase):
                                    "signal-source: <where>\n")
             self.assertEqual(next_stage(run), "operate")
 
+    def test_a_placeholder_source_with_a_real_count_leaves_operate_pending(self):
+        """the count filled in, the template's source line left as is:
+        no source is named, so Operate stays pending (ADR-0102)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run = feature_run(tmp, "users-observed: 4\n"
+                                   "signal-source: <where the count comes "
+                                   "from: analytics, support inbox, your own "
+                                   "usage, none>\n")
+            self.assertEqual(next_stage(run), "operate")
+
     def test_a_negative_or_non_integer_count_leaves_operate_pending(self):
         for count in ("-1", "three", "3.5", "", "²"):
             with self.subTest(count=count), \
