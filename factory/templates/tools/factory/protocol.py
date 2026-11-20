@@ -82,7 +82,16 @@ _FENCE = re.compile(r"^---\s*$")
 # dispatch-plane row grammar) so completion counting and dispatch agree
 # about the same line; separate owner by design — this seam stays
 # factory-agnostic and captures the checked state.
-_CHECKBOX = re.compile(r"^\s*[-*+]\s+\[([ xX])\]", re.MULTILINE)
+# Matched one line at a time, with the same trailing whitespace ROW
+# demands: a box glued to its text, or a bullet wrapped onto the next
+# line, is a row to neither reader.
+_CHECKBOX = re.compile(r"^\s*[-*+]\s+\[([ xX])\]\s")
+# The fence rule (CommonMark's, as knowledge_plane.fenced reads it): a
+# box inside a fenced block is quoted — a template, a defect's evidence —
+# not a work item. A copy, because this seam must not import that one;
+# change them together.
+_FENCE_OPEN = re.compile(r"^\s*(`{3,}|~{3,})(.*)$")
+_FENCE_CLOSE = re.compile(r"^\s*(`{3,}|~{3,})[ \t]*$")
 
 
 def frontmatter_end(lines):
@@ -327,8 +336,30 @@ def checkbox_progress(path):
     path = Path(path)
     if not path.is_file():
         return (0, 0)
-    boxes = _CHECKBOX.findall(path.read_text(encoding="utf-8"))
+    boxes = [match.group(1) for match in map(
+        _CHECKBOX.match,
+        _unfenced(path.read_text(encoding="utf-8").splitlines(True)))
+        if match]
     return (sum(1 for box in boxes if box in "xX"), len(boxes))
+
+
+def _unfenced(lines):
+    """The lines outside every fenced code block; an unclosed fence
+    swallows the rest, as knowledge_plane.unfenced does."""
+    fence = None
+    for line in lines:
+        if fence is not None:
+            close = _FENCE_CLOSE.match(line)
+            if close and close.group(1)[0] == fence[0] \
+                    and len(close.group(1)) >= len(fence):
+                fence = None
+            continue
+        opened = _FENCE_OPEN.match(line)
+        if opened and not (opened.group(1)[0] == "`"
+                           and "`" in opened.group(2)):
+            fence = opened.group(1)
+            continue
+        yield line
 
 
 def _all_boxes_checked(path):

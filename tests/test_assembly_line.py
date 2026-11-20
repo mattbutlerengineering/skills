@@ -226,6 +226,14 @@ class TestNestedDate(unittest.TestCase):
             write(path, "---\nstage: prd\ndate:\n  year: 2026\n---\n")
             self.assertIsNone(assembly_line._artifact_day(path))
 
+    def test_a_file_not_in_utf8_is_undated_not_a_crash(self):
+        # The board places such a run normally; raising here sent it to
+        # the attention list instead.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "idea.md"
+            path.write_bytes(b"---\ndate: 2026-03-01\n---\nCaf\xe9 menu\n")
+            self.assertIsNone(assembly_line._artifact_day(path))
+
 
 class TestHistory(unittest.TestCase):
     """Station arrivals, per architecture.md's Data model: a run enters
