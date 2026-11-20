@@ -176,7 +176,7 @@ def _write(path, block):
         else:
             new = text.rstrip("\n") + "\n\n" + block + "\n"
         if new != text:
-            path.write_text(new, encoding="utf-8")
+            cli.write_atomic(path, new)
     except (OSError, UnicodeDecodeError) as err:
         return f"{LABEL}: cannot update {path.name}: {err}"
     return None

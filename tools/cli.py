@@ -50,6 +50,7 @@ import secrets
 import select
 import signal
 import subprocess
+import tempfile
 import time
 from collections import namedtuple
 from pathlib import Path
@@ -252,6 +253,36 @@ def _heredoc_delimiter(text):
         delim = f"__EOF_{secrets.token_hex(16)}__"
         if delim not in text:
             return delim
+
+
+def write_atomic(path, text):
+    """Replace PATH's contents with TEXT in one rename, so a concurrent
+    reader sees the old file or the new one, never a truncated one, and
+    a crash mid-write leaves the old file whole. The temp file sits in
+    PATH's own directory (os.replace cannot cross filesystems), takes
+    the target's mode — or, for a new file, the umask default, not the
+    0600 NamedTemporaryFile creates — and is removed if anything fails.
+    Raises OSError like write_text; the caller words it."""
+    path = Path(path)
+    temp = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                "w", encoding="utf-8", dir=path.parent, delete=False,
+                prefix=f".{path.name}.") as handle:
+            temp = handle.name
+            handle.write(text)
+        try:
+            mode = path.stat().st_mode & 0o7777
+        except FileNotFoundError:
+            umask = os.umask(0)
+            os.umask(umask)
+            mode = 0o666 & ~umask
+        os.chmod(temp, mode)
+        os.replace(temp, path)
+    except BaseException:
+        if temp:
+            Path(temp).unlink(missing_ok=True)
+        raise
 
 
 def append_line(path, line):

@@ -169,6 +169,52 @@ class TestWriteOutputs(unittest.TestCase):
         self.assertEqual(self.parse_as_actions(text)["prompt"], body)
 
 
+class TestWriteAtomic(unittest.TestCase):
+    """A rewrite other processes read (CLAUDE.md, the manifest, the
+    standards index) must never be seen half-written: write_text
+    truncates first, and a reader polling during kb.py index saw an
+    empty CLAUDE.md 2352 times in 40917 reads."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(__import__("shutil").rmtree, self.tmp)
+
+    def test_it_replaces_the_contents(self):
+        path = self.tmp / "f.md"
+        path.write_text("old\n", encoding="utf-8")
+        cli.write_atomic(path, "new\n")
+        self.assertEqual(path.read_text(encoding="utf-8"), "new\n")
+        self.assertEqual(sorted(p.name for p in self.tmp.iterdir()),
+                         ["f.md"])
+
+    def test_it_keeps_the_targets_mode(self):
+        path = self.tmp / "f.md"
+        path.write_text("old\n", encoding="utf-8")
+        path.chmod(0o644)
+        cli.write_atomic(path, "new\n")
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+
+    def test_a_new_file_gets_the_umask_default_not_0600(self):
+        path = self.tmp / "new.json"
+        old = os.umask(0o022)
+        try:
+            cli.write_atomic(path, "{}\n")
+        finally:
+            os.umask(old)
+        self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o644)
+
+    def test_a_failed_replace_leaves_the_target_and_no_temp(self):
+        path = self.tmp / "f.md"
+        path.write_text("old\n", encoding="utf-8")
+        with mock.patch.object(cli.os, "replace",
+                               side_effect=OSError("disk full")):
+            with self.assertRaises(OSError):
+                cli.write_atomic(path, "new\n")
+        self.assertEqual(path.read_text(encoding="utf-8"), "old\n")
+        self.assertEqual(sorted(p.name for p in self.tmp.iterdir()),
+                         ["f.md"])
+
+
 class TestDetail(unittest.TestCase):
     def test_last_stderr_line_when_the_command_ran(self):
         err = subprocess.CalledProcessError(

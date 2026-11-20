@@ -64,7 +64,7 @@ import re
 import sys
 from pathlib import Path
 
-from cli import detail, read_file, report
+from cli import detail, read_file, report, write_atomic
 from knowledge_plane import adr_file_number, fenced, read_adrs, repo_root
 
 STANDARDS_PATH = "docs/standards.json"
@@ -304,7 +304,7 @@ def update(root):
     path = root / STANDARDS_PATH
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(merged, indent=2) + "\n", encoding="utf-8")
+        write_atomic(path, json.dumps(merged, indent=2) + "\n")
     except OSError as err:
         return [f"standards-index: cannot write {STANDARDS_PATH}: "
                 f"{detail(err)}"]

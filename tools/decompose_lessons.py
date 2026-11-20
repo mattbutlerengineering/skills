@@ -20,16 +20,14 @@ fetches.
 NOT A GATE. An empty pair set and a refused verdict are data.
 """
 import json
-import os
 import re
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 import decompose_signals
 import factory_config
-from cli import CLI_FAILURES, detail, read_file, report, runner
+from cli import CLI_FAILURES, detail, read_file, report, runner, write_atomic
 
 LABEL = "decompose-lessons"
 USAGE = "python3 tools/decompose_lessons.py [update]"
@@ -285,7 +283,7 @@ def serialize(lessons, seen):
 
 
 def dump(path, lessons, seen, shown=None):
-    """problems. Writes the whole file through a temp file and os.replace,
+    """problems. Writes the whole file through cli.write_atomic,
     so a failure leaves the original untouched. Invalid lessons write
     nothing; no lessons and no seen creates no file."""
     shown = shown or Path(path).name
@@ -296,18 +294,9 @@ def dump(path, lessons, seen, shown=None):
         problems.append(f"{LABEL}: {shown} line 1: {why}")
     if problems or not (lessons or seen):
         return problems
-    path = Path(path)
-    temp = None
     try:
-        with tempfile.NamedTemporaryFile(
-                "w", encoding="utf-8", dir=path.parent, delete=False,
-                prefix=f".{path.name}.") as handle:
-            temp = handle.name
-            handle.write(serialize(lessons, seen))
-        os.replace(temp, path)
+        write_atomic(path, serialize(lessons, seen))
     except OSError as err:
-        if temp:
-            Path(temp).unlink(missing_ok=True)
         return [f"{LABEL}: cannot write {shown}: {err}"]
     return []
 
