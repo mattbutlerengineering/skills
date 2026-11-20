@@ -86,8 +86,8 @@ jobs:
       prompt: ${{ steps.resolve.outputs.prompt }}
       transitioned: ${{ steps.claim.outputs.transitioned }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Resolve the dispatch from the REPO-CONTROLLED breakdown row (never the
@@ -148,8 +148,8 @@ jobs:
       outcome: ${{ steps.agent.outcome }}
       execution_file: ${{ steps.agent.outputs.execution_file }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # The chartered agent, on the model its charter's band routes to. Both
@@ -239,10 +239,10 @@ jobs:
       # Full history: the bundle's prerequisites are whatever the agent's
       # branch was cut from — this run's commit, or a newer main the agent
       # fetched — and a fetch from a bundle refuses one it lacks.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Fetch the agent's hand-off
