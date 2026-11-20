@@ -134,7 +134,7 @@ Run `kb.py lint`. For each problem:
 
 - **stale** — a cited source changed since `verified`. Re-read the
   changed code, then propose UPDATE, DELETE or NOOP per claim (step 2's
-  rules). A page that is still true gets its `verified:` moved to HEAD.
+  rules). A page that is still true gets its `verified:` moved to HEAD's sha (`git rev-parse HEAD`), never the word HEAD or a branch name.
 - **orphan / out of date / no index** — run `kb.py index`.
 - **broken source** — when the stale line says `renamed to X`, propose
   an UPDATE to `sources:` and re-verify against X. When the source is

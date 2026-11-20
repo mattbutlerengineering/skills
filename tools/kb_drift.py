@@ -55,7 +55,13 @@ BUILTINS = frozenset((
     "output-style", "permissions", "plugin", "plugins", "pr-comments",
     "privacy-settings", "release-notes", "resume", "review", "rewind",
     "security-review", "skills", "status", "statusline", "tasks",
-    "terminal-setup", "todos", "upgrade", "usage", "vim"))
+    "terminal-setup", "todos", "upgrade", "usage", "vim",
+    # Claude Code's bundled unprefixed skills and newer built-ins.
+    "loop", "schedule", "simplify", "code-review", "theme",
+    "fewer-permission-prompts"))
+# A bare span naming a filesystem root (`/tmp`) is a path, not a command.
+FS_ROOTS = frozenset(("tmp", "usr", "etc", "var", "dev", "opt", "home",
+                      "bin", "private", "Users"))
 SKIP_DIRS = frozenset((".git", "node_modules", ".venv", "venv",
                        "__pycache__", "dist", "build"))
 KEPT_HIDDEN = frozenset((".claude", ".github", ".claude-plugin"))
@@ -274,6 +280,8 @@ def _slash_problems(disk, settings, rel, number, line, ignored):
         plugin, name = match.groups() if match.group(2) else (None,
                                                               match.group(1))
         ref = f"/{plugin}:{name}" if plugin else f"/{name}"
+        if plugin is None and name in FS_ROOTS:
+            continue
         if plugin is None:
             every = set(disk.skills) | disk.commands() | BUILTINS
             if not any(name in names for names in disk.plugins.values()) \

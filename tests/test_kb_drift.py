@@ -240,6 +240,11 @@ class TestSlashCommands(Tree):
             "drift: CLAUDE.md:1 references /tdd, which resolves to no"
             " skill or command in this repo"])
 
+    def test_filesystem_paths_and_bundled_skills_are_not_commands(self):
+        self.file("CLAUDE.md", "Scratch goes in `/tmp`. Run `/loop 5m /foo`,"
+                  " `/schedule`, `/simplify`, `/theme`.\n")
+        self.assertEqual(self.drift(), [])
+
     def test_plugin_qualified_commands(self):
         write(self.root / ".claude-plugin" / "plugin.json",
               json.dumps({"name": "kit"}))

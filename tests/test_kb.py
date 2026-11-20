@@ -577,6 +577,61 @@ class TestStale(unittest.TestCase):
             f"kb: docs/kb/cache.md verified {'0' * 40!r} is not a commit"
             " in this repository"])
 
+    def test_a_verified_commit_off_heads_history_is_refused(self):
+        # A squash-merged branch's commit exists locally, so rev-parse
+        # passed, but every clone of main says it is no commit at all.
+        git(self.root, "checkout", "-q", "-b", "side")
+        write(self.root / "src" / "b.py", "y = 9\n")
+        git(self.root, "commit", "-qam", "side")
+        side = git(self.root, "rev-parse", "HEAD")
+        git(self.root, "checkout", "-q", "-")
+        self.indexed(verified=side)
+        self.assertEqual(kb.lint(self.root), [
+            f"kb: docs/kb/cache.md verified {side[:7]} is not in HEAD's"
+            " history — re-verify against a commit on it"])
+
+    def test_a_verified_ref_name_is_not_a_sha(self):
+        # HEAD resolves, and `git diff HEAD HEAD` is always empty: the
+        # page would never go stale.
+        self.indexed(verified="HEAD")
+        self.assertEqual(kb.lint(self.root), [
+            "kb: docs/kb/cache.md verified 'HEAD' is not a commit sha —"
+            " use `git rev-parse HEAD`"])
+
+    def test_a_source_cited_in_the_wrong_case_does_not_exist(self):
+        # macOS's exists() finds src/A.py for src/a.py, but git's pathspec
+        # is case-sensitive, so the page could never go stale.
+        self.indexed(sources="src/A.py", verified=self.sha)
+        self.assertEqual(kb.lint(self.root), [
+            "kb: docs/kb/cache.md cites source 'src/A.py', which does not"
+            " exist"])
+
+    def test_a_source_outside_the_repo_hides_no_other_finding(self):
+        write(self.root.parent / f"{self.root.name}-outside.md", "x\n")
+        self.addCleanup(
+            (self.root.parent / f"{self.root.name}-outside.md").unlink)
+        write(self.root / "docs" / "kb" / "aaa.md",
+              page(sources=f"../{self.root.name}-outside.md",
+                   verified=self.sha))
+        self.indexed(sources="src/a.py", verified=self.sha)
+        write(self.root / "src" / "a.py", "x = 2\n")
+        git(self.root, "commit", "-qam", "two")
+        self.assertEqual(kb.lint(self.root), [
+            f"kb: docs/kb/aaa.md cites source '../{self.root.name}"
+            "-outside.md', which is outside the repo",
+            f"kb: docs/kb/cache.md is stale: src/a.py changed since"
+            f" verified {self.sha[:7]} — re-verify it"])
+
+    def test_a_block_scalar_summary_is_refused(self):
+        for indicator in (">", "|-"):
+            with self.subTest(indicator=indicator):
+                write(self.root / "docs" / "kb" / "cache.md",
+                      page(summary=indicator, verified=self.sha))
+                problems = kb.index(self.root)
+                self.assertEqual(problems, [
+                    "kb: docs/kb/cache.md summary must be one plain line,"
+                    " not a YAML block scalar"])
+
     def test_git_unavailable_is_a_problem_not_a_traceback(self):
         self.indexed(verified=self.sha)
 
