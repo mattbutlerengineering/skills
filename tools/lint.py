@@ -11,6 +11,7 @@ the real repo, the test suite passes fixture trees.
 import ast
 import inspect
 import json
+import os
 import re
 import sys
 import textwrap
@@ -1104,10 +1105,17 @@ def check_ledger_links(root):
     path = root / "LEDGER.md"
     if not path.is_file():
         return []  # absence already reported by check_ledger
-    links = [(target, resolve_link(root, path, target))
-             for target in local_link_targets(
-                 path.read_text(encoding="utf-8"))
-             if target.startswith("evals/results/")]
+    # Filtered on where the link lands, not on its spelling: a
+    # "./evals/results/…" link to a missing file passed unchecked.
+    results = os.path.normpath(root / "evals" / "results")
+    links = []
+    for target in local_link_targets(path.read_text(encoding="utf-8")):
+        named = resolve_link(root, path, target)
+        if named is None:
+            continue
+        named = Path(os.path.normpath(named))
+        if os.path.commonpath([results, named]) == results:
+            links.append((target, named))
     return (
         [f"LEDGER.md links to eval results path {target!r} "
          "that does not match the results naming grammar"
