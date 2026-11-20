@@ -96,7 +96,8 @@ from cli import read_event, read_file, report
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
                              WO_TOKEN,
-                             adr_record, breakdown_rows, fenced,
+                             adr_file_number, adr_record, breakdown_rows,
+                             fenced,
                              link_target_problem, local_link_targets,
                              parse_run, repo_root,
                              resolve_link, run_dirs, status_head, unfenced,
@@ -680,6 +681,13 @@ def check_blueprint_drift(root, parsed=None):
             if not match:
                 continue
             number = match.group("num")
+            if number in rows:
+                # The first row is the one a reader sees, so it is the one
+                # judged; a repeat further down could otherwise hide it.
+                problems.append(
+                    f"D: docs/adr/README.md:{lineno} ADR-{number} is indexed"
+                    f" twice (first at line {rows[number][0]})")
+                continue
             rows[number] = (lineno, match.group("status"))
             filename = next(iter(local_link_targets(match.group("cell"))), "")
             named = resolve_link(root, adr_dir / "README.md", filename)
@@ -687,6 +695,12 @@ def check_blueprint_drift(root, parsed=None):
                 problems.append(
                     f"D: docs/adr/README.md:{lineno} index row ADR-{number}"
                     f" links to missing file {filename}")
+                continue
+            linked = adr_file_number(named.name)
+            if linked is not None and linked[0] != number:
+                problems.append(
+                    f"D: docs/adr/README.md:{lineno} index row ADR-{number}"
+                    f" links to {filename}, which is ADR-{linked[0]}")
         for number, text in sorted(statuses.items()):
             if number not in rows:
                 problems.append(
