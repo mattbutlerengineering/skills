@@ -928,8 +928,8 @@ class TestReconcileSweep(unittest.TestCase):
                 " are invisible; raise the window or narrow the query"])
 
     def test_the_window_matches_its_sibling_gh_read_callers(self):
-        # dashboard, gate_digest, rejection_mining, assembler and
-        # label_sync all read "gh issue list"/"gh pr list" with the same
+        # dashboard, gate_digest, assembler and label_sync all read
+        # "gh issue list"/"gh pr list" with the same
         # LIST_WINDOW; sweeps alone sat at 500 and hit it for real once
         # the repo passed 500 issues of all states (the scheduled
         # reconcile sweep started failing on main), and was bumped to
@@ -938,17 +938,17 @@ class TestReconcileSweep(unittest.TestCase):
         # reconcile sweep and the toolsmith mine all failed or under-read
         # the same week. Checked against the siblings' live values,
         # not a hand-copied number, so a lone drift fails here too.
+        # rejection_mining left the set when its PR read became a search
+        # windowed at human_gates.SEARCH_WINDOW (#2212).
         import assembler
         import dashboard
         import gate_digest
         import label_sync
-        import rejection_mining
         siblings = {
             "assembler": assembler.LIST_WINDOW,
             "dashboard": dashboard.LIST_WINDOW,
             "gate_digest": gate_digest.LIST_WINDOW,
             "label_sync": label_sync.LIST_WINDOW,
-            "rejection_mining": rejection_mining.LIST_WINDOW,
             "sweeps": sweeps.LIST_WINDOW,
         }
         self.assertEqual(siblings, {name: 2000 for name in siblings})

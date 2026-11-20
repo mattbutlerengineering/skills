@@ -52,7 +52,8 @@ from cli import json_lines, read_file, report, runner, write_atomic
 import cost_ledger
 import cost_report
 import factory_config
-from human_gates import open_queues, read_timelines, waiting_issues
+from human_gates import (open_queues, read_timelines,
+                         read_work_order_issues, waiting_issues)
 from knowledge_plane import (CLOSES_TOKEN, WO_TOKEN, active_runs,
                              breakdown_files, breakdown_rows, mirror_map)
 import plane_drift
@@ -70,12 +71,13 @@ git_runner = runner("git")
 _REMOTE = re.compile(
     r"^(?:git@github\.com:|https://github\.com/)([^/]+/[^/]+?)(?:\.git)?$")
 
-# How far back the dispatch-plane listings can see. cli.gh_read owns
-# the window — the limit it sends gh and the truncation it reports are
-# the same number, so the two can no longer drift apart. Matches the
-# sibling gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) —
-# bumped with the rest once the repo passed 1000 issues of all states
-# (2026-11-18).
+# How far back the PR listing can see. cli.gh_read owns the window —
+# the limit it sends gh and the truncation it reports are the same
+# number, so the two can no longer drift apart. Matches the sibling
+# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) — bumped
+# with the rest once the repo passed 1000 issues of all states
+# (2026-11-18). The issue listing no longer reads the whole tracker
+# under it: _listing reads only the work-order issues (#2212).
 LIST_WINDOW = 2000
 
 
@@ -121,15 +123,16 @@ def remote_slug(repo_path, git=git_runner):
     return match.group(1), []
 
 
-def _listing(slug, run, problems):
-    """The one windowed issue listing (--state all) both dispatch-plane
-    sections read — the queues filter it to open issues, the drift
-    check compares row checkboxes against its states. None on a failed
-    or unparseable list; the sections stay empty and render on."""
-    read = gh_read(
-        ["issue", "list", "-R", slug, "--state", "all", "--json",
-         "number,title,state,labels,url"],
-        "gh issue list", label="dashboard", run=run, window=LIST_WINDOW)
+def _listing(slug, mirror, run, problems):
+    """The one issue listing the dispatch-plane sections read — the
+    queues filter it to open issues, the drift check compares row
+    checkboxes against its states, the output table reads its labels.
+    Each reads only work-order issues, so this is
+    human_gates.read_work_order_issues (ADR-0133), not the whole
+    tracker, which filled the window as it grew (#2212). None on an
+    unusable read; the sections stay unread and render on."""
+    read = read_work_order_issues(mirror, "number,title,state,labels,url",
+                                  run, "dashboard", slug=slug)
     problems.extend(read.problems)
     return read.value
 
@@ -393,7 +396,7 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
         state["repo"]["remote"] = slug
         state["problems"].extend(remote_problems)
         if slug:
-            listing = _listing(slug, run, state["problems"])
+            listing = _listing(slug, mirror, run, state["problems"])
             if listing is not None:
                 by_number = {entry["number"]: entry for entry in listing
                              if isinstance(entry.get("number"), int)}

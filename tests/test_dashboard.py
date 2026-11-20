@@ -9,6 +9,7 @@ public state dict and the exact problem strings.
 import io
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -200,6 +201,11 @@ def clock():
     return datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
 
 
+# The repo's live labels, as `gh label list -R` answers them.
+WO_LABELS = [{"name": name} for name in (
+    "wo:draft", "wo:needs-review", "wo:merged", "size:S")]
+
+
 def queue_gh(timelines=None, issues=None, prs=None, **kwargs):
     """A fake gh for the dispatch-plane traffic: issue list -R, pr list
     -R, and per-issue timelines in --slurp's array-of-pages shape (the
@@ -219,10 +225,17 @@ def queue_gh(timelines=None, issues=None, prs=None, **kwargs):
     ]
 
     def timeline(args):
+        if not args[1].endswith("/timeline"):
+            # read_work_order_issues fetches by number a mirrored issue
+            # the label search did not return; a fixture that leaves one
+            # out of the listing means no such issue.
+            raise subprocess.CalledProcessError(
+                1, "gh", stderr="gh: Not Found (HTTP 404)\n")
         number = int(args[1].split("/")[-2])
         return json.dumps([canned.get(number, [])])
 
     return FakeGh(answers={
+        ("label", "list"): json.dumps(WO_LABELS),
         ("issue", "list"): json.dumps(listing),
         ("pr", "list"): json.dumps(list(prs or [])),
         ("api",): timeline,
@@ -298,6 +311,48 @@ class TestQueues(unittest.TestCase):
         self.assertEqual(state["problems"],
                          ["dashboard: gh issue list failed: boom"])
         self.assertEqual(len(state["runs"]), 1)
+
+    def test_the_tracker_read_lists_only_work_order_issues(self):
+        """#2212: the whole-tracker listing filled its window as the
+        tracker grew. gather reads what the queues, the drift check and
+        the output table use — the issues a wo: label marks, by one
+        search in the observed repo, and each mirrored issue the search
+        missed by number (#9 here)."""
+        issues = [{"number": 7, "title": "WO-0101: first", "state": "OPEN",
+                   "labels": [{"name": "wo:draft"}],
+                   "url": "https://github.com/o/r/issues/7"},
+                  {"number": 8, "title": "WO-0102: second", "state": "OPEN",
+                   "labels": [{"name": "wo:needs-review"}],
+                   "url": "https://github.com/o/r/issues/8"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            gh = queue_gh(issues=issues)
+            dashboard.gather(tmp, run=gh, git=git_remote(), clock=clock)
+        self.assertEqual(gh.called("label", "list"), [
+            ["label", "list", "-R", "o/r", "--json", "name", "--limit",
+             "1000"]])
+        self.assertEqual(gh.called("issue", "list"), [
+            ["issue", "list", "-R", "o/r", "--state", "all", "--search",
+             'label:"wo:draft","wo:merged","wo:needs-review"', "--json",
+             "number,title,state,labels,url", "--limit", "1000"]])
+        self.assertIn(["api", "repos/o/r/issues/9"], gh.calls)
+
+    def test_a_failed_fetch_by_number_leaves_the_queues_unread(self):
+        # #2182: an unread queue is None, never an empty one. A mirrored
+        # issue the search missed and the by-number read could not fetch
+        # makes the listing unusable, as a failed search does.
+        with tempfile.TemporaryDirectory() as tmp:
+            factory_repo(tmp)
+            gh = queue_gh(issues=[], error=subprocess.CalledProcessError(
+                1, "gh", stderr="HTTP 502: Bad Gateway\n"),
+                failing=["api", "repos/o/r/issues/7"])
+            # Answered before the failure raises, so it must not 404.
+            gh.answers[("api", "repos/o/r/issues/7")] = ""
+            state = dashboard.gather(tmp, run=gh, git=git_remote(),
+                                     clock=clock)
+        self.assertIsNone(state["queues"])
+        self.assertEqual(state["problems"], [
+            "dashboard: gh api issue #7 failed: HTTP 502: Bad Gateway"])
 
     def test_a_failing_timeline_lists_the_item_without_an_age(self):
         with tempfile.TemporaryDirectory() as tmp:

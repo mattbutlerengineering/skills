@@ -122,9 +122,10 @@ MAX_INTAKE = 10
 # How far back the dedupe listing can see. gh windows the listing silently, so
 # a full window is reported rather than trusted (known_keys). Matches the
 # LIST_WINDOW every other gh-reading module uses (dashboard, gate_digest,
-# rejection_mining, assembler, label_sync) — sweeps alone sat at 500 and hit
-# it for real once the repo passed 500 issues of all states, then all six hit
-# 1000 together once the repo passed 1000 (2026-11-18).
+# assembler, label_sync) — sweeps alone sat at 500 and hit it for real once
+# the repo passed 500 issues of all states, then all six hit 1000 together
+# once the repo passed 1000 (2026-11-18). rejection_mining has since moved
+# to a search windowed at human_gates.SEARCH_WINDOW (#2212).
 LIST_WINDOW = 2000
 
 MARKER = "intake-key:"

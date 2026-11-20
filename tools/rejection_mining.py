@@ -54,9 +54,9 @@ from datetime import datetime, timezone
 import conductor_close
 from conductor_flow import CHANGES_AGAIN, review_change
 
-from cli import gh_read, gh_runner, report, write_outputs
+from cli import GhResult, gh_read, gh_runner, report, write_outputs
 from gate_digest import upsert_marked_issue
-from human_gates import gate_rejections, read_gate_issues
+from human_gates import SEARCH_WINDOW, gate_rejections, read_gate_issues
 from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 
 # First line of the queue issue's body — how the weekly run finds its
@@ -64,18 +64,18 @@ from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 MARKER = "<!-- factory-toolsmith-queue -->"
 QUEUE_TITLE = "Toolsmith queue — mined rejections"
 
-# How far back the PR listing can see. cli.gh_read owns the window —
-# the limit it sends gh and the truncation it reports are the same
-# number, so the two can no longer drift apart. Matches the sibling
-# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) — bumped
-# with the rest once the repo passed 1000 issues of all states
-# (2026-11-18); the weekly toolsmith mine had already started under-
-# reading (issue #294's TRUNCATED note). The issue side no longer reads
-# the whole tracker: read_gate_issues reads only the work-order issues
-# (human_gates.read_work_order_issues).
-LIST_WINDOW = 2000
-PR_ARGS = ("pr", "list", "--state", "all", "--json",
-           "number,state,body,reviews")
+# The PR read searches rather than lists the whole repo, which was
+# filling a 2000 window (#2212). change_requests counts a review only on
+# a PR whose Closes clause names a mirrored issue, and such a body holds
+# that number as a search term, so a body search over the mirrored
+# numbers returns every PR it can count from (and more, which it skips).
+# GitHub search answers a query with more than five OR operators with no
+# results rather than an error, so the numbers go six to a query. Each
+# query's window is human_gates.SEARCH_WINDOW, GitHub's own search cap,
+# so a capped query still reads as a full one. The issue side reads only
+# the work-order issues too (human_gates.read_work_order_issues).
+PR_SEARCH_GROUP = 6
+PR_FIELDS = "number,state,body,reviews"
 
 
 def _excerpt(body):
@@ -222,14 +222,40 @@ def _change_requests(mirror, run, problems, truncated):
     a second value: None answers "was it read", which truncation does not
     contradict — a full window is read, usable, and short. Two facts, two
     channels, so neither has to encode the other."""
-    read = gh_read(list(PR_ARGS), "gh pr list", label="rm", run=run,
-                   window=LIST_WINDOW)
+    read = _pr_listing(sorted(mirror), run)
     problems.extend(read.problems)
     if read.truncated:
         truncated.append("the PR listing")
     if read.value is None:
         return None
     return change_requests(read.value, mirror)
+
+
+def _pr_listing(numbers, run):
+    """GhResult(listing, problems, truncated): every PR whose body holds
+    one of `numbers` (the mirrored issues), PR_SEARCH_GROUP numbers to a
+    search, each PR once however many searches return it — a review
+    counted twice would read as a recurrence. listing is None when any
+    search is unusable, since a missing group is a missing stream."""
+    listing, seen, problems, truncated = [], set(), [], False
+    for start in range(0, len(numbers), PR_SEARCH_GROUP):
+        group = numbers[start:start + PR_SEARCH_GROUP]
+        query = "in:body " + " OR ".join(str(number) for number in group)
+        read = gh_read(["pr", "list", "--state", "all", "--search", query,
+                        "--json", PR_FIELDS], "gh pr list", label="rm",
+                       run=run, window=SEARCH_WINDOW)
+        problems += read.problems
+        if read.value is None:
+            return GhResult(None, problems, False)
+        truncated = truncated or read.truncated
+        for entry in read.value:
+            number = entry.get("number") if isinstance(entry, dict) else None
+            if number in seen:
+                continue
+            if isinstance(number, int):
+                seen.add(number)
+            listing.append(entry)
+    return GhResult(listing, problems, truncated)
 
 
 def _sources(mirrored, events_by_issue, requests, truncated, ledgers):

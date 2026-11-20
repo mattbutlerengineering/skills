@@ -249,9 +249,9 @@ def read_work_order_issues(numbers, fields, run, label,
     """GhResult(listing, problems, truncated): every issue carrying a
     `wo:` label, plus each of `numbers` (the issues breakdown rows
     mirror) that carries none — exactly the entries the reconcile sweep,
-    the gate digest and the rejection miner read from what used to be
-    one whole-tracker listing, which went red each time the tracker
-    outgrew its window.
+    the gate digest, the rejection miner and the dashboard read from
+    what used to be one whole-tracker listing, which went red each time
+    the tracker outgrew its window.
 
     Three reads. The repo's live labels, so a `wo:` label outside the
     taxonomy is still searched for (an issue can carry only a label the
@@ -263,8 +263,11 @@ def read_work_order_issues(numbers, fields, run, label,
     finding to reconcile, so a read that may have dropped one must not
     look complete. A full window on either listing read flips
     `truncated` and is the caller's to word, as gh_read's always is."""
-    labels = gh_read(["label", "list", "--json", "name"], "gh label list",
-                     label, run, window=SEARCH_WINDOW)
+    # gh resolves {owner}/{repo} only in an api path; a named repo (the
+    # dashboard observes other checkouts) scopes the listings with -R.
+    scope = [] if slug == "{owner}/{repo}" else ["-R", slug]
+    labels = gh_read(["label", "list", *scope, "--json", "name"],
+                     "gh label list", label, run, window=SEARCH_WINDOW)
     if labels.value is None:
         return labels
     lifecycle = sorted({name for name in label_names(labels.value)
@@ -273,9 +276,9 @@ def read_work_order_issues(numbers, fields, run, label,
     truncated = labels.truncated
     if lifecycle:
         query = "label:" + ",".join(f'"{name}"' for name in lifecycle)
-        read = gh_read(["issue", "list", "--state", "all", "--search",
-                        query, "--json", fields], "gh issue list", label,
-                       run, window=SEARCH_WINDOW)
+        read = gh_read(["issue", "list", *scope, "--state", "all",
+                        "--search", query, "--json", fields],
+                       "gh issue list", label, run, window=SEARCH_WINDOW)
         if read.value is None:
             return GhResult(None, problems + read.problems, False)
         listing, truncated = list(read.value), truncated or read.truncated
