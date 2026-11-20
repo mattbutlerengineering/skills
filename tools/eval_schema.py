@@ -158,9 +158,20 @@ def write_snapshot(output, results_dir, kind, harness=None):
     if kind not in SNAPSHOT_KINDS:
         raise ValueError(f"{kind!r} results are not a single snapshot file")
     results_dir.mkdir(parents=True, exist_ok=True)
-    path = results_path(results_dir, kind, output["date"], harness=harness)
-    path.write_text(json.dumps(output, indent=2) + "\n", encoding="utf-8")
-    return path
+    text = json.dumps(output, indent=2) + "\n"
+    while True:
+        path = results_path(results_dir, kind, output["date"],
+                            harness=harness)
+        # Exclusive create: a concurrent recorder may take the name
+        # results_path just found free, and truncating its snapshot
+        # would rewrite append-only evidence. Lose the race, take the
+        # next name.
+        try:
+            with open(path, "x", encoding="utf-8") as handle:
+                handle.write(text)
+        except FileExistsError:
+            continue
+        return path
 
 
 def entries(data, key, label):
