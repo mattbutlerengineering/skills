@@ -58,7 +58,9 @@ branch.
 5. **Release.** If `release.md` already records `outcome: prepared`, this
    pass is the write-back, not a new release: read the pull request
    `pending-merge:` names and record what it reached, per the protocol's
-   "The Ship outcome" section, then go to step 8. Otherwise execute the
+   "The Ship outcome" section. If it reached `released`, run step 6's
+   intake bullet (close the intake issue and its duplicates) — this pass
+   skips the rest of step 6 — then go to step 8. Otherwise execute the
    project's release mechanism step by step, recording each
    command/action and its result as it happens. Version and tag
    according to the project's convention. Without release authorization
