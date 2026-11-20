@@ -766,13 +766,16 @@ class TestLoad(unittest.TestCase):
 
 
 class TestRead(unittest.TestCase):
-    def test_a_run_recorded_in_both_files_counts_once_and_is_reported(self):
+    def test_a_run_recorded_in_both_files_counts_once_and_writes_go_on(self):
         # One run recorded through budget_guard (the aggregate) on one
-        # branch and record_isolated (its run file) on another: every
-        # caller summed it twice (cost_report $12 under a $10 cap) while
-        # the Conductor's month_spend counted it once.
+        # branch and record_isolated (its run file) on another: read()
+        # counts it once. Reporting it as a read problem made every
+        # fail-closed caller refuse — record, record_new, the planner —
+        # so detector G reports it instead, in CI.
         row = entry("WO-0001", "run-7", "m", 10, 6.0, "merged",
                     "2026-11-19")
+        later = entry("WO-0002", "run-8", "m", 10, 1.0, "merged",
+                      "2026-11-20")
         with tempfile.TemporaryDirectory() as tmp:
             self.ledger(tmp, json.dumps(row) + "\n")
             # The merge of two branches: each writer refused a second
@@ -780,11 +783,9 @@ class TestRead(unittest.TestCase):
             run_file = Path(tmp) / cost_ledger.RUNS_DIR / "run-7.jsonl"
             run_file.parent.mkdir(parents=True)
             run_file.write_text(json.dumps(row) + "\n", encoding="utf-8")
-            entries, problems = cost_ledger.read(tmp)
-        self.assertEqual(entries, [row])
-        self.assertEqual(problems, [
-            f"ledger: {cost_ledger.RUNS_DIR}/run-7.jsonl:1 repeats run"
-            " 'run-7' of WO-0001, already recorded; counted once"])
+            self.assertEqual(cost_ledger.read(tmp), ([row], []))
+            self.assertEqual(cost_ledger.record(tmp, later), [])
+            self.assertEqual(cost_ledger.read(tmp), ([row, later], []))
 
     def ledger(self, tmp, text):
         path = Path(tmp) / cost_ledger.COST_LEDGER
@@ -1031,6 +1032,19 @@ class TestDispatched(unittest.TestCase):
         self.assertEqual(cost_ledger.line_problems(gate), [
             "a gate-latency row must cost 0 (ADR-0041), not 50"])
         self.assertEqual(cost_ledger.line_problems(dict(gate, cost=0)), [])
+
+    def test_a_stay_outside_the_datetime_range_names_no_stay(self):
+        # Both rows pass line_problems; gate_stay raised OverflowError and
+        # crashed gate_rows and the digest's record_new.
+        early = entry("WO-0001", "gate-merge-0001-01-01T00:00:05Z", "none",
+                      0, 0.0, "gate_wait:merge:10s", "0001-01-01")
+        huge = entry("WO-0001", "gate-merge-2026-11-20T00:00:00Z", "none",
+                     0, 0.0, "gate_wait:merge:99999999999999999s",
+                     "2026-11-20")
+        for row in (early, huge):
+            with self.subTest(row=row["outcome"]):
+                self.assertIsNone(cost_ledger.gate_stay(row))
+                self.assertEqual(cost_ledger.gate_rows([row]), [row])
 
     def test_an_integer_cost_too_large_for_a_float_is_a_problem(self):
         row = entry("WO-0001", "r1", "m", 0, 10 ** 400, "merged",

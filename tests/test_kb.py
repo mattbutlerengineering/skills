@@ -622,8 +622,15 @@ class TestStale(unittest.TestCase):
             f"kb: docs/kb/cache.md is stale: src/a.py changed since"
             f" verified {self.sha[:7]} — re-verify it"])
 
+    def test_a_nested_verified_map_is_a_problem_not_a_crash(self):
+        write(self.root / "docs" / "kb" / "cache.md",
+              page(verified="\n  sha: abc1234"))
+        problems = kb.lint(self.root)
+        self.assertTrue(any("is not a commit sha" in p for p in problems),
+                        problems)
+
     def test_a_block_scalar_summary_is_refused(self):
-        for indicator in (">", "|-"):
+        for indicator in (">", "|-", ">2", "|2-", ">-2", "| # c"):
             with self.subTest(indicator=indicator):
                 write(self.root / "docs" / "kb" / "cache.md",
                       page(summary=indicator, verified=self.sha))

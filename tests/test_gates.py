@@ -538,6 +538,15 @@ class TestCostLedger(unittest.TestCase):
             tree = self.build(tmp, self.LINE)
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
+    def test_a_run_recorded_twice_is_flagged(self):
+        # cost_ledger.read counts the repeat once without a problem (its
+        # callers fail closed), so G is where the repeat surfaces.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(tmp, self.LINE, self.LINE)
+            self.assertEqual(gates.check_cost_ledger(tree.root), [
+                "G: docs/factory/costs.jsonl:2 repeats run 'r-1' of"
+                " WO-0001, already recorded — one run, one ledger row"])
+
     def test_a_legacy_row_without_at_is_tolerated(self):
         """The ONE deliberately legacy-shaped fixture in this suite: the
         real costs.jsonl still holds pre-`at` rows (the ledger is

@@ -138,6 +138,16 @@ def gate_stay(entry):
     the difference is the stay's start exactly, whichever walk computed
     the end. A row whose run_id does not hold a readable timestamp names
     no stay (None) and is never merged with another."""
+    try:
+        return _gate_stay(entry)
+    except (OverflowError, ValueError):
+        # A well-formed row whose end minus its wait leaves the datetime
+        # range (year 1, or a wait past C int): it names no stay, rather
+        # than crashing gate_rows and the digest's record_new.
+        return None
+
+
+def _gate_stay(entry):
     wait = gate_wait(entry)
     run_id = entry.get("run_id") if wait is not None else None
     if not isinstance(run_id, str):
@@ -566,13 +576,12 @@ def read(root, ledger_path=None):
         # record() refuses a second row for one run ("recording it twice
         # would double-count the run against the monthly cap"); a repeat
         # already in the ledger (one run recorded on two branches, in the
-        # aggregate file and in its per-run file) is held to the same
-        # rule here, so every caller counts it once and is told.
+        # aggregate file and in its per-run file) is counted once here,
+        # so every caller agrees. It is NOT a read problem: every caller
+        # fails closed on one, and a merge leaving a repeat stopped every
+        # writer and the planner. Detector G reports it, in CI.
         key = row_key(record)
         if key in seen:
-            problems.append(f"ledger: {shown}:{lineno} repeats run"
-                            f" {key[1]!r} of {key[0]}, already recorded;"
-                            " counted once")
             continue
         seen.add(key)
         entries.append(record)
