@@ -144,7 +144,8 @@ Run `kb.py lint`. For each problem:
 - **summary over its cap** — rewrite it as the one fact the page holds.
 - **past its declared age** — the page's outside check is due:
   re-run the page's check (the page says how). If the claim still
-  holds, set `checked` to today's date; if not, propose UPDATE or
+  holds, set `checked` to today's UTC date (what `kb.py lint` judges it
+  against); if not, propose UPDATE or
   DELETE per claim. Never move `checked` without re-running the check.
 - **a malformed outside-check declaration** — `missing field`: declare
   all three of `checked-against`, `checked` and `max-age`, or drop the
