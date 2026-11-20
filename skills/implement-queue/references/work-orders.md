@@ -9,8 +9,10 @@ SKILL.md says. This page replaced the `work-queue` skill (ADR-0127).
 The queue is **opt-in by construction**. A work order is eligible only
 when both planes agree (ADR-0032): its breakdown row is unchecked with
 every `blocked by:` edge satisfied, *and* its mirrored issue carries
-`wo:ready-for-agent`, a label only the repo owner applies. No mode works
-"everything not done yet".
+`wo:ready-for-agent`, a label only the repo owner applies. The planner
+checks who applied it: the latest labeled event's actor must be the repo
+owner, so anyone else's label is inert, and a labeler it cannot read
+holds the order back. No mode works "everything not done yet".
 
 **This mode never merges.** `source: work-orders` forces `merge: off`,
 whatever the profile's `merge:` says. The merged PR is the human
@@ -78,17 +80,22 @@ way.
     python3 tools/work_queue.py plan          # or tools/factory/work_queue.py
 
 This replaces Phase 1's issue list, priority sort and `max_workers`. The
-planner owns every selection rule: eligibility across both planes,
-`blocked by:` edges, `wip_cap`, cheapest-band-first ordering, and pricing
-each `size:` band against month-to-date ledger spend and `monthly_cap_usd`
-(ADR-0034). Read its output. Never re-derive a decision it already made,
-and never widen or reorder the batch it returned.
+planner owns every selection rule: eligibility across both planes, the
+owner-only ready label, `blocked by:` edges, `wip_cap`, cheapest-band-first
+ordering, and pricing each `size:` band against month-to-date ledger spend
+and `monthly_cap_usd` (ADR-0034). Orders already on `wo:in-progress` count
+against both caps: each holds a `wip_cap` slot, and its band's budget is
+added to the month's spend before any new order is priced, because the
+ledger records a run only once it ends. Read its output. Never re-derive a
+decision it already made, and never widen or reorder the batch it
+returned.
 
 Its deferral lines are the useful half when the batch is empty. Each one
 names the plane that is holding a work order back: an unmet blocker, a
-row with no `(tracker: #N)` mirror, an issue without the ready label, the
-wip cap, or the monthly cap. Report them. An empty queue and a mis-wired
-queue must never read the same.
+row with no `(tracker: #N)` mirror, an issue without the ready label, a
+ready label someone other than the owner applied, an order already in
+flight, the wip cap, or the monthly cap. Report them. An empty queue and
+a mis-wired queue must never read the same.
 
 `wq:` problems are refusals, not warnings. Stop on them.
 
@@ -283,7 +290,10 @@ batch. Choose this **before** claiming, because the assembler does its
 own claim: leave `wo:ready-for-agent` in place and re-apply it to each
 planned issue, and `assembler.yml` resolves, claims and dispatches one
 order per label event. Claiming, the workers and the report are then the
-workflow's job.
+workflow's job. The assembler applies the same knowledge-plane check as
+the planner: a label re-applied to an order whose row is checked off
+dispatches nothing, and one on an order whose blockers are unmet or
+unreadable fails the run so the owner sees it.
 
 That path is serial per label event and depends on GitHub Actions, so
 prefer local. Say which path a run used either way. The two cannot be told

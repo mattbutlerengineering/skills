@@ -24,12 +24,15 @@ Two invariants here are security properties, not conveniences (ADR-0032):
         Resolve the labeled issue into dispatch outputs (dispatch, wo,
         charter, band, model, prompt) written to $GITHUB_OUTPUT for the
         workflow's claude-code-action step. A non-owner or non-ready label,
-        or an issue still flagged budget-exhausted (ADR-0034: the owner must
-        clear it to re-dispatch), is a no-op (dispatch=false, exit 0). A
+        an issue still flagged budget-exhausted (ADR-0034: the owner must
+        clear it to re-dispatch), or an order whose breakdown row is
+        already checked off, is a no-op (dispatch=false, exit 0). A
         genuine misconfiguration — an owner-applied ready label on an
-        unflagged issue with no work-order row, a charter with no band, a
-        band the routing table does not cover — is a problem (exit nonzero)
-        so the owner sees it.
+        unflagged issue with no work-order row, on an order whose
+        `blocked by:` edges are unmet or unreadable (ADR-0032: the dispatch
+        plane never runs ahead of the knowledge plane), a charter with no
+        band, a band the routing table does not cover — is a problem (exit
+        nonzero) so the owner sees it.
 
   python3 assembler.py find-pr <issue>
         Locate the open PR whose body Closes the issue (the dispatched
@@ -132,6 +135,46 @@ def issue_event(env):
     return event, []
 
 
+def held_by_blockers(row, by_wo):
+    """PURE: why `row`'s `blocked by:` edges hold it back, or None when
+    every edge names a checked-off row in `by_wo` ({wo: row facts}, the
+    knowledge plane's WO index or work_queue's projection of it).
+
+    The one blocker predicate of both dispatchers (ADR-0032: the dispatch
+    plane never runs ahead of the knowledge plane) — work_queue.eligible
+    defers on it, run_resolve refuses on it — so the planner and the
+    labeled-event path cannot disagree about whether an order may start.
+    An unreadable clause holds the row back: read as "no blockers" it
+    would dispatch work before a dependency nobody could check (beads
+    wo-o3l)."""
+    if row["unreadable"]:
+        return (f"blocked by {row['unreadable']!r}, which names no work"
+                " order, so its dependency cannot be checked")
+    unmet = sorted(b for b in row["blockers"]
+                   if b not in by_wo or not by_wo[b]["done"])
+    if unmet:
+        return f"blocked by {', '.join(unmet)}"
+    return None
+
+
+def _mirrored_row(root, issue_number):
+    """(the row facts mirrored to this issue, the WO index, problems)."""
+    index, _ = work_orders(root)
+    row = index["issue"].get(issue_number)
+    if row is None:
+        return None, index, [
+            f"asm: no breakdown row mirrors issue #{issue_number} — a"
+            " wo:ready-for-agent issue without a work-order row is not"
+            " dispatchable"]
+    if row["clashes"]:
+        return None, index, [f"asm: {clash}" for clash in row["clashes"]]
+    if not row["wo"]:
+        return None, index, [
+            f"asm: issue #{issue_number}'s breakdown row names no"
+            " work order"]
+    return row, index, []
+
+
 def resolve_row(root, issue_number):
     """(wo, row_text, problems): the breakdown row mirrored to this issue,
     WITH its indented sub-bullets — the Accept line is the acceptance
@@ -147,20 +190,29 @@ def resolve_row(root, issue_number):
     plane, not the issue, decides which work order an issue carries. A
     ready-for-agent issue with no row is a real misconfiguration (the mirror
     ran ahead of the breakdown, which ADR-0032 forbids) — say so."""
-    index, _ = work_orders(root)
-    row = index["issue"].get(issue_number)
-    if row is None:
-        return None, None, [
-            f"asm: no breakdown row mirrors issue #{issue_number} — a"
-            " wo:ready-for-agent issue without a work-order row is not"
-            " dispatchable"]
-    if row["clashes"]:
-        return None, None, [f"asm: {clash}" for clash in row["clashes"]]
-    if not row["wo"]:
-        return None, None, [
-            f"asm: issue #{issue_number}'s breakdown row names no"
-            " work order"]
+    row, _, problems = _mirrored_row(root, issue_number)
+    if problems:
+        return None, None, problems
     return row["wo"], row["block"], []
+
+
+def knowledge_plane_hold(row, index, issue_number):
+    """((no-op reason or None), problems) for a resolved row on the
+    knowledge plane (ADR-0032). A checked-off row is a no-op — a ready
+    label re-applied after the merge has nothing left to build. A row
+    whose blockers are unmet or unreadable is a problem: the owner
+    labelled it before its dependency landed, and must see that rather
+    than pay an agent to build on a missing base."""
+    if row["done"]:
+        return (f"asm: {row['wo']} is checked off in its breakdown — its"
+                f" work is done, so a {READY_LABEL} label on issue"
+                f" #{issue_number} has nothing to dispatch (ADR-0032)"), []
+    held = held_by_blockers(row, index["wo"])
+    if held:
+        return None, [f"asm: {row['wo']} (issue #{issue_number}): {held} —"
+                      " the dispatch plane never runs ahead of the"
+                      " knowledge plane (ADR-0032)"]
+    return None, []
 
 
 def select_charter(labels):
@@ -267,9 +319,15 @@ def run_resolve(root, env, agents_dir=None):
                 "reason": f"asm: issue #{number} carries {EXHAUSTED_LABEL} —"
                 " a hard-stopped order is not re-dispatchable until the owner"
                 " clears the flag (ADR-0034)"}, []
-    wo, row, problems = resolve_row(root, number)
+    facts, index, problems = _mirrored_row(root, number)
     if problems:
         return {"dispatch": "false"}, problems
+    noop, problems = knowledge_plane_hold(facts, index, number)
+    if noop:
+        return {"dispatch": "false", "reason": noop}, []
+    if problems:
+        return {"dispatch": "false"}, problems
+    wo, row = facts["wo"], facts["block"]
     role = select_charter(labels)
     band, problems = charter_band(agents_dir, role)
     if problems:

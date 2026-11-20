@@ -27,7 +27,8 @@ from fake_gh import FakeGh  # noqa: E402
 import cost_ledger  # noqa: E402
 from human_gates import (GATES, Waiting, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
-                         open_queues, read_gate_issues, read_timelines,
+                         open_queues, read_gate_issues, read_labelers,
+                         read_timelines,
                          read_work_order_issues, waited_seconds,
                          waiting_issues, waiting_since)
 
@@ -291,6 +292,59 @@ class TestReadTimelines(unittest.TestCase):
         self.assertEqual(gate_rejections(events[7]), [])
         self.assertEqual(problems, [
             "rm: timeline for #7 refused 1 malformed timestamp(s)"])
+
+
+def labeled_by(ts, name, login):
+    return {**labeled(ts, name), "actor": {"login": login}}
+
+
+class TestReadLabelers(unittest.TestCase):
+    """Who applied a label most recently, through read_timelines' own
+    read and admission (ADR-0090) — the dispatch plane's owner-only
+    ready label (ADR-0032) is a question about the latest labeled
+    event's actor, and an unreadable timeline must never answer it."""
+
+    def test_the_latest_labeled_event_names_the_labeler(self):
+        run = timeline_gh({7: [[
+            labeled_by("2026-08-01T00:00:00Z", "wo:ready-for-agent", "o"),
+            unlabeled("2026-08-02T00:00:00Z", "wo:ready-for-agent"),
+        ], [
+            labeled_by("2026-08-03T00:00:00Z", "wo:ready-for-agent",
+                       "drive-by"),
+            labeled_by("2026-08-04T00:00:00Z", "wo:draft", "o"),
+        ]]})
+        self.assertEqual(
+            read_labelers([7], "wo:ready-for-agent", run, "wq"),
+            ({7: "drive-by"}, []))
+
+    def test_a_timeline_without_the_label_answers_none(self):
+        self.assertEqual(
+            read_labelers([7], "wo:ready-for-agent", timeline_gh(), "wq"),
+            ({7: None}, []))
+
+    def test_an_actorless_labeled_event_answers_the_empty_name(self):
+        run = timeline_gh({7: [[
+            labeled("2026-08-01T00:00:00Z", "wo:ready-for-agent")]]})
+        self.assertEqual(
+            read_labelers([7], "wo:ready-for-agent", run, "wq"),
+            ({7: ""}, []))
+
+    def test_a_failed_fetch_is_absent_and_a_labelled_problem(self):
+        self.assertEqual(
+            read_labelers([7], "wo:ready-for-agent",
+                          timeline_gh(failing=["api"]), "wq"),
+            ({}, ["wq: gh api timeline for #7 failed: boom"]))
+
+    def test_a_refused_timestamp_leaves_the_issue_absent(self):
+        """Fail closed: a dropped flip could be the latest application,
+        so a timeline admission refused anything from answers nothing."""
+        run = timeline_gh({7: [[
+            labeled_by("2026-08-01T00:00:00Z", "wo:ready-for-agent", "o"),
+            labeled_by("yesterday", "wo:ready-for-agent", "drive-by"),
+        ]]})
+        self.assertEqual(
+            read_labelers([7], "wo:ready-for-agent", run, "wq"),
+            ({}, ["wq: timeline for #7 refused 1 malformed timestamp(s)"]))
 
 
 NOW = datetime(2026, 8, 14, 12, 0, tzinfo=timezone.utc)
