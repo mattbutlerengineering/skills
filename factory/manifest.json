@@ -23,7 +23,7 @@
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "2ff1f70273e839c9d22a9f5cad426c34387fce4944eb18a1d2fc91ee09154f76",
     "templates/tools/factory/.gitignore": "a8d4901caf8ede345c3ade1b4e165f431b8386799d91695a83521444a9c553b0",
-    "templates/tools/factory/assembler.py": "c5d110aefb8d9101d4d9ac7b6795202e68efe17afaa83ae31b7fd4ece4678f2f",
+    "templates/tools/factory/assembler.py": "abe11615f9b5b9f04bf61c6a32d81432fb40aa6ce2b801ee29b1b1e3573e7b9b",
     "templates/tools/factory/budget_guard.py": "4b750d81f2975ef18fea701f24a60f344bd8c02115a3347e7ef6f199765cdceb",
     "templates/tools/factory/cli.py": "c11892c7cdef735039320165d39ffb35b6f5681793c408d11e0adeddde3b8b97",
     "templates/tools/factory/conductor.py": "de3931a82672630e7f049468ffb8c2f3916dcb82b326257904460b4c22c52b15",
@@ -51,7 +51,7 @@
     "templates/tools/factory/protocol.py": "290319e0626231eb409c1b39a80ba4bf11cb1a1bce776ad8d251601f623635f4",
     "templates/tools/factory/rejection_mining.py": "6f6e3dfe946a51da3eb2b34e4e7eb53e7fa85b5c33b5a0fbd956c1ecf0abe733",
     "templates/tools/factory/standards_index.py": "513e11efab3d0bba78934fb80359755d819a03518abb0dae48c7875cbd69372b",
-    "templates/tools/factory/trace.py": "591eba74b425bc23510b05350bb3f0ad36edc5935e95f98a8bdf71e54f8b3742",
+    "templates/tools/factory/trace.py": "823e936de961019793f4c6e16e479fb368a033467f3ad624e0ab47f3177a47b4",
     "templates/tools/factory/validator.py": "a32616cae68ab2a010660a3dc2b1a1941feff416d594b532bbced149a72a984b",
     "templates/tools/factory/work_queue.py": "1d3c6c5d18088c5dc49ab997c93b5512e0f57ef16c65a03cd3c30d50ae0df658"
   }

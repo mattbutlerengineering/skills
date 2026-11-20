@@ -45,7 +45,7 @@ from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PRD_TOKEN, WO_TOKEN,
                              parse_run, sanitize, status_head, unfenced,
                              work_orders)
 from protocol import (MAINTENANCE_STAGE_ARTIFACTS, STAGE_ARTIFACTS,
-                      read_frontmatter, run_ref)
+                      parse_frontmatter, run_ref)
 
 LABEL = "trace"
 DEFAULT_BUDGET = 4096
@@ -229,7 +229,10 @@ def resolve_kb(root, key, runs):
     page = root / key
     if not page.is_file():
         return None, [f"{key} does not exist"]
-    sources = (read_frontmatter(page) or {}).get("sources", "")
+    text, problem = read_file(page, key, str)
+    if problem:
+        return None, [problem]
+    sources = (parse_frontmatter(text) or {}).get("sources", "")
     for run in runs:
         rel = run["path"].relative_to(root).as_posix()
         if run["ref"] != "product" and f"{rel}/" in sources:

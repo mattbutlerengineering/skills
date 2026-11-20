@@ -195,6 +195,17 @@ class TestCharterBand(unittest.TestCase):
             self.assertEqual(assembler.charter_band(agents, "support"),
                              ("mechanical", []))
 
+    def test_an_unreadable_stub_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agents = self.tree(tmp).root / "factory" / "agents"
+            stub = agents / "factory-swe.md"
+            stub.write_bytes(stub.read_bytes() + b"\xff\n")
+            band, problems = assembler.charter_band(agents, "swe")
+            self.assertIsNone(band)
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                f"asm: cannot read {stub}: "), problems)
+
     def test_a_missing_stub_is_a_problem(self):
         with tempfile.TemporaryDirectory() as tmp:
             agents = self.tree(tmp).root / "factory" / "agents"
