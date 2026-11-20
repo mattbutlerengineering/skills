@@ -1129,9 +1129,37 @@ CHECKERS = (check_manifest, check_plugin_skills,
             check_ledger_links)
 
 
+# The markdown the checkers parse. They read it bare, so a non-UTF-8
+# file would escape one of them as a traceback; lint() runs them only
+# once every one of these decodes.
+DOC_GLOBS = ("README.md", "LEDGER.md", "docs/pipeline-protocol.md",
+             "skills/**/*.md")
+
+
+def unreadable_docs(root):
+    """`cannot read <rel>: <err>` for each doc in DOC_GLOBS that will not
+    read as UTF-8 text (cli.read_file, ADR-0075)."""
+    problems = []
+    for pattern in DOC_GLOBS:
+        for path in sorted(root.glob(pattern)):
+            if path.is_file():
+                _, problem = read_file(path, path.relative_to(root).as_posix(),
+                                       str)
+                if problem:
+                    problems.append(problem)
+    return problems
+
+
+def lint(root):
+    """Every checker's problems, or only the unreadable docs when there
+    are any: a checker would crash on them, not report."""
+    return unreadable_docs(root) or [p for checker in CHECKERS
+                                     for p in checker(root)]
+
+
 def main():
     root = Path(__file__).resolve().parent.parent
-    problems = [p for checker in CHECKERS for p in checker(root)]
+    problems = lint(root)
     checked = len(ALL_SKILLS) + len(extra_skills(root))
     # Checker strings carry no label (their suite pins them bare); the
     # LINT: prefix is print-time dress, applied before the shared epilogue.

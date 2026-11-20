@@ -221,6 +221,24 @@ class CheckerTreeTest(unittest.TestCase):
             "plugin.json is not valid JSON:"), problems)
 
 
+class TestUnreadableDocs(CheckerTreeTest):
+    """A non-UTF-8 doc lint parses is a problem string, not a traceback
+    out of whichever checker reads it first."""
+
+    def test_a_clean_tree_has_no_unreadable_doc(self):
+        self.assertEqual(lint.unreadable_docs(self.root), [])
+
+    def test_non_utf8_docs_are_reported_and_nothing_raises(self):
+        skill = sorted((self.root / "skills").glob("*/SKILL.md"))[0]
+        for path in (self.root / "README.md", skill):
+            path.write_bytes(path.read_bytes() + b"\xff\n")
+        problems = lint.lint(self.root)
+        self.assertEqual(
+            [p.split(":")[0] for p in problems],
+            ["cannot read README.md",
+             f"cannot read {skill.relative_to(self.root).as_posix()}"])
+
+
 class TestCleanTree(CheckerTreeTest):
     def test_every_checker_reports_zero_problems(self):
         for checker in lint.CHECKERS:
