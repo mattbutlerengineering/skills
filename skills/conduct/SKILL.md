@@ -208,10 +208,8 @@ with `conductor.py ask`:
   and it needs its own ask).
 - **Clarify asks**, when a Worker stopped on a question it could not
   answer. A Worker cannot ask mid-run, so its question reaches the Owner
-  only through you. The tool does not pass the answer to any later
-  Worker brief: once the Owner answers, write the answer into the item's
-  issue or run artifact yourself before the retry, or the next run starts
-  without it.
+  only through you. The tool carries the Owner's answer (question,
+  choice and note) into the item's next Worker brief.
 
 The `--kind` for both of your own merge asks and train asks is `merge`;
 for a clarify ask it is `clarify`.

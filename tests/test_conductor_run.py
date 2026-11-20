@@ -899,6 +899,71 @@ SPEC_LOG = ("chore(cost): conductor-b1-12-spec-1\n"
             "feat: not this run's\n")
 
 
+def clarify(ask_id, key, question, options=("yes", "no")):
+    return {"at": "2026-10-10T12:00:00Z", "kind": "ask", "item": key,
+            "id": ask_id, "ask_kind": "clarify", "question": question,
+            "options": list(options), "recommended": options[0],
+            "why": "the recommendation, never briefed"}
+
+
+def replied(ask_id, key, choice, note=""):
+    return dict(answered(ask_id, choice, key, at="2026-10-10T12:10:00Z"),
+                note=note)
+
+
+class TestClarifyAnswersInTheBrief(RunCase):
+    """#2227: the Owner's answer to a Worker's clarify question reaches
+    the item's next Worker brief; nothing else the ledger holds does."""
+
+    def brief(self, *rows):
+        self.run_step("#12", "spec", Harness(act=pr_body),
+                      rows=BASE + list(rows))
+        return self.harness.calls[0]["cmd"][2]
+
+    def test_an_answered_clarify_ask_is_briefed_after_the_objective(self):
+        text = self.brief(clarify("ask-2", "#12", "Keep the v1 route?"),
+                          replied("ask-2", "#12", "no", "drop it in 2.0"))
+        self.assertIn(
+            "\n## Owner answers\n\n"
+            "The Owner's recorded answers to this item's clarify"
+            " questions, in the order given. Follow them:\n"
+            "- Question: Keep the v1 route?\n"
+            "  Answer: no\n"
+            "  Note: drop it in 2.0\n"
+            "\n## Output\n", text)
+        self.assertNotIn("never briefed", text)
+
+    def test_two_answers_keep_ledger_order_and_drop_an_empty_note(self):
+        text = self.brief(clarify("ask-2", "#12", "First?"),
+                          replied("ask-2", "#12", "yes"),
+                          clarify("ask-3", "#12", "Second?", ("a", "b")),
+                          replied("ask-3", "#12", "b", "because"))
+        self.assertIn(
+            "- Question: First?\n"
+            "  Answer: yes\n"
+            "- Question: Second?\n"
+            "  Answer: b\n"
+            "  Note: because\n", text)
+
+    def test_no_answered_clarify_ask_means_no_section(self):
+        text = self.brief(stall_ask("ask-2", "#12"),
+                          answered("ask-2", "retry", "#12"),
+                          clarify("ask-3", "#13", "Another item's?"),
+                          replied("ask-3", "#13", "yes"),
+                          clarify("ask-4", "#13", "Unanswered?"))
+        self.assertNotIn("## Owner answers", text)
+        self.assertNotIn("Another item's?", text)
+
+    def test_only_an_items_answered_clarify_asks_are_its_owner_answers(self):
+        rows = BASE + [clarify("ask-2", "#12", "Answered?"),
+                       replied("ask-2", "#12", "yes", "n"),
+                       stall_ask("ask-3", "#12"),
+                       answered("ask-3", "retry", "#12"),
+                       clarify("ask-4", "#12", "Unanswered?")]
+        self.assertEqual(conductor_run.owner_answers(rows, "#12"),
+                         [("Answered?", "yes", "n")])
+
+
 class TestRetryAfterBudgetStop(RunCase):
     """#725: a retry after a budget stop continues the committed work,
     a repeat budget stop recommends no plain retry, and the stop's

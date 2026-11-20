@@ -188,10 +188,11 @@ def harness_command(brief, model, effort, ceiling_usd,
 
 def compose_brief(step, item, item_type, worktree, branch, block, wo,
                   context, issue_body, ceiling, tools=ALLOWED_TOOLS,
-                  prior=""):
+                  prior="", answered=()):
     """The Worker's brief in its fixed shape. The issue body is an input
     only for a spec step (ADR-0032: owner-authored issues only). `prior`
-    is a retry's note on the work its stalled run committed (#725)."""
+    is a retry's note on the work its stalled run committed (#725), and
+    `answered` the item's owner_answers (#2227)."""
     scale = ("maintenance run from capture" if item_type == "fix"
              else "feature run from idea")
     reserved = ", ".join(f"{kind} {span(values)}"
@@ -210,6 +211,7 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         "## Objective", "",
         OBJECTIVES[step].format(item=item, scale=scale, wo=wo), "",
         *(["## Prior work", "", prior, ""] if prior else []),
+        *_answers_section(answered),
         "## Output", "",
         f"The stage artifact or code, as commits on {branch}. Write the"
         f" pull request body to {PR_BODY_FILE} at the worktree root and"
@@ -230,6 +232,30 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         "The run directory on this branch, and:", *inputs,
         f"Your budget is ${ceiling:.2f}: the dollar ceiling is the whole"
         " context budget.", ""])
+
+
+def owner_answers(rows, item):
+    """[(question, choice, note)]: the Owner's recorded answers to the
+    item's clarify asks, in the ledger order of the answers (#2227). An
+    ask's recommendation is never one of them."""
+    asked = {row["id"]: row for row in rows if row["kind"] == "ask"
+             and row["item"] == item and row["ask_kind"] == "clarify"}
+    return [(asked[row["ask"]]["question"], row["choice"], row["note"])
+            for row in rows
+            if row["kind"] == "answer" and row["ask"] in asked]
+
+
+def _answers_section(answered):
+    """The brief's lines for owner_answers: none when there are none."""
+    if not answered:
+        return []
+    lines = ["## Owner answers", "",
+             "The Owner's recorded answers to this item's clarify"
+             " questions, in the order given. Follow them:"]
+    for question, choice, note in answered:
+        lines += [f"- Question: {question}", f"  Answer: {choice}",
+                  *([f"  Note: {note}"] if note else [])]
+    return lines + [""]
 
 
 def _git(git, args, what):
@@ -684,7 +710,8 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     tools = allowed_tools(gate)
     brief = compose_brief(step, item, entry["type"], worktree, branch,
                           ctx["block"], ctx["wo"], ctx["context"],
-                          ctx["body"], ceiling, tools, ctx["prior"])
+                          ctx["body"], ceiling, tools, ctx["prior"],
+                          owner_answers(ctx["rows"], item))
     event, ended, _ = _harness(
         harness, harness_command(brief, model, effort, ceiling, tools),
         worktree, minutes, batch)
