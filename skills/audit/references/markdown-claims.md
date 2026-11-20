@@ -23,7 +23,8 @@ the plugin checkout's path in place of the placeholder:
 `check` prints one problem per contradicted claim and
 `md-claims: N problem(s) across M doc(s)`, exiting 1 when N > 0.
 `extract` prints every claim it found as JSON — the inventory this mode
-judges. With no paths it reads the root `*.md` (minus the
+judges; a path that names no doc is reported instead, exiting 1, so a
+typo never reads as "no claims". With no paths it reads the root `*.md` (minus the
 agent-instruction files) and `docs/**/*.md` (minus date-prefixed
 snapshots). Pass paths to narrow it when `docs/` also holds records — run
 artifacts, ADRs, research notes — which describe what was true when they
