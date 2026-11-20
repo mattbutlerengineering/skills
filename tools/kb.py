@@ -36,7 +36,7 @@ from pathlib import Path
 import cli
 import kb_drift
 import kb_harvest
-from knowledge_plane import local_link_targets, resolve_link
+from knowledge_plane import link_target_problem, local_link_targets, resolve_link
 from protocol import read_frontmatter
 
 LABEL = "kb"
@@ -103,11 +103,24 @@ def _unreadable_problem(page):
     return f"{LABEL}: {page['path']} cannot be read: {page['unreadable']}"
 
 
+# A YAML block scalar the frontmatter parser cannot read: the summary
+# comes back as the bare indicator, or spans lines and writes them into
+# the managed block (a `## heading` among them becomes a real heading).
+BLOCK_INDICATOR = re.compile(r"[>|][+-]?")
+
+
+def _plain_line(summary):
+    return "\n" not in summary and not BLOCK_INDICATOR.fullmatch(
+        summary.strip())
+
+
 def _summary(page):
-    """The page's summary when it is a non-empty string; "" otherwise (a
-    missing, empty or nested-map summary has no index line)."""
+    """The page's summary when it is a non-empty plain line; "" otherwise
+    (a missing, empty, nested-map or multi-line summary has no index
+    line)."""
     summary = (page["fields"] or {}).get("summary")
-    return summary if isinstance(summary, str) else ""
+    return summary if isinstance(summary, str) and _plain_line(summary) \
+        else ""
 
 
 def _nested_problem(page, field):
@@ -159,6 +172,10 @@ def _field_problems(page):
     problems += [_nested_problem(page, field)
                  for field in ("summary", "sources", "related")
                  if isinstance(page["fields"].get(field), dict)]
+    summary = page["fields"].get("summary")
+    if isinstance(summary, str) and summary and not _plain_line(summary):
+        problems.append(f"{LABEL}: {page['path']} summary must be one plain"
+                        " line, not a YAML block scalar")
     size = len(_summary(page).encode("utf-8"))
     if size > SUMMARY_CAP:
         problems.append(f"{LABEL}: {page['path']} summary is {size} bytes,"
@@ -209,9 +226,18 @@ def index(root):
 def _link_problems(root, page):
     fields, label = page["fields"], f"{LABEL}: {page['path']}"
     slugs = {p.stem for p in (root / KB_DIR).glob("*.md")}
-    problems = [f"{label} cites source {source!r}, which does not exist"
-                for source in _items(fields.get("sources", ""))
-                if not (root / source).exists()]
+    # link_target_problem, not exists(): macOS finds src/gates.py for
+    # src/Gates.py, but git's pathspec is case-sensitive, so the page
+    # would never go stale; a source outside the repo fails git diff.
+    problems = []
+    for source in _items(fields.get("sources", "")):
+        reason = link_target_problem(root, root / source)
+        if reason == "outside the repo":
+            problems.append(f"{label} cites source {source!r}, which is"
+                            " outside the repo")
+        elif reason:
+            problems.append(f"{label} cites source {source!r}, which does"
+                            " not exist")
     problems += [f"{label} relates to {slug!r}, which is not a page in"
                  " docs/kb/" for slug in _items(fields.get("related", ""))
                  if slug not in slugs]
@@ -297,6 +323,9 @@ def _index_problems(path, every, block):
     return problems
 
 
+SHA = re.compile(r"[0-9a-f]{7,40}")
+
+
 def _stale_problems(root, page, git):
     """A page is stale once a source it cites changed between its
     verified commit and HEAD. Raises cli.CLI_FAILURES only for git
@@ -306,6 +335,11 @@ def _stale_problems(root, page, git):
         fields.get("sources", ""))
     if not sha or not sources:
         return []
+    if not SHA.fullmatch(sha):
+        # HEAD or a branch name resolves, and diffing it against HEAD is
+        # always empty: the page would never go stale.
+        return [f"{label} verified {sha!r} is not a commit sha — use"
+                " `git rev-parse HEAD`"]
     base = ["-C", str(root)]
     try:
         git(base + ["rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}"])
@@ -314,9 +348,31 @@ def _stale_problems(root, page, git):
             raise
         return [f"{label} verified {sha!r} is not a commit in this"
                 " repository"]
-    changed = [path for path in git(base + [
-        "diff", "-z", "--name-only", sha, "HEAD", "--", *sources]
-    ).split("\0") if path]
+    try:
+        # A commit that exists locally but is off HEAD's history (a
+        # squash-merged branch's) passes here and fails in every clone.
+        git(base + ["merge-base", "--is-ancestor", sha, "HEAD"])
+    except cli.CLI_FAILURES as err:
+        if isinstance(err, OSError):
+            raise
+        return [f"{label} verified {sha[:7]} is not in HEAD's history —"
+                " re-verify against a commit on it"]
+    # A deleted source still diffs (it is how a page learns it went); a
+    # source outside the repo makes git diff fail, and _link_problems
+    # already reports it.
+    inside = [source for source in sources
+              if link_target_problem(root, root / source)
+              != "outside the repo"]
+    if not inside:
+        return []
+    try:
+        out = git(base + ["diff", "-z", "--name-only", sha, "HEAD", "--",
+                          *inside])
+    except cli.CLI_FAILURES as err:
+        if isinstance(err, OSError):
+            raise
+        return [f"{label} sources could not be diffed: {cli.detail(err)}"]
+    changed = [path for path in out.split("\0") if path]
     if not changed:
         return []
     renamed = _renames(root, sha, git) if any(
