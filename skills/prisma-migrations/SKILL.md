@@ -23,6 +23,15 @@ Paths below assume Prisma's defaults (`prisma/schema.prisma`,
 schema location, package manager and deploy platform before giving a
 command — adapt the paths, never assume them.
 
+The commands here, and in the references, are Prisma 5–6 forms. Read the
+repo's Prisma version first: Prisma 7 removed several of their flags.
+`migrate diff`'s `--from-schema-datamodel` and `--to-schema-datamodel`
+became `--from-schema` and `--to-schema`. `--from-url`/`--to-url` and
+`--shadow-database-url` gave way to `--from-config-datasource` and
+`--to-config-datasource`, with the URLs read from `prisma.config.ts`.
+`migrate reset` has no `--skip-seed`. On Prisma 7, check
+`npx prisma <command> --help` and translate before giving a command.
+
 ## Must never
 
 - Run `prisma migrate dev`, `prisma migrate reset` or `prisma db push`
