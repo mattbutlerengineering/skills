@@ -106,7 +106,9 @@ def _unreadable_problem(page):
 # A YAML block scalar the frontmatter parser cannot read: the summary
 # comes back as the bare indicator, or spans lines and writes them into
 # the managed block (a `## heading` among them becomes a real heading).
-BLOCK_INDICATOR = re.compile(r"[>|][+-]?")
+# Indentation and chomping indicators in either order, and a trailing
+# comment, all parse to the bare indicator too (`>2`, `|2-`, `| # c`).
+BLOCK_INDICATOR = re.compile(r"[>|](?:[1-9][+-]?|[+-][1-9]?)?\s*(?:#.*)?")
 
 
 def _plain_line(summary):
@@ -335,7 +337,7 @@ def _stale_problems(root, page, git):
         fields.get("sources", ""))
     if not sha or not sources:
         return []
-    if not SHA.fullmatch(sha):
+    if not isinstance(sha, str) or not SHA.fullmatch(sha):
         # HEAD or a branch name resolves, and diffing it against HEAD is
         # always empty: the page would never go stale.
         return [f"{label} verified {sha!r} is not a commit sha — use"

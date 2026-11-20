@@ -504,6 +504,14 @@ class TestReadWorkOrderIssues(unittest.TestCase):
         self.assertEqual(run.calls[2],
                          ["api", "repos/{owner}/{repo}/issues/7"])
 
+    def test_a_fetched_issue_links_to_its_page_not_the_api(self):
+        run = tracker_gh([], rest={5: rest_issue(
+            5, "open", [], url="https://api.github.com/repos/o/r/issues/5",
+            html_url="https://github.com/o/r/issues/5")})
+        read = read_work_order_issues([5], "number,url", run, "dashboard")
+        self.assertEqual(read.value, [
+            {"number": 5, "url": "https://github.com/o/r/issues/5"}])
+
     def test_every_gate_field_survives_the_fetch_by_number(self):
         run = tracker_gh([], rest={7: rest_issue(7, "open", [])})
         read = read_work_order_issues(

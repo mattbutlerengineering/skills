@@ -294,7 +294,10 @@ def _issue_by_number(number, fields, run, label, slug):
                       f" {type(value).__name__} where dict was expected"]
     if "pull_request" in value or value.get("number") != number:
         return None, []
-    spelled = {**value, "state": str(value.get("state") or "").upper()}
+    # REST's `url` is the API address; `gh issue list --json url` gives
+    # the github.com page, which is what every reader links to.
+    spelled = {**value, "state": str(value.get("state") or "").upper(),
+               "url": value.get("html_url")}
     return {name: spelled.get(name) for name in fields.split(",")}, []
 
 

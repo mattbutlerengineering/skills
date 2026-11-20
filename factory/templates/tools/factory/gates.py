@@ -776,9 +776,19 @@ def check_cost_ledger(root, parsed=None):
         # merged-row cross-check have no ledger to bite on.
         return problems
     wo_rows = collect_wo_rows(parsed)
-    recorded = set()
+    recorded, keys = set(), set()
     for lineno, entry, located, shown in rows:
         problems.extend(located)
+        if entry is not None and not located:
+            # One run, one row: a repeat (a run recorded on two branches,
+            # in the aggregate and in its run file) is counted once by
+            # cost_ledger.read, and reported here, where CI sees it.
+            key = cost_ledger.row_key(entry)
+            if key in keys:
+                problems.append(f"G: {shown}:{lineno} repeats run"
+                                f" {key[1]!r} of {key[0]}, already recorded"
+                                " — one run, one ledger row")
+            keys.add(key)
         wo = cost_ledger.wo_token(entry) if entry is not None else None
         if wo:
             if cost_ledger.gate_wait(entry) is None:
