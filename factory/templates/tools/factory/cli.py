@@ -62,6 +62,15 @@ CLI_FAILURES = (subprocess.CalledProcessError, subprocess.TimeoutExpired,
                 OSError)
 
 
+def finite(number):
+    """True when `number` is a finite float or converts to one: an int
+    too large for a float makes math.isfinite raise OverflowError, and
+    any sum of it with a float raises too, so it is not a cost."""
+    try:
+        return math.isfinite(number)
+    except OverflowError:
+        return False
+
 def child_env():
     """The environment for a harness child process: the caller's environ
     minus CLAUDECODE, so an eval run or charter replay can nest
@@ -543,7 +552,8 @@ def read_execution(path):
     result = results[-1]
     cost = result.get("total_cost_usd")
     if isinstance(cost, bool) or not isinstance(cost, (int, float)) \
-            or not math.isfinite(cost) or cost < 0:
+            or not finite(cost) \
+            or cost < 0:
         return None, (f"execution file {path} result entry's"
                       f" total_cost_usd {cost!r} is not a non-negative"
                       " number")
