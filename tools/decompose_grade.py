@@ -35,6 +35,12 @@ MIN_NAME = 4
 # sitting (measured in architecture.md: 1 of 205 real rows exceeds 3).
 MAX_SPAN = 3
 _BLOCKED_BY = re.compile(r"blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
+# The item's own clause: a `Blocked by:` sub-bullet, preferred over an
+# inline match, and never one inside a code span (an Accept line that
+# talks about "a `blocked by:` clause" names no edge).
+_BLOCKED_SUB = re.compile(r"^\s*[-*+]\s+blocked by:[ \t]*([^(\n]*)",
+                          re.IGNORECASE | re.MULTILINE)
+_CODE_SPAN = re.compile(r"`[^`\n]*`")
 _BOLD = re.compile(r"\*\*(.*?)\*\*")
 _NO_EDGE = {"", "—", "-", "none"}
 _ACCEPT = re.compile(r"^\s*[-*+]\s+accept:[ \t]*(.*)$", re.IGNORECASE)
@@ -121,11 +127,16 @@ def blockers(block, labels=()):
     split on `;` and `,`; an empty, dash or `none` element is no edge. A
     `;` segment that is wholly some item's bold label (`labels`) stays one
     element, so a label holding a comma is not cut in two."""
-    clause = _BLOCKED_BY.search(block)
+    # Match on a copy with code spans blanked to their own length, then
+    # read the clause from the original: a blocker's title may itself
+    # hold a code span.
+    masked = _CODE_SPAN.sub(lambda m: " " * len(m.group(0)), block)
+    clause = _BLOCKED_SUB.search(masked) or _BLOCKED_BY.search(masked)
     if clause is None:
         return []
+    text = block[clause.start(1):clause.end(1)]
     parts = []
-    for segment in clause.group(1).split(";"):
+    for segment in text.split(";"):
         whole = segment.strip(" .`*")
         parts.extend([whole] if "," in whole and whole in labels
             else (p.strip(" .`*") for p in segment.split(",")))
@@ -139,6 +150,9 @@ def _label(item):
 
 
 def _resolves(element, key):
+    # Backticks compared out on both sides: the element's edge backtick
+    # is stripped with its punctuation, a title's own code span is not.
+    element, key = element.replace("`", ""), key.replace("`", "")
     return re.match(rf"{re.escape(key)}(?!\w)", element) is not None
 
 
