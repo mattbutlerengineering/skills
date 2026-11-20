@@ -364,7 +364,13 @@ def _retro_populated(run_dir):
     if count is None and source is None:
         return True
     return (isinstance(count, str) and _COUNT.fullmatch(count) is not None
-            and isinstance(source, str) and bool(source))
+            and isinstance(source, str) and bool(source)
+            and not _is_placeholder(source))
+
+
+def _is_placeholder(value):
+    """A template slot left unfilled: `<...>`, as TEMPLATE.md writes it."""
+    return value.startswith("<") and value.endswith(">")
 
 
 def run_ref(root, run_dir):
