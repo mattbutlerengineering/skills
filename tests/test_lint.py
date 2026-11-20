@@ -2058,6 +2058,18 @@ class TestLedgerLinks(CheckerTreeTest):
             ["LEDGER.md links to missing eval results file "
              "'evals/results/trigger-2026-02-02.json'"])
 
+    def test_a_dot_prefixed_link_to_a_missing_file_is_reported(self):
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(
+            ledger.read_text(encoding="utf-8")
+            + "| extra | "
+            "[2099-01-01](./evals/results/trigger-2099-01-01.json) |\n",
+            encoding="utf-8")
+        self.assertEqual(
+            lint.check_ledger_links(self.root),
+            ["LEDGER.md links to missing eval results file "
+             "'./evals/results/trigger-2099-01-01.json'"])
+
     def test_link_to_directory_not_file_is_reported(self):
         (self.root / "evals" / "results" / "output").mkdir()
         ledger = self.root / "LEDGER.md"
