@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: tools/gates.py, tools/knowledge_plane.py, tools/validator.py, tools/pr_body_preflight.py, .github/workflows/validator.yml
-verified: 81141d71acd1b524a9c5caeb4061922f6951b900
+verified: e5178728cc30bff3aa8ef07a5ebc5906cb1a2271
 related: gates-scan-every-doc
 ---
 
@@ -78,6 +78,11 @@ Added 2026-10-10 (from #650).
   `knowledge_plane.unfenced`). Inline backticks do
   **not** quote it, so a body that merely mentions an order in prose
   makes the job try to flip that order's mirror.
+- B and the validator read `Closes #N` differently. B takes it from the
+  whole body (HTML comments aside), but the validator's legs resolve the
+  work order from a Closes line outside fences and blockquotes only
+  (#2164): GitHub closes nothing from a code block, so a fenced Closes
+  line passes B and flips no label.
 - That job runs only on `opened`/`reopened` or `workflow_dispatch`, not
   on `edited`. Fixing its body does not re-run it: close and reopen the
   PR, or `gh workflow run validator.yml --ref <branch> -f pr=<N>`.
@@ -88,5 +93,7 @@ Added 2026-10-10 (from #652). GitHub honours `Closes #N` only when the PR
 merges into the **default** branch. A PR merged into a parent branch
 never closes its issue, not even after the parent lands on `main`, so
 the fixed issue looks open and unfixed to an audit. Close it by hand, or
-put the `Closes` line on the PR that reaches `main`.
+put the `Closes` line on the PR that reaches `main`. The validator's
+`merged-label` job agrees since #2166: a merge into a non-default base
+marks no order `wo:merged`.
 
