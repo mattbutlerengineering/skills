@@ -49,12 +49,14 @@ def labeled_by(login):
             "created_at": "2026-08-01T00:00:00Z", "actor": {"login": login}}
 
 
-def listing(*numbers, in_flight=(), labelers=None, owner=OWNER):
+def listing(*numbers, in_flight=(), labelers=None, owner=OWNER,
+            variables=()):
     """A gh whose ready listing answers with these issue numbers.
 
     work_queue's reads, each keyed on its own argv prefix: the ready
     listing (`work_queue.LIST_ARGS`), the in-flight listing
-    (`work_queue.IN_FLIGHT_ARGS`), the repo owner (`gh repo view`), and
+    (`work_queue.IN_FLIGHT_ARGS`), the repository variables (`gh variable
+    list`, answering `variables`), the repo owner (`gh repo view`), and
     each ready issue's timeline. `labelers` maps an issue to the login
     whose labeled event applied the ready label; an issue it does not
     name was labelled by `owner` — the only labeler ADR-0032 honours.
@@ -70,6 +72,7 @@ def listing(*numbers, in_flight=(), labelers=None, owner=OWNER):
             json.dumps([{"number": n} for n in numbers]),
         tuple(work_queue.IN_FLIGHT_ARGS[:4]):
             json.dumps([{"number": n} for n in in_flight]),
+        ("variable", "list"): json.dumps(list(variables)),
         ("repo", "view"): json.dumps({"owner": {"login": owner}}),
         ("api",): timeline})
 
@@ -364,7 +367,8 @@ class TestOwnerHolds(unittest.TestCase):
                " owner — inert (ADR-0032)"}, []))
 
     def test_an_unreadable_timeline_fails_closed(self):
-        run = FakeGh(answers={("repo", "view"):
+        run = FakeGh(answers={("variable", "list"): "[]",
+                              ("repo", "view"):
                               json.dumps({"owner": {"login": OWNER}})},
                      failing=["api"])
         self.assertEqual(work_queue.owner_holds([7], run), ({
@@ -373,7 +377,8 @@ class TestOwnerHolds(unittest.TestCase):
             ["wq: gh api timeline for #7 failed: boom"]))
 
     def test_a_timeline_with_no_labeled_event_fails_closed(self):
-        run = FakeGh(answers={("repo", "view"):
+        run = FakeGh(answers={("variable", "list"): "[]",
+                              ("repo", "view"):
                               json.dumps({"owner": {"login": OWNER}}),
                               ("api",): json.dumps([[]])})
         self.assertEqual(work_queue.owner_holds([7], run), ({
@@ -384,9 +389,41 @@ class TestOwnerHolds(unittest.TestCase):
 
     def test_an_unknown_owner_trusts_no_label(self):
         holds, problems = work_queue.owner_holds(
-            [7], FakeGh(failing=["repo"]))
+            [7], FakeGh(answers={("variable", "list"): "[]"},
+                        failing=["repo"]))
         self.assertIsNone(holds)
         self.assertEqual(problems, ["wq: gh repo view failed: boom"])
+
+    def test_the_owner_login_variable_names_the_owner(self):
+        """#2105: an org-owned repo's owner is the org, which never
+        labels; FACTORY_OWNER_LOGIN names the person, exactly as
+        assembler.yml's vars.FACTORY_OWNER_LOGIN does."""
+        run = listing(7, 8, owner="the-org", labelers={7: "the-person"},
+                      variables=[{"name": "FACTORY_PAUSED", "value": "false"},
+                                 {"name": "FACTORY_OWNER_LOGIN",
+                                  "value": "the-person"}])
+        self.assertEqual(work_queue.owner_holds([7, 8], run), ({
+            8: "carries wo:ready-for-agent applied by the-org, not the"
+               " owner — inert (ADR-0032)"}, []))
+        self.assertNotIn(["repo", "view", "--json", "owner"], run.calls)
+
+    def test_an_unset_or_blank_variable_falls_back_to_the_repo_owner(self):
+        for variables in ([], [{"name": "FACTORY_OWNER_LOGIN",
+                                "value": "  "}]):
+            with self.subTest(variables=variables):
+                run = listing(7, 8, labelers={8: "drive-by"},
+                              variables=variables)
+                self.assertEqual(work_queue.owner_holds([7, 8], run), ({
+                    8: "carries wo:ready-for-agent applied by drive-by,"
+                       " not the owner — inert (ADR-0032)"}, []))
+                self.assertIn(["repo", "view", "--json", "owner"],
+                              run.calls)
+
+    def test_an_unreadable_variable_list_trusts_no_label(self):
+        holds, problems = work_queue.owner_holds(
+            [7], FakeGh(failing=["variable"]))
+        self.assertIsNone(holds)
+        self.assertEqual(problems, ["wq: gh variable list failed: boom"])
 
     def test_no_ready_issue_reads_nothing(self):
         run = listing()
