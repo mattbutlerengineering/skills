@@ -41,6 +41,7 @@ _BLOCKED_BY = re.compile(r"blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
 _BLOCKED_SUB = re.compile(r"^\s*[-*+]\s+blocked by:[ \t]*([^(\n]*)",
                           re.IGNORECASE | re.MULTILINE)
 _CODE_SPAN = re.compile(r"`[^`\n]*`")
+_CLAUSE = re.compile(r"[^(\n]*")
 _BOLD = re.compile(r"\*\*(.*?)\*\*")
 _NO_EDGE = {"", "—", "-", "none"}
 _ACCEPT = re.compile(r"^\s*[-*+]\s+accept:[ \t]*(.*)$", re.IGNORECASE)
@@ -131,10 +132,17 @@ def blockers(block, labels=()):
     # read the clause from the original: a blocker's title may itself
     # hold a code span.
     masked = _CODE_SPAN.sub(lambda m: " " * len(m.group(0)), block)
-    clause = _BLOCKED_SUB.search(masked) or _BLOCKED_BY.search(masked)
+    first = masked.split("\n", 1)[0]
+    # The row line's own inline clause first (it names keys), then a
+    # Blocked-by sub-bullet, then any other clause in the block. The
+    # masked copy only locates the clause — a code span is never one —
+    # and the clause is read from the original from there, so a `(`
+    # inside a later code span still ends it as it always did.
+    clause = (_BLOCKED_BY.search(first) or _BLOCKED_SUB.search(masked)
+              or _BLOCKED_BY.search(masked))
     if clause is None:
         return []
-    text = block[clause.start(1):clause.end(1)]
+    text = _CLAUSE.match(block, clause.start(1)).group(0)
     parts = []
     for segment in text.split(";"):
         whole = segment.strip(" .`*")
