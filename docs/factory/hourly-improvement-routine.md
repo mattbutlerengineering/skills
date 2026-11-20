@@ -63,9 +63,15 @@ Check in order; the first hit sets the run mode.
    is that PR. Take it through the gate (§6). Review comments on it
    are addressed on its branch. A PR that cannot be made green with
    one small fix is closed with a comment naming the failing job; its
-   issue stays open and gains `needs-human`. A hold label on that PR
+   issue stays open, leaves `in-progress` by the queue's worker outcome
+   table through the `transition` hook (`agent-failed`; the skill's
+   claim.md: a driver "never leaves `in-progress` on an issue it no
+   longer works"), and gains `needs-human`. A hold label on that PR
    or its issue parks the routine: the gate ends at its hold step
-   (§6 step 2), nothing new is picked, and only a human clears it.
+   (§6 step 2), nothing new is picked, and only a human clears it. So
+   does a PR parked on merge denial (§6 step 6's marker naming its
+   current head): the run logs it as awaiting a human merge, does not
+   gate or review it again, and picks nothing new.
 5. `main` is red — any verify command fails on an untouched checkout,
    or the latest `check` run on `main` failed → the fix is this run's
    work (§4 rung 1).
@@ -95,6 +101,7 @@ Run the verify suite at the repo root, exactly:
 ```
 python3 -m unittest discover tests
 python3 tools/lint.py
+python3 tools/kb.py drift
 python3 tools/gates.py && python3 tools/gates.py --selftest
 ```
 
@@ -276,7 +283,10 @@ Implement-queue's gate, run for this one PR under the profile:
    Phase 3 step 3, is not a moved head); read the head again, as step 1
    says, then run the `merge-command` hook. A merge the runtime
    denies is reported as **awaiting a human merge** with the denial,
-   and is never retried by another route in this run (ADR-0087). Wait
+   and is never retried by another route (ADR-0087): comment the
+   derived verdict line on the PR ending in
+   `<!-- merge-denied: <gated head> -->`, the skill's park marker, so
+   the next run finds it parked (§1 step 4) instead of re-gating it. Wait
    for the merge to land and for `main`'s `check` to finish; a red
    `main` afterwards is reported at the top of the journal comment and
    is the next run's rung 1.

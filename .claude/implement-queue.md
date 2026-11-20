@@ -75,9 +75,11 @@ the reviewer's text, never a shell fragment. The reviewer is
 told no pass line and the threshold lives only in this tool. Exit 0
 prints `reviewer-verdict: pass (score N/10)`, exit 1 prints
 `reviewer-verdict: flag (score N/10)`, exit 2 prints
-`reviewer-verdict: error (<reason>)` (no usable score, or a wrong
-argument count). Act on the exit code only; post the printed line
-verbatim as the first line of the PR's verdict comment. A hook-side
+`reviewer-verdict: error (<reason>)` (no usable score); a wrong
+argument count prints usage and exits 2, so post
+`reviewer-verdict: error (hook exit 2)` per gate step 5. Act on the
+exit code only; post the printed `reviewer-verdict:` line verbatim as
+the first line of the PR's verdict comment. A hook-side
 `error` (a missing hook, a hook that did not run, or any exit code
 other than 0 or 1 on a usable score: a wrong argument count gives 2, a
 killed process 137) is held for a human at once,
