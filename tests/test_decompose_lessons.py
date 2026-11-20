@@ -1264,7 +1264,7 @@ class TestFrontDoor(TempFile):
         before = self.file.read_bytes()
         code, lines = self.main([], [HIT, CLEAN])
         self.assertEqual(lines, [
-            f"{PREFIX} 2 contrast pair(s) from 2 hit run(s): re-plan 1,"
+            f"{PREFIX} 2 contrast pair(s) from 2 signal hit(s): re-plan 1,"
             " design gaps 1, review-traced 0",
             f"{PREFIX} design_gaps/feature/routed importance 2 \u2014"
             f" {ROUTED_TEXT} (sources: feature:c, feature:h)",
