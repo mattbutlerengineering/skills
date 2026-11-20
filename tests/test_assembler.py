@@ -37,10 +37,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 # The target row, a later row that only MENTIONS it in a blocking edge, an
 # unmirrored row, and a Notes line carrying the token — the same grammar
 # cases validator's reverse lookup must survive, exercised forwards here.
+# WO-0004 is checked off, so WO-0005's one blocker is met and #110 is
+# dispatchable on the knowledge plane as well as the dispatch plane.
 BREAKDOWN = (
     "# Breakdown\n"
     "\n"
-    "- [ ] **WO-0004** validator.yml — size:M, blocked by: WO-0003"
+    "- [x] **WO-0004** validator.yml — size:M, blocked by: WO-0003"
     " (PRD-0001 §Solution) (tracker: #109)\n"
     "- [ ] **WO-0005** assembler.yml + guards — size:L, blocked by: WO-0004"
     " (PRD-0001 §Solution) (tracker: #110)\n"
@@ -284,6 +286,54 @@ class TestRunResolve(unittest.TestCase):
             self.assertEqual(outputs["model"], "claude-sonnet-5-5")
             self.assertIn("WO-0005", outputs["prompt"])
             self.assertEqual(outputs["branch"], "wo-0005")
+
+    def test_a_checked_off_order_is_not_dispatched_again(self):
+        """ADR-0032: the dispatch plane never runs ahead of the knowledge
+        plane. A ready label re-applied to an order whose row is already
+        checked off would pay an agent to redo merged work — a no-op,
+        with the reason stated."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = label_event(tmp, number=109)
+            outputs, problems = assembler.run_resolve(self.tree(tmp).root, env)
+            self.assertEqual(problems, [])
+            self.assertEqual(outputs, {
+                "dispatch": "false",
+                "reason": "asm: WO-0004 is checked off in its breakdown —"
+                " its work is done, so a wo:ready-for-agent label on issue"
+                " #109 has nothing to dispatch (ADR-0032)"})
+
+    def test_an_order_with_an_unmet_blocker_is_a_problem(self):
+        """The owner labelled an order before its dependency landed: a
+        misconfiguration the owner must see, never a build on a missing
+        base. The blocker reading is work_queue.eligible's, word for
+        word, so the two dispatchers cannot disagree."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            tree.write("docs/features/demo/breakdown.md",
+                       BREAKDOWN.replace("- [x] **WO-0004**",
+                                         "- [ ] **WO-0004**"))
+            env = label_event(tmp, number=110)
+            outputs, problems = assembler.run_resolve(tree.root, env)
+            self.assertEqual(outputs, {"dispatch": "false"})
+            self.assertEqual(problems, [
+                "asm: WO-0005 (issue #110): blocked by WO-0004 — the"
+                " dispatch plane never runs ahead of the knowledge plane"
+                " (ADR-0032)"])
+
+    def test_an_order_with_an_unreadable_blocker_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            tree.write("docs/features/demo/breakdown.md",
+                       BREAKDOWN.replace("blocked by: WO-0004",
+                                         "blocked by: the validator"))
+            env = label_event(tmp, number=110)
+            outputs, problems = assembler.run_resolve(tree.root, env)
+            self.assertEqual(outputs, {"dispatch": "false"})
+            self.assertEqual(problems, [
+                "asm: WO-0005 (issue #110): blocked by 'the validator',"
+                " which names no work order, so its dependency cannot be"
+                " checked — the dispatch plane never runs ahead of the"
+                " knowledge plane (ADR-0032)"])
 
     def test_a_budget_exhausted_order_is_refused(self):
         """ADR-0034: the dispatcher refuses a budget-exhausted order until

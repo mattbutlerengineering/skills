@@ -14,13 +14,16 @@ that produces the stream and says what its admission refused.
 Its callers are thin: gate_digest.py keeps the confirmed stays as
 latency rows, rejection_mining.py harvests the rest, dashboard.py ages
 the open ones, gates.py's detector J asks which labels the gates
-name, validator.py reads GATES, and trace.py reads a run's timelines. They differ in what a stay MEANS to them, never in what a stay
+name, validator.py reads GATES, trace.py reads a run's timelines, and
+work_queue.py asks who applied its ready label. They differ in what a stay MEANS to them, never in what a stay
 IS, which is the whole reason this is one module and their posts and
 compositions are not.
 
-Pure but for two functions: no ledger, no filesystem, no clock (`now`
-is an argument). read_timelines is the exception ADR-0090 made, and
-read_gate_issues (the listing plus read_timelines) the second — both
+Pure but for three functions: no ledger, no filesystem, no clock (`now`
+is an argument). read_timelines is the exception ADR-0090 made,
+read_labelers (the same read, asking who applied a label — work_queue's
+owner-only ready label, ADR-0032) the second, and read_gate_issues (the
+listing plus read_timelines) the third — all
 read gh, but only through the injected runner at cli's gh port, so
 tests still never touch the network. ADR-0056 had kept that read in each
 tool; the #491 refusal then had to be wired into each copy, and one
@@ -117,14 +120,14 @@ def waited_seconds(start, end):
     return int((_parse_ts(end) - _parse_ts(start)).total_seconds())
 
 
-def _admit(timeline):
-    """The one walk over a raw GitHub timeline: every event classed as a
-    label flip carrying a name, split into admitted (timestamp reads as
-    one) and refused (it does not). label_events keeps the admitted
-    list; read_timelines also reports the refused count. One loop reading
-    the payload's `event`/`label`/`created_at` keys, so the two
-    questions cannot drift apart — the second clause of "well-formed" is
-    still asked exactly once, by `_is_timestamp`."""
+def _admit_raw(timeline):
+    """([(raw event, kind, name)] admitted, refused count): the one walk
+    over a raw GitHub timeline — every event classed as a label flip
+    carrying a name, split into admitted (timestamp reads as one) and
+    refused (it does not). One loop reading the payload's
+    `event`/`label`/`created_at` keys, so _admit and read_labelers
+    cannot drift apart — the second clause of "well-formed" is still
+    asked exactly once, by `_is_timestamp`."""
     admitted = []
     refused = 0
     for event in timeline:
@@ -134,12 +137,20 @@ def _admit(timeline):
         name = (event.get("label") or {}).get("name")
         if not name:
             continue
-        ts = event.get("created_at")
-        if _is_timestamp(ts):
-            admitted.append((_utc_z(ts), kind, name))
+        if _is_timestamp(event.get("created_at")):
+            admitted.append((event, kind, name))
         else:
             refused += 1
     return admitted, refused
+
+
+def _admit(timeline):
+    """(admitted [(UTC timestamp, kind, name)], refused count) —
+    _admit_raw's walk, respelled. label_events keeps the admitted list;
+    read_timelines also reports the refused count."""
+    admitted, refused = _admit_raw(timeline)
+    return ([(_utc_z(event["created_at"]), kind, name)
+             for event, kind, name in admitted], refused)
 
 
 def label_events(timeline):
@@ -184,20 +195,63 @@ def read_timelines(numbers, run, label, slug="{owner}/{repo}"):
     events = {}
     problems = []
     for number in numbers:
-        path = f"repos/{slug}/issues/{number}/timeline"
-        read = gh_read(["api", path, "--paginate", "--slurp"],
-                       f"gh api timeline for #{number}", label=label,
-                       run=run)
-        problems.extend(read.problems)
-        if read.value is None:
+        timeline, read_problems = _read_timeline(number, run, label, slug)
+        problems.extend(read_problems)
+        if timeline is None:
             continue
-        admitted, refused = _admit(
-            [event for page in read.value for event in page])
+        admitted, refused = _admit(timeline)
         if refused:
-            problems.append(f"{label}: timeline for #{number} refused"
-                            f" {refused} malformed timestamp(s)")
+            problems.append(_refusal(label, number, refused))
         events[number] = admitted
     return events, problems
+
+
+def _read_timeline(number, run, label, slug):
+    """(one issue's raw timeline events, pages flattened, or None when
+    the fetch failed or did not parse, problems) — the gh read itself."""
+    path = f"repos/{slug}/issues/{number}/timeline"
+    read = gh_read(["api", path, "--paginate", "--slurp"],
+                   f"gh api timeline for #{number}", label=label, run=run)
+    if read.value is None:
+        return None, list(read.problems)
+    return ([event for page in read.value for event in page],
+            list(read.problems))
+
+
+def _refusal(label, number, refused):
+    return (f"{label}: timeline for #{number} refused {refused} malformed"
+            " timestamp(s)")
+
+
+def read_labelers(numbers, name, run, label, slug="{owner}/{repo}"):
+    """({issue number: login of the actor whose `labeled` event for
+    `name` is the timeline's latest}, problems) — the same read and
+    admission as read_timelines, kept with each flip's actor.
+
+    The value is None when the timeline holds no admitted labeled event
+    for `name`, and "" when that event names no actor. An issue whose
+    fetch failed, or whose timeline admission refused any flip, is
+    ABSENT with a problem: a dropped flip could be the latest
+    application, so a caller deciding WHO applied a label (the dispatch
+    plane's owner-only ready label, ADR-0032) must fail closed rather
+    than read an earlier actor as the current one."""
+    labelers = {}
+    problems = []
+    for number in numbers:
+        timeline, read_problems = _read_timeline(number, run, label, slug)
+        problems.extend(read_problems)
+        if timeline is None:
+            continue
+        admitted, refused = _admit_raw(timeline)
+        if refused:
+            problems.append(_refusal(label, number, refused))
+            continue
+        actor = None
+        for event, kind, flipped in admitted:
+            if kind == "labeled" and flipped == name:
+                actor = (event.get("actor") or {}).get("login") or ""
+        labelers[number] = actor
+    return labelers, problems
 
 
 # GitHub search answers at most 1000 results per query, whatever

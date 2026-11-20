@@ -23,7 +23,7 @@
     "templates/docs/design/design-system.md": "1fc55e79cdfb2d888eefaf5d03293c7ebe5ba13f9c317c7ba9b245e765a5ed45",
     "templates/factory.json": "2ff1f70273e839c9d22a9f5cad426c34387fce4944eb18a1d2fc91ee09154f76",
     "templates/tools/factory/.gitignore": "a8d4901caf8ede345c3ade1b4e165f431b8386799d91695a83521444a9c553b0",
-    "templates/tools/factory/assembler.py": "abe11615f9b5b9f04bf61c6a32d81432fb40aa6ce2b801ee29b1b1e3573e7b9b",
+    "templates/tools/factory/assembler.py": "3038c0449958298e7775c04aaeef1b4085f0482fac29974979e9b81656b4c789",
     "templates/tools/factory/budget_guard.py": "4b750d81f2975ef18fea701f24a60f344bd8c02115a3347e7ef6f199765cdceb",
     "templates/tools/factory/cli.py": "4b2bac84f3f7f0ced98da0a8c39b1dfb91f9836232d606d5ec279e45778c6868",
     "templates/tools/factory/conductor.py": "de3931a82672630e7f049468ffb8c2f3916dcb82b326257904460b4c22c52b15",
@@ -44,7 +44,7 @@
     "templates/tools/factory/gates.py": "5eea6dc8a85e3a03dcff138b483d731513c2907eda20b1352a221cfeb8ee4a51",
     "templates/tools/factory/gates_selftest.py": "a1750cc27fe906a27b8e3e60348c72e40c1ce8ba6f4d8786f412e46a29a3e2e4",
     "templates/tools/factory/handoff.py": "b39c2e7c02b57377db3e813446767440edad311b32d94eada9e2c1c9b7bd4267",
-    "templates/tools/factory/human_gates.py": "9b22d96048820a5596693439523444657b24229a838b1820ee2472b85f307ef6",
+    "templates/tools/factory/human_gates.py": "4fa6b49b9b46a65e626cd74d43bf4a666607ee0a84d5407ccf4fa02aa4e424ec",
     "templates/tools/factory/knowledge_plane.py": "9a53dbfa6a8872f2f9da8f77bcef4e9ec647b142ab02ef224b981306c6e52ba9",
     "templates/tools/factory/label_sync.py": "8ba4c198a258a5bd24358c4fb9e1371fe9706071ac293c7c1ffa39f6ae4fe9b1",
     "templates/tools/factory/orientation_pack.py": "8e20b1f409840176347b605c0525b797727fce7ba12efe8f631f7281faaf339f",
@@ -53,6 +53,6 @@
     "templates/tools/factory/standards_index.py": "a656c112025f34f5e0890660e7def511f5ee04a497a1593128fa976a17cc5aca",
     "templates/tools/factory/trace.py": "1fc4821e393b225df2477a4004babacf1249f57b63e85f509ea21c14b46a01f3",
     "templates/tools/factory/validator.py": "7513fcd6584e57fa2b2f082835eae7f278e5c62e06252d0d6684231fb5a14638",
-    "templates/tools/factory/work_queue.py": "1d3c6c5d18088c5dc49ab997c93b5512e0f57ef16c65a03cd3c30d50ae0df658"
+    "templates/tools/factory/work_queue.py": "b6e705c0d25f5e693cce229c6829f6745be103ed53bb87b9f448a51d1ca5a512"
   }
 }
