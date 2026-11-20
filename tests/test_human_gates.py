@@ -14,6 +14,7 @@ window tests stopped agreeing — now there is one window test, in
 completed_stays, and this asserts what it guarantees.
 """
 import json
+import subprocess
 import sys
 import unittest
 from datetime import datetime, timezone
@@ -27,7 +28,7 @@ import cost_ledger  # noqa: E402
 from human_gates import (GATES, Waiting, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
                          open_queues, read_gate_issues, read_timelines,
-                         waited_seconds,
+                         read_work_order_issues, waited_seconds,
                          waiting_issues, waiting_since)
 
 
@@ -312,29 +313,178 @@ class TestReadGateIssues(unittest.TestCase):
     def gh(self, **kwargs):
         def timeline(args):
             return json.dumps([[]])
-        return FakeGh(answers={("issue", "list"): json.dumps(self.LISTING),
+        return FakeGh(answers={("label", "list"): json.dumps(
+                                   [{"name": "wo:merged"}]),
+                               ("issue", "list"): json.dumps(self.LISTING),
                                ("api",): timeline}, **kwargs)
 
     def test_only_mirrored_issues_have_their_timelines_read(self):
         run = self.gh()
-        issues = read_gate_issues({3: "WO-0001", 5: "WO-0002"}, run, "gd",
-                                  window=1000)
+        issues = read_gate_issues({3: "WO-0001", 5: "WO-0002"}, run, "gd")
         self.assertEqual(issues.listing, self.LISTING)
         self.assertEqual(issues.mirrored, [3, 5])
         self.assertEqual(issues.events, {3: [], 5: []})
         self.assertEqual((issues.truncated, issues.problems), (False, []))
-        self.assertEqual(run.calls[0], [
-            "issue", "list", "--state", "all", "--json",
+        self.assertEqual(run.calls[1], [
+            "issue", "list", "--state", "all", "--search",
+            'label:"wo:merged"', "--json",
             "number,title,state,labels,body", "--limit", "1000"])
 
     def test_an_unreadable_listing_reads_no_timelines(self):
         run = self.gh(failing=["issue", "list"])
-        issues = read_gate_issues({3: "WO-0001"}, run, "rm", window=1000)
+        issues = read_gate_issues({3: "WO-0001"}, run, "rm")
         self.assertIsNone(issues.listing)
         self.assertEqual((issues.mirrored, issues.events), ([], {}))
         self.assertEqual(len(issues.problems), 1)
         self.assertTrue(issues.problems[0].startswith("rm: gh issue list"))
+        self.assertEqual(len(run.calls), 2)
+
+    def test_a_mirrored_issue_the_search_missed_still_has_its_timeline_read(
+            self):
+        # #9 lost every wo: label, so the label search cannot find it —
+        # but a row mirrors it, and its history still holds stays.
+        run = tracker_gh([], rest={9: rest_issue(9, "closed", ["type:chore"])})
+        issues = read_gate_issues({9: "WO-0003"}, run, "gd")
+        self.assertEqual(issues.mirrored, [9])
+        self.assertEqual(issues.events, {9: []})
+        self.assertEqual(issues.problems, [])
+
+
+def entry(number, state, labels):
+    """An issue-list entry carrying every field the gate readers ask for."""
+    return {"number": number, "title": f"issue {number}", "state": state,
+            "labels": [{"name": name} for name in labels], "body": ""}
+
+
+def rest_issue(number, state, labels, **extra):
+    """The REST issue object `gh api repos/.../issues/N` answers with."""
+    return {"number": number, "title": f"issue {number}", "state": state,
+            "labels": [{"name": name, "color": "fff"} for name in labels],
+            "body": "", "comments": 0, **extra}
+
+
+LIVE_LABELS = [{"name": name} for name in
+               ("wo:merged", "type:chore", "wo:draft", "wo:blocked")]
+
+
+def tracker_gh(issues, rest=None, labels=LIVE_LABELS, failing_numbers=()):
+    """A fake gh that answers the narrowed read the way GitHub does: the
+    label search returns only the listed issues carrying one of the
+    searched labels (comma-separated values are OR), and `gh api
+    repos/.../issues/N` answers from `rest` — 404 for a number absent
+    from it, a plain failure for one in `failing_numbers`."""
+    def search(args):
+        query = args[args.index("--search") + 1]
+        assert query.startswith("label:"), query
+        wanted = {name.strip('"') for name in query[6:].split(",")}
+        return json.dumps([issue for issue in issues
+                           if wanted & {label["name"]
+                                        for label in issue["labels"]}])
+
+    def issue_api(args):
+        path = args[1]
+        if path.endswith("/timeline"):
+            return json.dumps([[]])
+        number = int(path.rsplit("/", 1)[1])
+        if number in failing_numbers:
+            raise subprocess.CalledProcessError(
+                1, "gh", stderr="HTTP 502: Bad Gateway\n")
+        if number not in (rest or {}):
+            raise subprocess.CalledProcessError(
+                1, "gh", stderr="gh: Not Found (HTTP 404)\n")
+        return json.dumps(rest[number])
+
+    return FakeGh(answers={("label", "list"): json.dumps(labels),
+                           ("issue", "list"): search,
+                           ("api",): issue_api})
+
+
+class TestReadWorkOrderIssues(unittest.TestCase):
+    """The narrowed tracker read (#2205): every issue a wo:
+    label marks, found by one OR search over the repo's live wo: labels,
+    plus each mirrored issue that carries none, fetched by number — so a
+    reader sees exactly what the whole-tracker listing showed it, without
+    reading the whole tracker."""
+
+    FIELDS = "number,state,labels"
+
+    def test_one_search_over_every_live_wo_label(self):
+        run = tracker_gh([entry(4, "OPEN", ["wo:draft"]),
+                          entry(6, "OPEN", ["type:chore"])])
+        read = read_work_order_issues([4], self.FIELDS, run, "sweeps")
+        self.assertEqual(read.value, [entry(4, "OPEN", ["wo:draft"])])
+        self.assertEqual((read.problems, read.truncated), ([], False))
+        self.assertEqual(run.calls, [
+            ["label", "list", "--json", "name", "--limit", "1000"],
+            ["issue", "list", "--state", "all", "--search",
+             'label:"wo:blocked","wo:draft","wo:merged"', "--json",
+             self.FIELDS, "--limit", "1000"]])
+
+    def test_a_mirrored_issue_with_no_wo_label_is_fetched_by_number(self):
+        run = tracker_gh(
+            [entry(4, "OPEN", ["wo:draft"])],
+            rest={7: rest_issue(7, "closed", ["type:chore"])})
+        read = read_work_order_issues([4, 7], self.FIELDS, run, "sweeps")
+        self.assertEqual(read.value, [
+            entry(4, "OPEN", ["wo:draft"]),
+            {"number": 7, "state": "CLOSED",
+             "labels": [{"name": "type:chore", "color": "fff"}]}])
+        self.assertEqual(read.problems, [])
+        self.assertEqual(run.calls[2],
+                         ["api", "repos/{owner}/{repo}/issues/7"])
+
+    def test_every_gate_field_survives_the_fetch_by_number(self):
+        run = tracker_gh([], rest={7: rest_issue(7, "open", [])})
+        read = read_work_order_issues(
+            [7], "number,title,state,labels,body", run, "gd")
+        self.assertEqual(read.value, [{"number": 7, "title": "issue 7",
+                                       "state": "OPEN", "labels": [],
+                                       "body": ""}])
+
+    def test_a_mirrored_number_that_is_no_issue_stays_absent(self):
+        # The whole-tracker listing never held a missing issue, a pull
+        # request, or one transferred away (answered under another
+        # number), so neither does this — absence is what reconcile
+        # reports as "not in the issue listing".
+        run = tracker_gh([], rest={
+            8: rest_issue(8, "closed", [], pull_request={"url": "x"}),
+            11: rest_issue(12, "open", [])})
+        read = read_work_order_issues([8, 10, 11], self.FIELDS, run, "gd")
+        self.assertEqual((read.value, read.problems), ([], []))
+
+    def test_a_failed_fetch_by_number_makes_the_listing_unusable(self):
+        run = tracker_gh([], failing_numbers=(7,))
+        read = read_work_order_issues([7], self.FIELDS, run, "sweeps")
+        self.assertIsNone(read.value)
+        self.assertEqual(read.problems, [
+            "sweeps: gh api issue #7 failed: HTTP 502: Bad Gateway"])
+
+    def test_a_repo_with_no_wo_labels_searches_nothing(self):
+        run = tracker_gh([], labels=[{"name": "type:chore"}],
+                         rest={7: rest_issue(7, "open", [])})
+        read = read_work_order_issues([7], self.FIELDS, run, "gd")
+        self.assertEqual([call[:2] for call in run.calls],
+                         [["label", "list"], ["api", "repos/{owner}/{repo}/issues/7"]])
+        self.assertEqual(len(read.value), 1)
+
+    def test_an_unreadable_label_list_is_an_unusable_listing(self):
+        run = FakeGh(failing=["label", "list"])
+        read = read_work_order_issues([7], self.FIELDS, run, "gd")
+        self.assertIsNone(read.value)
+        self.assertEqual(read.problems, ["gd: gh label list failed: boom"])
         self.assertEqual(len(run.calls), 1)
+
+    def test_a_full_search_window_is_reported_as_truncated(self):
+        # GitHub search stops at 1000 results whatever --limit asks, so
+        # the window IS 1000: a capped search reads as a full window
+        # instead of a silently short one.
+        run = tracker_gh([entry(n, "CLOSED", ["wo:merged"])
+                          for n in range(1, 1001)])
+        read = read_work_order_issues([], self.FIELDS, run, "gd")
+        self.assertTrue(read.truncated)
+        self.assertEqual(read.problems, [
+            "gd: gh issue list returned a full 1000-entry window — older"
+            " entries are invisible; raise the window or narrow the query"])
 
 
 class TestOpenQueues(unittest.TestCase):

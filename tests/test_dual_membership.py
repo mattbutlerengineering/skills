@@ -17,7 +17,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOLS = "tools"
 
 # ADR-0091's table as (root-only importer, mirrored module) pairs:
-# 63 pairs over nine mirrored modules (ADR-0097 added fast_path to the
+# 64 pairs over nine mirrored modules (ADR-0097 added fast_path to the
 # cli.py row; ADR-0106 added pr_body_preflight to the cli.py and gates.py
 # rows; ADR-0110 added decompose_signals to the cli.py, knowledge_plane.py
 # and protocol.py rows; ADR-0112 added size_band_calibration to the cli.py,
@@ -29,7 +29,7 @@ TOOLS = "tools"
 # added npx_bundle to the cli.py row; ADR-0124 added assembly_line to the
 # cli.py, knowledge_plane.py and protocol.py rows; ADR-0126 added
 # kb_harvest to the protocol.py row; ADR-0128 added reap_worktrees to the
-# cli.py row). The
+# cli.py row; ADR-0133 added sweeps to the human_gates.py row). The
 # pairs land one per item as the module grows its imports.
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     {(tool, "cli") for tool in (
@@ -56,7 +56,8 @@ ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
         ("size_band_calibration", "cost_ledger"),
         ("size_band_calibration", "factory_config"),
         ("decompose_lessons", "factory_config"),
-        ("dashboard", "human_gates"), ("factory_init", "gates"),
+        ("dashboard", "human_gates"), ("sweeps", "human_gates"),
+        ("factory_init", "gates"),
         ("sweeps", "label_sync"), ("pr_body_preflight", "gates"),
     })
 

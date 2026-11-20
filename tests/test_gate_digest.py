@@ -15,6 +15,7 @@ knowledge plane's (ADR-0039), covered in tests/test_knowledge_plane.py.
 """
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -24,6 +25,7 @@ from pathlib import Path
 
 import cost_ledger
 import gate_digest
+import human_gates
 
 # discover puts tests/ on sys.path; selective package-style runs need it
 # added for the sibling fixture_tree import
@@ -52,6 +54,12 @@ def issue(number, title, state="OPEN", labels=(), body=""):
             "labels": [{"name": name} for name in labels], "body": body}
 
 
+# The repo's live wo: labels, as `gh label list` answers them.
+WO_LABELS = [{"name": name} for name in (
+    "wo:draft", "wo:prd-approved", "wo:blueprint-approved",
+    "wo:needs-review", "wo:merged")]
+
+
 def gh(issues=(), timelines=None,
        create_url="https://github.com/o/r/issues/50", **kwargs):
     """A fake gh for the digest's traffic: `issue list` answers with a
@@ -62,10 +70,17 @@ def gh(issues=(), timelines=None,
     canned = timelines or {}
 
     def timeline(args):
+        if not args[1].endswith("/timeline"):
+            # read_work_order_issues fetches a mirrored issue the label
+            # search did not return by number; every fixture issue is in
+            # the canned listing, so any other number is no issue.
+            raise subprocess.CalledProcessError(
+                1, "gh", stderr="gh: Not Found (HTTP 404)\n")
         number = int(args[1].split("/")[-2])
         return json.dumps([canned.get(number, [])])
 
     return FakeGh(answers={
+        ("label", "list"): json.dumps(WO_LABELS),
         ("issue", "list"): json.dumps(list(issues)),
         ("api",): timeline,
         ("issue", "create"): create_url + "\n",
@@ -363,7 +378,8 @@ class TestRunDaily(unittest.TestCase):
     def test_an_unparseable_issue_list_reports_and_posts_nothing(self):
         # gh ran, exited 0, answered `issue list` with raw non-JSON.
         with tempfile.TemporaryDirectory() as tmp:
-            run = FakeGh(answers={("issue", "list"): "gh: banner text"})
+            run = FakeGh(answers={("label", "list"): json.dumps(WO_LABELS),
+                                  ("issue", "list"): "gh: banner text"})
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
@@ -374,7 +390,8 @@ class TestRunDaily(unittest.TestCase):
 
     def test_a_non_list_issue_listing_reports_and_posts_nothing(self):
         with tempfile.TemporaryDirectory() as tmp:
-            run = FakeGh(answers={("issue", "list"): "{}"})
+            run = FakeGh(answers={("label", "list"): json.dumps(WO_LABELS),
+                                  ("issue", "list"): "{}"})
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
@@ -386,13 +403,13 @@ class TestRunDaily(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=[
                 issue(10_000 + n, f"noise {n}", state="CLOSED")
-                for n in range(gate_digest.LIST_WINDOW)])
+                for n in range(human_gates.SEARCH_WINDOW)])
             run.answers[("issue", "list", "--state", "open", "--search")] = "[]"
             outputs, problems = gate_digest.run_daily(
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
                 "gd: gh issue list returned a full"
-                f" {gate_digest.LIST_WINDOW}-entry window — older entries"
+                f" {human_gates.SEARCH_WINDOW}-entry window — older entries"
                 " are invisible; raise the window or narrow the query"])
             self.assertEqual(len(run.called("issue", "create")), 1)
 
@@ -403,7 +420,7 @@ class TestRunDaily(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=[
                 issue(10_000 + n, f"noise {n}", state="CLOSED")
-                for n in range(gate_digest.LIST_WINDOW)])
+                for n in range(human_gates.SEARCH_WINDOW)])
             digest = issue(50, "Factory gate queue",
                            body=gate_digest.DIGEST_MARKER + "\nold")
             run.answers[("issue", "list", "--state", "open", "--search")] = json.dumps([digest])
@@ -411,7 +428,7 @@ class TestRunDaily(unittest.TestCase):
                 tree(tmp).root, run=run, clock=clock)
             self.assertEqual(problems, [
                 "gd: gh issue list returned a full"
-                f" {gate_digest.LIST_WINDOW}-entry window — older entries"
+                f" {human_gates.SEARCH_WINDOW}-entry window — older entries"
                 " are invisible; raise the window or narrow the query"])
             self.assertEqual(run.called("issue", "create"), [])
             (edit,) = run.called("issue", "edit")
@@ -457,7 +474,7 @@ class TestRunDaily(unittest.TestCase):
             readable = self._body(gh(issues=waiting, timelines={123: []}),
                                   tmp)
             broken = gh(issues=waiting)
-            broken.answers[("api",)] = "not json"
+            broken.answers[("api", "repos/{owner}/{repo}/issues/123/timeline")] = "not json"
             unreadable = self._body(broken, tmp)
         self.assertIn("- #123 WO-0018 rejection mining\n", readable)
         self.assertIn("- #123 WO-0018 rejection mining — age unknown"
@@ -475,7 +492,7 @@ class TestRunDaily(unittest.TestCase):
             partial = self._body(gh(
                 issues=[waiting] + [
                     issue(10_000 + n, f"noise {n}", state="CLOSED")
-                    for n in range(gate_digest.LIST_WINDOW - 1)],
+                    for n in range(human_gates.SEARCH_WINDOW - 1)],
                 timelines=seen), tmp)
         self.assertNotEqual(complete, partial)
         self.assertNotIn(gate_digest.TRUNCATED_NOTE, complete)

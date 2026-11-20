@@ -13,12 +13,14 @@ tests/test_human_gates.py, beside the property that says the two halves
 partition one list.
 """
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
+import human_gates
 import rejection_mining
 
 # discover puts tests/ on sys.path; selective package-style runs need it
@@ -61,6 +63,12 @@ def pr(number, body="", reviews=(), state="MERGED"):
             "reviews": list(reviews)}
 
 
+# The repo's live wo: labels, as `gh label list` answers them.
+WO_LABELS = [{"name": name} for name in (
+    "wo:draft", "wo:prd-approved", "wo:blueprint-approved",
+    "wo:needs-review", "wo:merged")]
+
+
 def gh(issues=(), timelines=None, prs=(),
        create_url="https://github.com/o/r/issues/60", **kwargs):
     """A fake gh for the harvest's traffic: `issue list` and `pr list`
@@ -70,10 +78,17 @@ def gh(issues=(), timelines=None, prs=(),
     canned = timelines or {}
 
     def timeline(args):
+        if not args[1].endswith("/timeline"):
+            # read_work_order_issues fetches a mirrored issue the label
+            # search did not return by number; every fixture issue is in
+            # the canned listing, so any other number is no issue.
+            raise subprocess.CalledProcessError(
+                1, "gh", stderr="gh: Not Found (HTTP 404)\n")
         number = int(args[1].split("/")[-2])
         return json.dumps([canned.get(number, [])])
 
     return FakeGh(answers={
+        ("label", "list"): json.dumps(WO_LABELS),
         ("issue", "list"): json.dumps(list(issues)),
         ("pr", "list"): json.dumps(list(prs)),
         ("api",): timeline,
@@ -404,14 +419,14 @@ class TestRunMine(unittest.TestCase):
         self.assertIn("TRUNCATED: the PR listing", body)
 
     def test_a_full_issue_window_is_named_in_the_body(self):
-        """The same blindness on the other listing, where it also corrupts
-        the count beside it: a truncated issue listing shortens `mirrored`,
-        so "N of M issue timelines" understates M as confidently as it
-        states N. The line cannot know the true M — naming the truncation
-        is the honest most it can do."""
+        """The same blindness on the other listing. A mirrored issue the
+        capped label search missed is still fetched by number, but the
+        listing itself came back full, and the body must say so rather
+        than read as complete — naming the truncation is the honest most
+        it can do."""
         issues = [issue(7, "WO-0101: first")] + [
             issue(10_000 + n, f"noise {n}", state="CLOSED")
-            for n in range(rejection_mining.LIST_WINDOW - 1)]
+            for n in range(human_gates.SEARCH_WINDOW - 1)]
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=[])
             run.answers[("issue", "list", "--state", "open", "--search")] = "[]"
@@ -420,7 +435,7 @@ class TestRunMine(unittest.TestCase):
             body = self._posted_body(run)
         self.assertEqual(problems, [
             "rm: gh issue list returned a full"
-            f" {rejection_mining.LIST_WINDOW}-entry window — older entries"
+            f" {human_gates.SEARCH_WINDOW}-entry window — older entries"
             " are invisible; raise the window or narrow the query"])
         self.assertIn("TRUNCATED: the issue listing", body)
 

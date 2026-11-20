@@ -18,6 +18,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+import human_gates
 import knowledge_plane
 import plane_drift
 import sweeps
@@ -808,16 +809,82 @@ class TestReconcileSweep(unittest.TestCase):
         tree.write("docs/features/demo/breakdown.md", self.BREAKDOWN)
         return tree
 
-    def test_it_reads_every_state_in_one_listing(self):
+    def test_it_reads_only_the_work_order_issues(self):
+        # Never the whole tracker: that listing went red at 500 and again
+        # at 1000 issues. Every state, but only issues a wo: label marks.
+        lifecycle = sorted(name for name in LABEL_NAMES
+                           if name.startswith("wo:"))
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
             runner = gh(issues=[issue(109, "CLOSED", ["wo:merged"])])
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual((intakes, problems), ([], []))
-            self.assertEqual(runner.calls, [[
-                "issue", "list", "--state", "all",
-                "--json", "number,state,labels",
-                "--limit", str(sweeps.LIST_WINDOW)]])
+            self.assertEqual(runner.calls, [
+                ["label", "list", "--json", "name", "--limit", "1000"],
+                ["issue", "list", "--state", "all", "--search",
+                 "label:" + ",".join(f'"{name}"' for name in lifecycle),
+                 "--json", "number,state,labels", "--limit", "1000"]])
+
+    def narrowed_gh(self, issues, rest):
+        """A fake gh that answers as GitHub does: the label search
+        returns only issues carrying a searched label, and a by-number
+        read answers from `rest` (REST shape) or 404s."""
+        def search(args):
+            query = args[args.index("--search") + 1]
+            wanted = {name.strip('"') for name in query[6:].split(",")}
+            return json.dumps([entry for entry in issues
+                               if wanted & {label["name"]
+                                            for label in entry["labels"]}])
+
+        def by_number(args):
+            number = int(args[1].rsplit("/", 1)[1])
+            if number not in rest:
+                raise subprocess.CalledProcessError(
+                    1, "gh", stderr="gh: Not Found (HTTP 404)\n")
+            return json.dumps(rest[number])
+
+        return FakeGh(answers={("label", "list"): json.dumps(TAXONOMY),
+                               ("issue", "list"): search,
+                               ("api",): by_number})
+
+    def test_a_mirrored_issue_with_no_wo_label_is_still_compared(self):
+        # The label search cannot see #109 — it lost its wo: label — but
+        # a checked row mirrors it, and that disagreement is drift.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            runner = self.narrowed_gh(
+                [issue(300, "CLOSED", ["type:chore"])],
+                {109: {"number": 109, "state": "closed",
+                       "labels": [{"name": "type:chore"}]}})
+            intakes, problems = sweeps.reconcile(tree.root, run=runner)
+            self.assertEqual(problems, [])
+            [intake] = intakes
+            self.assertIn("a checked row mirrors #109, which carries no wo:"
+                          " label — the row says merged", intake.body)
+            self.assertNotIn("#300", intake.body)
+
+    def test_a_row_mirroring_no_issue_is_still_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            runner = self.narrowed_gh([], {})
+            intakes, problems = sweeps.reconcile(tree.root, run=runner)
+            self.assertEqual(problems, [])
+            [intake] = intakes
+            self.assertIn("a row mirrors #109, which is not in the issue"
+                          " listing", intake.body)
+
+    def test_a_wo_issue_no_row_mirrors_is_still_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            runner = self.narrowed_gh(
+                [issue(109, "CLOSED", ["wo:merged"]),
+                 issue(902, "CLOSED", ["wo:merged"])], {})
+            intakes, problems = sweeps.reconcile(tree.root, run=runner)
+            self.assertEqual(problems, [])
+            [intake] = intakes
+            self.assertIn("#902 carries wo:merged but no breakdown row"
+                          " mirrors it", intake.body)
+            self.assertEqual(runner.called("api"), [])
 
     def test_an_unreadable_breakdown_aborts_rather_than_filing_drift(self):
         """a dropped breakdown would make its mirrors look rowless and
@@ -851,13 +918,14 @@ class TestReconcileSweep(unittest.TestCase):
         # a report full of drift that does not exist.
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            runner = gh(issues=[issue(n) for n in range(sweeps.LIST_WINDOW)])
+            runner = gh(issues=[issue(n, labels=["wo:merged"])
+                                for n in range(human_gates.SEARCH_WINDOW)])
             intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual(intakes, [])
             self.assertEqual(problems, [
                 f"sweeps: gh issue list returned a full"
-                f" {sweeps.LIST_WINDOW}-entry window — older entries are"
-                " invisible; raise the window or narrow the query"])
+                f" {human_gates.SEARCH_WINDOW}-entry window — older entries"
+                " are invisible; raise the window or narrow the query"])
 
     def test_the_window_matches_its_sibling_gh_read_callers(self):
         # dashboard, gate_digest, rejection_mining, assembler and
@@ -899,8 +967,9 @@ class TestReconcileSweep(unittest.TestCase):
     def test_an_unparseable_listing_is_a_problem_not_a_traceback(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)
-            intakes, problems = sweeps.reconcile(
-                tree.root, run=lambda args: "gh: banner text")
+            runner = FakeGh(answers={("label", "list"): json.dumps(TAXONOMY),
+                                     ("issue", "list"): "gh: banner text"})
+            intakes, problems = sweeps.reconcile(tree.root, run=runner)
             self.assertEqual(intakes, [])
             self.assertEqual(problems, [
                 "sweeps: gh issue list returned unparseable JSON:"
