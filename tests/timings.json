@@ -72,6 +72,7 @@
   "tests.test_gates": 12.103,
   "tests.test_git_repo": 2.665,
   "tests.test_handoff": 0.075,
+  "tests.test_help_flag": 0.05,
   "tests.test_house_voice": 0.131,
   "tests.test_house_voice_suite": 0.126,
   "tests.test_human_gates": 0.115,
