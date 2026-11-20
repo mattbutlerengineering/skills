@@ -365,11 +365,14 @@ jobs:
       # delivery at all (an unusable gh, or a full window). `!=` not
       # `==`: an unset output means the find step never ran, and a run
       # that died before it must still flip.
+      # find.outputs.pr set means the delivery was observed: a later step
+      # failing (the validator hand-off) is no evidence it is absent.
       - name: Mark the work order failed
         if: >-
           (failure() || needs.agent.result != 'success')
           && needs.dispatch.outputs.transitioned == 'true'
           && steps.find.outputs.looked != 'false'
+          && steps.find.outputs.pr == ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make wo-failed ISSUE=${{ github.event.issue.number }}

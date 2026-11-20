@@ -234,12 +234,14 @@ jobs:
   # Merging the PR is gate 3 itself (ADR-0033), and it is the work order's
   # terminal state: flip the mirrored issue to wo:merged (ADR-0032 — exactly
   # one lifecycle label at a time). The issue number comes from the breakdown
-  # row, so the mirror stays one-way.
+  # row, so the mirror stays one-way. Only a merge into the default branch
+  # passes gate 3: a stacked child merged into its parent closes nothing.
   merged-label:
     if: >-
       github.event_name == 'pull_request'
       && github.event.action == 'closed'
       && github.event.pull_request.merged == true
+      && github.event.pull_request.base.ref == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: read

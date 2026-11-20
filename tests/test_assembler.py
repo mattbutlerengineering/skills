@@ -586,6 +586,16 @@ class TestValidatorDispatchLockstep(unittest.TestCase):
         self.assertIn("steps.find.outputs.looked != 'false'", condition)
         self.assertNotIn("steps.find.outputs.looked == 'true'", condition)
 
+    def test_the_failure_flip_skips_a_found_pr(self):
+        """A step failing after find-pr observed the PR (the validator
+        hand-off hitting a rate limit) is no evidence the delivery is
+        absent, so the terminal wo:failed must not be written (ADR-0063)
+        beside an open, unchecked PR."""
+        text = self.ASSEMBLER.read_text(encoding="utf-8")
+        condition = text.split("Mark the work order failed", 1)[1].split(
+            "run:", 1)[0]
+        self.assertIn("steps.find.outputs.pr == ''", condition)
+
     def test_validator_accepts_a_dispatched_pr_number(self):
         text = self.VALIDATOR.read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", text)
