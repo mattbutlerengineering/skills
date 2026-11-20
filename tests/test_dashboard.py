@@ -1260,6 +1260,23 @@ class TestRespondPost(unittest.TestCase):
         return dashboard.respond_post("/api/backlog-order", body,
                                       lambda: ([tmp], []))
 
+    def test_a_backlog_that_resolves_outside_the_repo_is_refused(self):
+        """A symlinked docs/backlog.md let the console rewrite a file
+        outside every configured repo."""
+        with tempfile.TemporaryDirectory() as tmp, \
+                tempfile.TemporaryDirectory() as elsewhere:
+            outside = Path(elsewhere) / "outside.md"
+            outside.write_text(self.TEXT, encoding="utf-8")
+            (Path(tmp) / "docs").mkdir()
+            (Path(tmp) / "docs" / "backlog.md").symlink_to(outside)
+            body = json.dumps({"i": 0,
+                               "hash": dashboard.backlog_hash(self.TEXT),
+                               "order": [5, 3, 4]})
+            status, payload = self.post(tmp, body)
+            self.assertEqual((status, payload), (400, {"problems": [
+                "dashboard: docs/backlog.md resolves outside its repo"]}))
+            self.assertEqual(outside.read_text(encoding="utf-8"), self.TEXT)
+
     def test_a_valid_order_rewrites_the_file_and_returns_204(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = self.backlog(tmp)
@@ -1636,8 +1653,78 @@ def post_raw(raw, repos_fn=lambda: ([], [])):
 def post_with_length(declared, path=b"/api/repos", body=b"{}"):
     header = (b"Content-Length: " + declared + b"\r\n"
               if declared is not None else b"")
-    return post_raw(b"POST " + path + b" HTTP/1.1\r\nHost: x\r\n"
+    return post_raw(b"POST " + path + b" HTTP/1.1\r\nHost: 127.0.0.1:0\r\n"
+                    b"Content-Type: application/json\r\n"
                     + header + b"\r\n" + body)
+
+
+class TestRequestRefusal(unittest.TestCase):
+    """Security review 2026-11-20: the console checked nothing, so any web
+    page could POST a text/plain reorder (no CORS preflight) and rewrite
+    docs/backlog.md, and a DNS-rebinding page could read every /api
+    response. Only the console's own page may talk to it."""
+
+    def refusal(self, method="GET", port=8765, **headers):
+        base = {"Host": f"127.0.0.1:{port}"}
+        base.update({k.replace("_", "-"): v for k, v in headers.items()})
+        return dashboard.request_refusal(method, base, port)
+
+    def test_the_consoles_own_requests_pass(self):
+        self.assertIsNone(self.refusal())
+        self.assertIsNone(self.refusal(Host="localhost:8765",
+                                       Origin="http://localhost:8765"))
+        self.assertIsNone(self.refusal(
+            "POST", Origin="http://127.0.0.1:8765",
+            Content_Type="application/json; charset=utf-8"))
+
+    def test_a_foreign_host_is_refused(self):
+        self.assertEqual(self.refusal(Host="evil.example"), (
+            403, "dashboard: Host 'evil.example' is not this console"
+            " (http://127.0.0.1:8765/)"))
+
+    def test_a_missing_host_is_refused(self):
+        self.assertEqual(dashboard.request_refusal("GET", {}, 8765), (
+            403, "dashboard: Host None is not this console"
+            " (http://127.0.0.1:8765/)"))
+
+    def test_a_cross_origin_request_is_refused(self):
+        self.assertEqual(self.refusal(Origin="https://evil.example"), (
+            403, "dashboard: cross-origin request from"
+            " 'https://evil.example' refused"))
+
+    def test_a_post_that_is_not_json_is_refused(self):
+        for kind in (None, "text/plain;charset=UTF-8",
+                     "application/x-www-form-urlencoded"):
+            with self.subTest(kind=kind):
+                headers = {} if kind is None else {"Content_Type": kind}
+                self.assertEqual(self.refusal("POST", **headers), (
+                    415, "dashboard: a POST body must be"
+                    " Content-Type: application/json"))
+
+    def test_the_handler_refuses_a_cross_site_post_before_reading(self):
+        def boom():
+            raise AssertionError("repos_fn must not run")
+        status, payload = post_raw(
+            b"POST /api/backlog-order HTTP/1.1\r\nHost: 127.0.0.1:0\r\n"
+            b"Origin: https://evil.example\r\n"
+            b"Content-Type: text/plain\r\nContent-Length: 2\r\n\r\n{}",
+            repos_fn=boom)
+        self.assertEqual(status, "HTTP/1.0 403 Forbidden")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: cross-origin request from 'https://evil.example'"
+            " refused"]})
+
+    def test_the_handler_refuses_a_rebinding_get(self):
+        status, payload = get_raw(
+            b"GET /api/repos HTTP/1.1\r\nHost: evil.example\r\n\r\n")
+        self.assertEqual(status, "HTTP/1.0 403 Forbidden")
+        self.assertEqual(payload, {"problems": [
+            "dashboard: Host 'evil.example' is not this console"
+            " (http://127.0.0.1:0/)"]})
+
+
+def get_raw(raw, repos_fn=lambda: ([], [])):
+    return post_raw(raw, repos_fn)
 
 
 class TestContentLength(unittest.TestCase):

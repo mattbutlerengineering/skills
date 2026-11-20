@@ -547,6 +547,11 @@ def respond_post(target, body, repos_fn):
             and 0 <= index < len(repos)):
         return 404, {"problems": ["dashboard: no such repo index"]}
     path = Path(repos[index]) / BACKLOG
+    if not path.resolve().is_relative_to(Path(repos[index]).resolve()):
+        # A symlinked backlog would let the console rewrite a file
+        # outside every configured repo.
+        return 400, {"problems": [
+            f"dashboard: {BACKLOG} resolves outside its repo"]}
     # Hand-written rather than cli.read_file (ADR-0075): an absent
     # backlog is an OSError message here, where read_file gives
     # (None, None).
@@ -566,6 +571,31 @@ def respond_post(target, body, repos_fn):
         return 500, {"problems": [
             f"dashboard: cannot write {BACKLOG}: {err}"]}
     return 204, None
+
+
+def request_refusal(method, headers, port):
+    """(status, problem) when a request did not come from the console's
+    own page, else None. Binding 127.0.0.1 is not enough: any web page
+    can make the browser send a "simple" cross-origin POST (text/plain,
+    no CORS preflight) to localhost, and a DNS-rebinding page reaches
+    the console under its own hostname and reads every response. So the
+    Host must name this console, an Origin (browsers send one on every
+    cross-origin request and every POST) must be this console's, and a
+    POST must be application/json, which a cross-origin page cannot send
+    without a preflight this server never answers."""
+    hosts = (f"127.0.0.1:{port}", f"localhost:{port}")
+    host = headers.get("Host")
+    if host not in hosts:
+        return 403, (f"dashboard: Host {host!r} is not this console"
+                     f" (http://127.0.0.1:{port}/)")
+    origin = headers.get("Origin")
+    if origin is not None and origin not in {f"http://{h}" for h in hosts}:
+        return 403, f"dashboard: cross-origin request from {origin!r} refused"
+    kind = (headers.get("Content-Type") or "").split(";")[0].strip().lower()
+    if method == "POST" and kind != "application/json":
+        return 415, ("dashboard: a POST body must be"
+                     " Content-Type: application/json")
+    return None
 
 
 MAX_BODY = 1 << 20  # 1 MiB; a save is `{i, hash, order}`, ~8 bytes a seed
@@ -608,7 +638,24 @@ class _Handler(BaseHTTPRequestHandler):
     repos_fn = None
     gather_fn = None
 
+    def _refused(self, method):
+        """Answer a refused request (request_refusal) and say so."""
+        refusal = request_refusal(method, self.headers,
+                                  self.server.server_port)
+        if refusal is None:
+            return False
+        status, problem = refusal
+        body = json.dumps({"problems": [problem]}).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
     def do_GET(self):
+        if self._refused("GET"):
+            return
         status, payload = respond(self.path, type(self).repos_fn,
                                   type(self).gather_fn)
         html = isinstance(payload, str)
@@ -621,6 +668,8 @@ class _Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        if self._refused("POST"):
+            return
         length, problems = content_length(
             self.headers.get("Content-Length"))
         if problems:
