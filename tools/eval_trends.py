@@ -581,7 +581,7 @@ def _usage(why):
 
 def main(argv):
     """`python3 tools/eval_trends.py [<repo-root>]` — print the trend view of the
-    records under the repo root (default: this module's directory). Exit 0
+    records under the repo root (default: the repo root above tools/). Exit 0
     when no record is malformed (a refusal is data, and a root with no
     records says so in one line), 1 with problems, 2 on a usage error."""
     if argv in (["-h"], ["--help"]):

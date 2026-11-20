@@ -13,15 +13,16 @@ that produces the stream and says what its admission refused.
 
 Its callers are thin: gate_digest.py keeps the confirmed stays as
 latency rows, rejection_mining.py harvests the rest, dashboard.py ages
-the open ones, and gates.py's detector J asks which labels the gates
-name. They differ in what a stay MEANS to them, never in what a stay
+the open ones, gates.py's detector J asks which labels the gates
+name, validator.py reads GATES, and trace.py reads a run's timelines. They differ in what a stay MEANS to them, never in what a stay
 IS, which is the whole reason this is one module and their posts and
 compositions are not.
 
-Pure but for one function: no ledger, no filesystem, no clock (`now` is
-an argument). read_timelines is the exception ADR-0090 made — it reads
-gh, but only through the injected runner at cli's gh port, so tests
-still never touch the network. ADR-0056 had kept that read in each
+Pure but for two functions: no ledger, no filesystem, no clock (`now`
+is an argument). read_timelines is the exception ADR-0090 made, and
+read_gate_issues (the listing plus read_timelines) the second — both
+read gh, but only through the injected runner at cli's gh port, so
+tests still never touch the network. ADR-0056 had kept that read in each
 tool; the #491 refusal then had to be wired into each copy, and one
 copy missed it (#791). Everything else is events in, gate facts out,
 testable with a literal list.
