@@ -143,6 +143,13 @@ class TestParseRow(unittest.TestCase):
             [(row["lineno"], row["wo"]) for row in breakdown_rows(lines)],
             [(2, "WO-0001"), (4, None), (5, "WO-0002")])
 
+    def test_breakdown_rows_skip_a_row_quoted_in_a_fence(self):
+        lines = ["- [x] WO-0001 one", "```md", "- [ ] <Item> — template",
+                 "```", "- [ ] WO-0002 two"]
+        self.assertEqual(
+            [(row["lineno"], row["wo"]) for row in breakdown_rows(lines)],
+            [(1, "WO-0001"), (5, "WO-0002")])
+
     def test_an_indented_row_ends_the_row_above_it(self):
         # A nested checkbox is its own row: the dependency it names must
         # not be read as the parent's (_row_block stops at any row).

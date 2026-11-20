@@ -477,7 +477,11 @@ def breakdown_rows(lines):
     G, O and the dispatch-plane tools share instead of each re-reading
     every line."""
     out = []
-    for index, line in enumerate(lines):
+    for lineno, line in unfenced(lines):
+        # A row quoted in a fenced block (a template, a defect's
+        # evidence) is not a work order; protocol.checkbox_progress
+        # skips it too, so the board and dispatch count the same rows.
+        index = lineno - 1
         row = parse_row(line)
         if row is None:
             continue

@@ -48,7 +48,13 @@ def _artifact_day(path):
     the file is absent or carries no readable date."""
     if not path.is_file():
         return None
-    value = (read_frontmatter(path) or {}).get("date")
+    try:
+        value = (read_frontmatter(path) or {}).get("date")
+    except (OSError, ValueError):
+        # A file not in UTF-8 (UnicodeDecodeError is a ValueError) has no
+        # readable date; raising here turned a run the board places
+        # normally into an attention entry.
+        return None
     if not isinstance(value, str):
         return None
     try:

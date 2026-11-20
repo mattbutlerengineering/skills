@@ -40,6 +40,23 @@ class TestCheckboxProgress(unittest.TestCase):
             path = self.write(tmp, "- [x] a\n- [X] b\n")
             self.assertEqual(checkbox_progress(path), (2, 2))
 
+    def test_counts_only_the_lines_the_dispatch_plane_calls_rows(self):
+        # knowledge_plane.ROW wants whitespace after the box and reads one
+        # line: a glued box, a box with nothing after it at end of file,
+        # and a bullet wrapped onto the next line are rows to neither
+        # reader, or the board's progress could never complete.
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, "- [x] **A** — a\n- [x]**B** glued\n"
+                                   "-\n  [ ] wrapped\n- [ ]")
+            self.assertEqual(checkbox_progress(path), (1, 1))
+
+    def test_a_fenced_checkbox_is_quoted_not_counted(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.write(tmp, "- [x] **A** — one\n```md\n"
+                                   "- [ ] **<Item>** — template\n```\n"
+                                   "~~~~\n- [ ] x\n```\n- [ ] y\n~~~~\n")
+            self.assertEqual(checkbox_progress(path), (1, 1))
+
     def test_no_checkboxes_counts_zero_of_zero(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = self.write(tmp, "prose only\n")
