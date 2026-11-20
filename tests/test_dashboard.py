@@ -627,6 +627,35 @@ class TestMetrics(unittest.TestCase):
             "gate_wait_median": 200, "acceptance": None,
             "rework": None})
 
+    def test_a_stay_recorded_twice_feeds_the_median_once(self):
+        """ADR-0132: ADR-0074's walk change re-recorded WO 0074's merge
+        stay under a second end key (558s, then 557s). The median takes
+        that stay once, at its last-recorded wait."""
+        rows = [
+            {"wo": "WO-0101", "run_id": "r0", "model": "m", "tokens": 1,
+             "cost": 1.0, "outcome": "completed", "at": "2026-08-01"},
+            {"wo": "WO-0101", "run_id": "gate-prd-2026-08-02T00:01:40Z",
+             "model": "none", "tokens": 0, "cost": 0.0,
+             "outcome": "gate_wait:prd:100s", "at": "2026-08-02"},
+            {"wo": "WO-0101", "run_id": "gate-merge-2026-09-25T04:20:47Z",
+             "model": "none", "tokens": 0, "cost": 0.0,
+             "outcome": "gate_wait:merge:558s", "at": "2026-09-25"},
+            {"wo": "WO-0101", "run_id": "gate-merge-2026-09-25T04:20:46Z",
+             "model": "none", "tokens": 0, "cost": 0.0,
+             "outcome": "gate_wait:merge:557s", "at": "2026-09-25"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl",
+                       "".join(json.dumps(row) + "\n" for row in rows))
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(state["metrics"]["gate_wait_median"],
+                         round((100 + 557) / 2))
+
     def test_issue_keyed_spend_is_not_counted_as_work_orders(self):
         """ADR-0084: `#N` groups are not orders. WO-0001 at $10 plus
         nine issue keys at $1 each is $10.0 per work order, not 1.9."""

@@ -224,7 +224,8 @@ class TestRunDaily(unittest.TestCase):
             entries, ledger_problems = cost_ledger.read(fixture.root)
             self.assertEqual(ledger_problems, [])
             self.assertEqual(entries, [cost_ledger.gate_entry(
-                "WO-0010", "merge", 3600, "2026-07-01T10:00:00Z")])
+                "WO-0010", "merge", 3600, "2026-07-01T10:00:00Z",
+            "2026-07-01T09:00:00Z")])
             # the captured row is stamped with the passage date — the
             # monthly circuit breaker windows on it
             self.assertEqual(entries[0]["at"], "2026-07-01")

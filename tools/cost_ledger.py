@@ -19,7 +19,7 @@ byte-for-byte).
 import json
 import math
 import re
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from cli import append_line, detail, finite, json_lines, read_file
@@ -56,6 +56,8 @@ AT_DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 # long a work order waited at one of the three human gates, written by the
 # daily gate digest inside ADR-0034's open outcome vocabulary.
 GATE_OUTCOME = re.compile(r"gate_wait:([a-z]+):(\d+)s")
+# The run_id marker of a start-keyed gate row (ADR-0132).
+GATE_START_MARKER = "entered-"
 
 # Owner-session markers (ADR-0069): a $0 row recording that a work order
 # was worked in an owner session, not dispatched — "not a dispatch", so
@@ -83,12 +85,19 @@ def entry(wo, run_id, model, tokens, cost, outcome, at):
     return record
 
 
-def gate_entry(wo, gate, waited_seconds, passed_at):
+def gate_entry(wo, gate, waited_seconds, passed_at, started_at):
     """A gate-latency observation as a well-formed ledger record
-    (ADR-0041): the work order waited `waited_seconds` at `gate` and
-    passed it at `passed_at` (ISO timestamp, which keys the run_id so a
-    re-observed passage dedups instead of double-recording, and whose date
-    part is the row's `at` — gate rows need no clock).
+    (ADR-0041): the work order entered `gate`'s queue at `started_at`,
+    waited `waited_seconds` and passed it at `passed_at` (UTC ISO
+    timestamps; the passage's date part is the row's `at` — gate rows
+    need no clock).
+
+    The run_id is keyed on the stay's START (ADR-0132, amending
+    ADR-0041's passage-timestamp key): the queue label's add time is a
+    label event, while the end is the walk's computation and moved once
+    already (ADR-0074), re-recording every passage under a new key. The
+    `entered-` marker tells a start key from a legacy end key, which
+    gate_stay reads both of.
 
     The composed outcome is checked against GATE_OUTCOME, the reader's
     own pattern, so the writer cannot state the grammar more loosely
@@ -103,8 +112,69 @@ def gate_entry(wo, gate, waited_seconds, passed_at):
             f"{outcome!r} is not a gate row gate_wait can read: the gate "
             "name must be lowercase letters and the wait a whole "
             "non-negative number of seconds")
-    return entry(wo, f"gate-{gate}-{passed_at}", "none", 0, 0.0, outcome,
-                 at=passed_at[:10])
+    return entry(wo, f"gate-{gate}-{GATE_START_MARKER}{started_at}", "none",
+                 0, 0.0, outcome, at=passed_at[:10])
+
+
+def _utc_instant(text):
+    """`text` as an aware UTC datetime, or None when it does not read as
+    an offset-carrying ISO timestamp."""
+    try:
+        moment = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if moment.tzinfo is None:
+        return None
+    return moment.astimezone(timezone.utc)
+
+
+def gate_stay(entry):
+    """(wo, gate, stay start as UTC "YYYY-MM-DDTHH:MM:SSZ") for a gate
+    row, else None — the identity of the stay the row measures
+    (ADR-0132). A start-keyed row (gate_entry's run_id,
+    "gate-<gate>-entered-<start>") names its start. A legacy end-keyed
+    row ("gate-<gate>-<end>", ADR-0041) yields end minus its wait: the
+    wait is whole seconds between two whole-second GitHub timestamps, so
+    the difference is the stay's start exactly, whichever walk computed
+    the end. A row whose run_id does not hold a readable timestamp names
+    no stay (None) and is never merged with another."""
+    wait = gate_wait(entry)
+    run_id = entry.get("run_id") if wait is not None else None
+    if not isinstance(run_id, str):
+        return None
+    gate, waited = wait
+    prefix = f"gate-{gate}-"
+    if not run_id.startswith(prefix):
+        return None
+    rest = run_id[len(prefix):]
+    if rest.startswith(GATE_START_MARKER):
+        start = _utc_instant(rest[len(GATE_START_MARKER):])
+    else:
+        end = _utc_instant(rest)
+        start = None if end is None else end - timedelta(seconds=waited)
+    if start is None:
+        return None
+    return entry["wo"], gate, start.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def gate_rows(entries):
+    """The gate-latency rows of `entries`, one per stay (ADR-0132), in
+    ledger order — the reader every gate-row consumer counts through.
+
+    The ledger is append-only, so a stay recorded twice stays recorded
+    twice: ADR-0074's walk change re-recorded four passages under new
+    end keys. Rule: rows naming the same gate_stay are one stay, and the
+    LAST recorded of them is kept — the latest walk's measurement, which
+    for those four is ADR-0074's corrected wait. A row naming no stay is
+    kept as it is."""
+    gates = [entry for entry in entries if gate_wait(entry) is not None]
+    last = {}
+    for index, row in enumerate(gates):
+        stay = gate_stay(row)
+        if stay is not None:
+            last[stay] = index
+    return [row for index, row in enumerate(gates)
+            if gate_stay(row) is None or last[gate_stay(row)] == index]
 
 
 def in_month(entry, month):
@@ -268,6 +338,9 @@ def record_new(root, rows):
     is already in the ledger, or earlier in the batch, is skipped, not
     refused: callers carrying or re-scanning rows hand over everything
     and never restate the dedup. landed is the rows appended, in order.
+    A gate row is also skipped when its gate_stay is already recorded
+    (ADR-0132): under its start key, or under a legacy end key from any
+    walk, so the key switch re-records nothing.
 
     Fails closed before any write: a read() problem, or any row
     line_problems rejects, refuses the whole batch and lands nothing.
@@ -281,15 +354,19 @@ def record_new(root, rows):
     if problems:
         return [], problems
     present = {row_key(existing) for existing in entries}
+    stays = {gate_stay(existing) for existing in entries} - {None}
     landed = []
     for row in rows:
-        if row_key(row) not in present:
+        stay = gate_stay(row)
+        if row_key(row) not in present and stay not in stays:
             try:
                 append(root, row)
             except OSError as err:
                 return landed, [
                     f"ledger: cannot write {COST_LEDGER}: {detail(err)}"]
             present.add(row_key(row))
+            if stay is not None:
+                stays.add(stay)
             landed.append(row)
     return landed, []
 
@@ -297,8 +374,9 @@ def record_new(root, rows):
 def row_key(entry):
     """The row's (wo, run_id) identity — ADR-0041's dedup rule in the
     module that composes both fields: gate_entry keys run_id on the
-    passage timestamp so a daily re-scan builds a row with the SAME key,
-    and the gate digest drops any row whose key is already recorded.
+    stay's start (ADR-0132) so a daily re-scan builds a row with the SAME
+    key, and the gate digest drops any row whose key — or, for a gate
+    row, whose gate_stay — is already recorded.
     Takes a well-formed row (read() entries, entry/gate_entry outputs);
     both fields are required on every row, so this subscripts — the read
     contract."""
