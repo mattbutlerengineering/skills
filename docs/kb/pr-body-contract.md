@@ -38,7 +38,9 @@ way, or edited later, is judged by CI's B alone.
 The body must carry both, judged after HTML comments are stripped
 (`gates.HTML_COMMENT`, #1907): the PR template's own comment is never the
 author's declaration, and a WO id or `Closes #N` inside `<!-- ... -->`
-counts for nothing.
+counts for nothing. An unclosed `<!--` hides the rest of the body only
+when it opens a line, as GitHub renders it; one mid-line or in a code
+span is literal text and hides nothing (#2136).
 
 1. A work-order id (a four-digit `WO-` token), **or** a waiver line
    matching `No work order: <reason>` (`gates.NO_WO_DECLARATION`; the

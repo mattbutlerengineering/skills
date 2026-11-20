@@ -743,6 +743,37 @@ class TestStaleness(unittest.TestCase):
                 "I: docs/guide.md:1 stale link adr/0009-x.md (no such path)"])
 
 
+class TestStalenessCaseAndRepoBounds(unittest.TestCase):
+    """A link whose case differs from the file passed on macOS (a
+    case-insensitive filesystem) and failed on Linux CI and GitHub; a
+    link resolving outside the repo passed wherever the outside path
+    happened to exist."""
+
+    def test_a_case_mismatched_link_is_stale_on_every_filesystem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            tree.write("README.md", "# Readme\n")
+            tree.write("docs/adr/0001-spine.md", "# Spine\n")
+            tree.write("docs/guide.md",
+                       "[a](../readme.md) [b](ADR/0001-spine.md)"
+                       " [ok](../README.md)\n")
+            self.assertEqual(gates.check_staleness(tree.root), [
+                "I: docs/guide.md:1 stale link ../readme.md (no such path)",
+                "I: docs/guide.md:1 stale link ADR/0001-spine.md"
+                " (no such path)"])
+
+    def test_a_link_that_leaves_the_repo_is_stale(self):
+        with tempfile.TemporaryDirectory() as outer:
+            (Path(outer) / "outside.md").write_text("x\n", encoding="utf-8")
+            root = Path(outer) / "repo"
+            root.mkdir()
+            tree = FixtureTree(root)
+            tree.write("docs/guide.md", "[out](../../outside.md)\n")
+            self.assertEqual(gates.check_staleness(tree.root), [
+                "I: docs/guide.md:1 stale link ../../outside.md"
+                " (outside the repo)"])
+
+
 class TestStalenessLinkGrammar(unittest.TestCase):
     """Issue #739: detector I reads the one CommonMark link grammar —
     an angle-bracket path keeps its space, a title is not the path."""
