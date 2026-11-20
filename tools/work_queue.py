@@ -247,6 +247,9 @@ def compose_plan(batch, deferred, spent, wip):
 
 
 def main(argv, run=None, clock=None):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if not argv or argv[0] != "plan":
         print(__doc__.strip())
         return 2

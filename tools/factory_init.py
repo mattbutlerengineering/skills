@@ -739,6 +739,9 @@ def _report_adr_skips(source, target):
 
 
 def main(argv):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     root = Path(__file__).resolve().parent.parent
     stamping, updating = _target(argv, "stamp"), _target(argv, "update")
     keeping = (Path(argv[2]) if argv[:2] == ["stamp", "--keep-existing"]

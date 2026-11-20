@@ -233,6 +233,9 @@ def main(argv, clock=None, root=None):
     from __file__, so a test that only chdir'd into a temp tree would write
     its fabricated row into the REAL ledger — an append-only file the
     honesty rules say may never carry invented runs."""
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if len(argv) in (6, 7) and argv[0] == "record":
         fields, problems = _record_args(argv[1:])
         if not problems:

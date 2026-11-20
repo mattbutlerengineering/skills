@@ -250,6 +250,9 @@ def tracked_files(root, run=runner("git")):
 
 
 def main(argv):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if len(argv) != 2 or argv[0] != "build":
         print(__doc__.strip())
         return 2

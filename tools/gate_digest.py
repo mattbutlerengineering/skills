@@ -210,6 +210,9 @@ def run_daily(root, run=gh_runner, clock=None):
 
 
 def main(argv, env=None, root=None, run=gh_runner, clock=None):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     env = os.environ if env is None else env
     root = root or repo_root()
     if argv == ["daily"]:

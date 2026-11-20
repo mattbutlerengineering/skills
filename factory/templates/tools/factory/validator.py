@@ -659,6 +659,9 @@ def parse(argv):
 
 
 def main(argv, env=None, run=gh_runner):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     env = os.environ if env is None else env
     root = repo_root()
     command, options = parse(argv)

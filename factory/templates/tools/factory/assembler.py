@@ -324,6 +324,9 @@ def pr_for_issue(issue_number, run=gh_runner):
 
 
 def main(argv, env=None, run=gh_runner):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     env = os.environ if env is None else env
     root = repo_root()
     if argv == ["resolve"]:

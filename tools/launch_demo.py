@@ -679,6 +679,9 @@ def main(argv, root=None, which=shutil.which, runner=cli.runner,
     repo root: problems then `launch-demo: N problem(s)` (exit 1), or
     the leg's lines, its verdict word alone, and the zero summary
     (exit 0); unrecognised argv is usage (exit 2)."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     root = Path(root or ".")
     if argv == ["config"]:
         config, problems = _read_config(root, platform)
