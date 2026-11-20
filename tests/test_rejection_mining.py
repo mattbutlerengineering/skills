@@ -397,6 +397,44 @@ class TestRunMine(unittest.TestCase):
         self.assertEqual(outputs["reason"],
                          "rm: 0 candidate WO(s), 0 correction(s) mined")
 
+    def test_the_pr_read_searches_only_bodies_naming_a_mirrored_issue(self):
+        """#2212: the whole-repo PR listing was filling its window. A
+        change request counts only on a PR whose Closes clause names a
+        mirrored issue, and such a body holds that number, so a body
+        search over the mirrored numbers returns every PR the miner can
+        count from."""
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[issue(7, "WO-0101: first")], prs=[])
+            rejection_mining.run_mine(tree(tmp).root, run=run, clock=clock)
+        self.assertEqual(run.called("pr", "list"), [
+            ["pr", "list", "--state", "all", "--search", "in:body 7 OR 8",
+             "--json", "number,state,body,reviews", "--limit",
+             str(human_gates.SEARCH_WINDOW)]])
+
+    def test_mirrored_numbers_go_six_to_a_search_and_a_pr_counts_once(
+            self):
+        # GitHub search answers a query with more than five OR operators
+        # with no results, not an error, so seven mirrored issues take
+        # two searches. A PR both searches return (it closes #7 and #13)
+        # is one PR: its review counts once per order it closes.
+        rows = "".join(
+            f"- [ ] **WO-01{n:02d}** row {n} — size:S, blocked by: —"
+            f" (PRD-0009 §X) (tracker: #{n})\n" for n in range(7, 14))
+        with tempfile.TemporaryDirectory() as tmp:
+            fixture = FixtureTree(tmp)
+            fixture.write("docs/features/demo/breakdown.md",
+                          "# Breakdown\n\n" + rows)
+            run = gh(prs=[pr(45, body="Closes #7. Closes #13.", reviews=[
+                review("CHANGES_REQUESTED", "Tighten.")])])
+            outputs, problems = rejection_mining.run_mine(
+                fixture.root, run=run, clock=clock)
+        self.assertEqual(problems, [])
+        self.assertEqual([call[5] for call in run.called("pr", "list")],
+                         ["in:body 7 OR 8 OR 9 OR 10 OR 11 OR 12",
+                          "in:body 13"])
+        self.assertEqual(outputs["reason"],
+                         "rm: 2 candidate WO(s), 2 correction(s) mined")
+
     def test_a_full_pr_window_is_named_in_the_body(self):
         """The third way a harvest goes partial, and the one this run's own
         fix was blind to. gh_read leaves a full-window value USABLE and
@@ -406,7 +444,7 @@ class TestRunMine(unittest.TestCase):
         the defect this run exists to remove, one state over."""
         issues = [issue(7, "WO-0101: first")]
         prs = [pr(1000 + n, body="Closes #7")
-               for n in range(rejection_mining.LIST_WINDOW)]
+               for n in range(human_gates.SEARCH_WINDOW)]
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=issues, timelines={7: REJECTED_STAY}, prs=prs)
             _, problems = rejection_mining.run_mine(tree(tmp).root, run=run,
@@ -414,7 +452,7 @@ class TestRunMine(unittest.TestCase):
             body = self._posted_body(run)
         self.assertEqual(problems, [
             "rm: gh pr list returned a full"
-            f" {rejection_mining.LIST_WINDOW}-entry window — older entries"
+            f" {human_gates.SEARCH_WINDOW}-entry window — older entries"
             " are invisible; raise the window or narrow the query"])
         self.assertIn("TRUNCATED: the PR listing", body)
 
@@ -552,7 +590,7 @@ class TestConductorRework(unittest.TestCase):
 class TestWorkflowPermissions(unittest.TestCase):
     """The harvest reads two correction streams off two different gh
     surfaces: the wo: label timelines (issues) and the
-    CHANGES_REQUESTED reviews (pull requests, PR_ARGS). A token granted
+    CHANGES_REQUESTED reviews (pull requests, PR_FIELDS). A token granted
     only `issues: write` lists the first and is refused the second, so
     the harvest fails *partially* — the queue issue still posts, gate
     rejections only, and nothing about the tracker announces the gap.

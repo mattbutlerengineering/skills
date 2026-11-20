@@ -420,6 +420,23 @@ class TestReadWorkOrderIssues(unittest.TestCase):
              'label:"wo:blocked","wo:draft","wo:merged"', "--json",
              self.FIELDS, "--limit", "1000"]])
 
+    def test_a_named_repo_scopes_every_read_to_it(self):
+        # The dashboard observes checkouts other than the one gh runs
+        # in, so a slug it names must reach the label list and the
+        # search as -R, not only the by-number REST path (#2212).
+        run = tracker_gh([entry(4, "OPEN", ["wo:draft"])],
+                         rest={7: rest_issue(7, "open", [])})
+        read = read_work_order_issues([4, 7], self.FIELDS, run, "dashboard",
+                                      slug="o/r")
+        self.assertEqual([entry["number"] for entry in read.value], [4, 7])
+        self.assertEqual(run.calls, [
+            ["label", "list", "-R", "o/r", "--json", "name", "--limit",
+             "1000"],
+            ["issue", "list", "-R", "o/r", "--state", "all", "--search",
+             'label:"wo:blocked","wo:draft","wo:merged"', "--json",
+             self.FIELDS, "--limit", "1000"],
+            ["api", "repos/o/r/issues/7"]])
+
     def test_a_mirrored_issue_with_no_wo_label_is_fetched_by_number(self):
         run = tracker_gh(
             [entry(4, "OPEN", ["wo:draft"])],
