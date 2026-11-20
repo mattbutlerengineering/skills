@@ -144,15 +144,19 @@ def upsert_marked_issue(title, marker, body, label, run):
 
 def _capture_latency(root, mirror, events_by_issue, problems):
     """Append every not-yet-recorded gate passage to the cost ledger and
-    return the new rows. The dedup identity is cost_ledger.row_key
-    (ADR-0041): gate_entry keys run_id on the passage timestamp, so a
-    daily re-scan of the same history appends nothing — the skip is
+    return the new rows. The dedup identity is cost_ledger.row_key plus,
+    for gate rows, cost_ledger.gate_stay (ADR-0041, ADR-0132): gate_entry
+    keys run_id on the stay's start, so a daily re-scan of the same
+    history appends nothing, even after a walk change moves the end, and
+    a passage already recorded under a legacy end key is not
+    re-recorded either — the skip is
     cost_ledger.record_new's, in one ledger read (#772). A ledger that
     cannot be read stops the capture (#736): with no recorded set to
     dedup against, every past passage would be re-appended."""
-    rows = [cost_ledger.gate_entry(mirror[number], gate, waited, passed_at)
+    rows = [cost_ledger.gate_entry(mirror[number], gate, waited, passed_at,
+                                   started_at)
             for number, events in sorted(events_by_issue.items())
-            for gate, waited, passed_at in gate_passages(events)]
+            for gate, waited, passed_at, started_at in gate_passages(events)]
     landed, refused = cost_ledger.record_new(root, rows)
     problems.extend(refused)
     return landed

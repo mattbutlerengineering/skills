@@ -386,10 +386,14 @@ class TestLineProblems(unittest.TestCase):
 class TestGateEntry(unittest.TestCase):
     def test_a_gate_row_is_a_well_formed_zero_cost_ledger_record(self):
         record = cost_ledger.gate_entry(
-            "WO-0017", "merge", 7260, "2026-07-22T05:17:00Z")
+            "WO-0017", "merge", 7260, "2026-07-22T05:17:00Z",
+            "2026-07-22T03:16:00Z")
         self.assertEqual(cost_ledger.line_problems(record), [])
         self.assertEqual(record["wo"], "WO-0017")
-        self.assertEqual(record["run_id"], "gate-merge-2026-07-22T05:17:00Z")
+        # ADR-0132: keyed on the stay's start, which no amendment to
+        # how the walk computes a stay's end can move.
+        self.assertEqual(record["run_id"],
+                         "gate-merge-entered-2026-07-22T03:16:00Z")
         self.assertEqual(record["tokens"], 0)
         self.assertEqual(record["cost"], 0.0)
         self.assertEqual(record["outcome"], "gate_wait:merge:7260s")
@@ -398,12 +402,14 @@ class TestGateEntry(unittest.TestCase):
         # Gate rows need no clock: the passage timestamp already carries
         # the date the monthly window keys on.
         record = cost_ledger.gate_entry(
-            "WO-0017", "merge", 7260, "2026-07-22T05:17:00Z")
+            "WO-0017", "merge", 7260, "2026-07-22T05:17:00Z",
+            "2026-07-22T03:16:00Z")
         self.assertEqual(record["at"], "2026-07-22")
 
     def test_the_round_trip_through_gate_wait(self):
         record = cost_ledger.gate_entry(
-            "WO-0003", "prd", 86400, "2026-07-01T09:00:00Z")
+            "WO-0003", "prd", 86400, "2026-07-01T09:00:00Z",
+            "2026-06-30T09:00:00Z")
         self.assertEqual(cost_ledger.gate_wait(record), ("prd", 86400))
 
 
@@ -419,11 +425,11 @@ class TestGateEntryCannotOutwriteItsReader(unittest.TestCase):
     def test_a_gate_name_the_reader_cannot_read_is_refused(self):
         with self.assertRaises(ValueError):
             cost_ledger.gate_entry("WO-0001", "code-review", 120,
-                                   self.PASSED_AT)
+                                   self.PASSED_AT, self.PASSED_AT)
 
     def test_a_negative_wait_is_refused(self):
         with self.assertRaises(ValueError):
-            cost_ledger.gate_entry("WO-0001", "merge", -30, self.PASSED_AT)
+            cost_ledger.gate_entry("WO-0001", "merge", -30, self.PASSED_AT, self.PASSED_AT)
 
     def test_the_writer_and_the_reader_never_disagree(self):
         # The property that makes the two statements of the grammar one:
@@ -437,7 +443,7 @@ class TestGateEntryCannotOutwriteItsReader(unittest.TestCase):
                 with self.subTest(gate=gate, wait=wait):
                     try:
                         row = cost_ledger.gate_entry("WO-0001", gate, wait,
-                                                     self.PASSED_AT)
+                                                     self.PASSED_AT, self.PASSED_AT)
                     except ValueError:
                         continue
                     self.assertIsNotNone(
@@ -451,7 +457,7 @@ class TestGateEntryCannotOutwriteItsReader(unittest.TestCase):
         for gate in human_gates.GATES:
             with self.subTest(gate=gate.name):
                 row = cost_ledger.gate_entry("WO-0001", gate.name, 60,
-                                             self.PASSED_AT)
+                                             self.PASSED_AT, self.PASSED_AT)
                 self.assertEqual(cost_ledger.gate_wait(row),
                                  (gate.name, 60))
 
@@ -467,19 +473,147 @@ class TestRowKey(unittest.TestCase):
         # of the same label history composes a row with the SAME identity
         # — the dedup the gate digest hangs on this function.
         first = cost_ledger.gate_entry("WO-0017", "merge", 7260,
-                                       "2026-07-22T05:17:00Z")
+                                       "2026-07-22T05:17:00Z",
+            "2026-07-22T03:16:00Z")
         again = cost_ledger.gate_entry("WO-0017", "merge", 7260,
-                                       "2026-07-22T05:17:00Z")
+                                       "2026-07-22T05:17:00Z",
+            "2026-07-22T03:16:00Z")
         self.assertEqual(cost_ledger.row_key(first),
                          cost_ledger.row_key(again))
 
     def test_distinct_passages_have_distinct_keys(self):
         earlier = cost_ledger.gate_entry("WO-0017", "merge", 7260,
-                                         "2026-07-22T05:17:00Z")
+                                         "2026-07-22T05:17:00Z",
+            "2026-07-22T03:16:00Z")
         later = cost_ledger.gate_entry("WO-0017", "merge", 60,
-                                       "2026-07-23T09:00:00Z")
+                                       "2026-07-23T09:00:00Z",
+            "2026-07-23T08:59:00Z")
         self.assertNotEqual(cost_ledger.row_key(earlier),
                             cost_ledger.row_key(later))
+
+
+# The eight gate rows docs/factory/costs.jsonl holds for the four
+# passages ADR-0074's walk change re-recorded under new end keys (ledger
+# lines 35/86, 71/87, 72/88, 81/89): each pair is one stay, recorded once
+# before the change and once after it.
+LEGACY_DUPLICATES = [
+    entry("WO-0034", "gate-merge-2026-08-15T05:51:40Z", "none", 0, 0.0,
+          "gate_wait:merge:48s", "2026-08-15"),
+    entry("WO-0074", "gate-prd-2026-09-24T04:31:50Z", "none", 0, 0.0,
+          "gate_wait:prd:1399s", "2026-09-24"),
+    entry("WO-0074", "gate-blueprint-2026-09-24T04:31:50Z", "none", 0, 0.0,
+          "gate_wait:blueprint:19s", "2026-09-24"),
+    entry("WO-0074", "gate-merge-2026-09-25T04:20:47Z", "none", 0, 0.0,
+          "gate_wait:merge:558s", "2026-09-25"),
+    entry("WO-0034", "gate-merge-2026-08-15T05:51:39Z", "none", 0, 0.0,
+          "gate_wait:merge:47s", "2026-08-15"),
+    entry("WO-0074", "gate-prd-2026-09-24T04:31:31Z", "none", 0, 0.0,
+          "gate_wait:prd:1380s", "2026-09-24"),
+    entry("WO-0074", "gate-blueprint-2026-09-24T04:31:35Z", "none", 0, 0.0,
+          "gate_wait:blueprint:4s", "2026-09-24"),
+    entry("WO-0074", "gate-merge-2026-09-25T04:20:46Z", "none", 0, 0.0,
+          "gate_wait:merge:557s", "2026-09-25"),
+]
+
+
+class TestGateStay(unittest.TestCase):
+    """ADR-0132: a gate row's stay is (wo, gate, start). A start-keyed
+    row carries the start in its run_id; a legacy end-keyed row's start
+    is its end minus its whole-second wait."""
+
+    def test_a_start_keyed_row_names_its_start(self):
+        row = cost_ledger.gate_entry("WO-0017", "merge", 7260,
+                                     "2026-07-22T05:17:00Z",
+                                     "2026-07-22T03:16:00Z")
+        self.assertEqual(cost_ledger.gate_stay(row),
+                         ("WO-0017", "merge", "2026-07-22T03:16:00Z"))
+
+    def test_a_legacy_end_keyed_row_derives_its_start(self):
+        self.assertEqual(cost_ledger.gate_stay(LEGACY_DUPLICATES[1]),
+                         ("WO-0074", "prd", "2026-09-24T04:08:31Z"))
+
+    def test_each_legacy_pair_names_one_stay(self):
+        stays = [cost_ledger.gate_stay(row) for row in LEGACY_DUPLICATES]
+        self.assertEqual(stays[:4], stays[4:])
+        self.assertEqual(len(set(stays)), 4)
+
+    def test_a_row_that_is_not_a_gate_row_has_no_stay(self):
+        run = entry("WO-0001", "r-1", "m", 100, 1.5, "merged", "2026-08-02")
+        self.assertIsNone(cost_ledger.gate_stay(run))
+
+    def test_a_run_id_without_a_readable_timestamp_has_no_stay(self):
+        row = entry("WO-0001", "gate-merge-yesterday", "none", 0, 0.0,
+                    "gate_wait:merge:60s", "2026-08-02")
+        self.assertIsNone(cost_ledger.gate_stay(row))
+
+
+class TestGateRows(unittest.TestCase):
+    def test_the_real_duplicates_collapse_to_the_last_recorded_row(self):
+        # One row per stay; the later record wins, which for these four
+        # is ADR-0074's corrected measurement.
+        self.assertEqual(cost_ledger.gate_rows(LEGACY_DUPLICATES),
+                         LEGACY_DUPLICATES[4:])
+
+    def test_runs_and_markers_are_not_gate_rows(self):
+        run = entry("WO-0001", "r-1", "m", 100, 1.5, "merged", "2026-08-02")
+        marker = entry("WO-0001", "s-1", "m", 0, 0.0,
+                       "owner-session:unmetered", "2026-08-02")
+        gate = cost_ledger.gate_entry("WO-0001", "merge", 60,
+                                      "2026-08-02T00:01:00Z",
+                                      "2026-08-02T00:00:00Z")
+        self.assertEqual(cost_ledger.gate_rows([run, gate, marker]), [gate])
+
+    def test_a_legacy_row_and_its_start_keyed_twin_are_one_stay(self):
+        legacy = LEGACY_DUPLICATES[0]
+        twin = cost_ledger.gate_entry("WO-0034", "merge", 48,
+                                      "2026-08-15T05:51:40Z",
+                                      "2026-08-15T05:50:52Z")
+        self.assertEqual(cost_ledger.gate_rows([legacy, twin]), [twin])
+
+    def test_rows_without_a_readable_stay_are_each_kept(self):
+        odd = entry("WO-0001", "gate-merge-x", "none", 0, 0.0,
+                    "gate_wait:merge:60s", "2026-08-02")
+        self.assertEqual(cost_ledger.gate_rows([odd, odd]), [odd, odd])
+
+
+class TestRecordNewBridgesTheKeyChange(unittest.TestCase):
+    """ADR-0132: switching the key from a stay's end to its start must not
+    re-record every passage the ledger already holds under an end key."""
+
+    def write(self, tmp, rows):
+        path = Path(tmp) / cost_ledger.COST_LEDGER
+        path.parent.mkdir(parents=True)
+        path.write_text("".join(json.dumps(row) + "\n" for row in rows))
+
+    def test_a_passage_recorded_under_its_end_key_is_not_recorded_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write(tmp, LEGACY_DUPLICATES)
+            # The current walk's view of WO-0074's blueprint stay.
+            row = cost_ledger.gate_entry("WO-0074", "blueprint", 4,
+                                         "2026-09-24T04:31:35Z",
+                                         "2026-09-24T04:31:31Z")
+            self.assertEqual(cost_ledger.record_new(tmp, [row]), ([], []))
+
+    def test_a_walk_that_moves_the_end_records_nothing_new(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            first = cost_ledger.gate_entry("WO-0017", "merge", 7260,
+                                           "2026-07-22T05:17:00Z",
+                                           "2026-07-22T03:16:00Z")
+            moved = cost_ledger.gate_entry("WO-0017", "merge", 60,
+                                           "2026-07-22T03:17:00Z",
+                                           "2026-07-22T03:16:00Z")
+            self.assertEqual(cost_ledger.record_new(tmp, [first]),
+                             ([first], []))
+            self.assertEqual(cost_ledger.record_new(tmp, [moved]), ([], []))
+
+    def test_a_new_stay_still_lands(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.write(tmp, LEGACY_DUPLICATES)
+            row = cost_ledger.gate_entry("WO-0074", "merge", 60,
+                                         "2026-10-01T00:01:00Z",
+                                         "2026-10-01T00:00:00Z")
+            self.assertEqual(cost_ledger.record_new(tmp, [row]),
+                             ([row], []))
 
 
 class TestInMonth(unittest.TestCase):
@@ -855,7 +989,8 @@ class TestDispatched(unittest.TestCase):
         # The production shape (gate_entry writes $0/0 tokens): excluded
         # for being a gate row, not for costing nothing.
         gate = cost_ledger.gate_entry("WO-0017", "merge", 7260,
-                                      "2026-08-03T05:17:00Z")
+                                      "2026-08-03T05:17:00Z",
+            "2026-08-03T03:16:00Z")
         self.assertEqual(cost_ledger.dispatched([gate], "2026-08"), [])
 
     def test_an_owner_session_marker_is_never_a_run(self):

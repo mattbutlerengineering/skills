@@ -28,7 +28,7 @@ copy missed it (#791). Everything else is events in, gate facts out,
 testable with a literal list.
 """
 from collections import namedtuple
-from datetime import datetime
+from datetime import datetime, timezone
 
 from cli import gh_read, label_names
 
@@ -90,6 +90,17 @@ def _is_timestamp(value):
         return False
 
 
+def _utc_z(iso):
+    """An admitted timestamp respelled as UTC "YYYY-MM-DDTHH:MM:SSZ",
+    GitHub's own form. Downstream takes the date from the first ten
+    characters (a ledger row's `at`) and embeds the string in a run_id,
+    so an offset or basic-format spelling would date a row by its local
+    day, or give it an `at` the ledger refuses — and refuse the digest's
+    whole batch on every later run, since timelines never change."""
+    return _parse_ts(iso).astimezone(timezone.utc).strftime(
+        "%Y-%m-%dT%H:%M:%SZ")
+
+
 def waited_seconds(start, end):
     """Whole seconds between two GitHub timestamps.
 
@@ -122,7 +133,7 @@ def _admit(timeline):
             continue
         ts = event.get("created_at")
         if _is_timestamp(ts):
-            admitted.append((ts, kind, name))
+            admitted.append((_utc_z(ts), kind, name))
         else:
             refused += 1
     return admitted, refused
@@ -136,7 +147,8 @@ def label_events(timeline):
 
     Well-formed means all three: a label flip, carrying a name, and
     carrying a timestamp that reads as one. The third clause is what
-    lets every function downstream take ISO-8601 as given.
+    lets every function downstream take ISO-8601 as given, and every
+    admitted timestamp is respelled in UTC Z form (_utc_z).
 
     Silent on purpose: it returns no problems for any of the three
     clauses. read_timelines is the one caller that reports what the
@@ -267,10 +279,12 @@ def completed_stays(events, gate):
 
 
 def gate_passages(events):
-    """[(gate, waited seconds, passed at)] — every confirmed gate
-    passage in one issue's label history, in pipeline then stay order.
-    Re-entering a gate yields one passage per confirmed stay."""
-    return [(gate.name, waited_seconds(start, end), end)
+    """[(gate, waited seconds, passed at, stay started at)] — every
+    confirmed gate passage in one issue's label history, in pipeline then
+    stay order. Re-entering a gate yields one passage per confirmed stay.
+    The start is the queue label's add time, which no change to how the
+    walk computes the end can move — the ledger keys on it (ADR-0132)."""
+    return [(gate.name, waited_seconds(start, end), end, start)
             for gate in GATES
             for start, end, confirmed in completed_stays(events, gate)
             if confirmed]

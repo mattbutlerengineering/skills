@@ -23,6 +23,7 @@ from pathlib import Path
 # added for the sibling helper import
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fake_gh import FakeGh  # noqa: E402
+import cost_ledger  # noqa: E402
 from human_gates import (GATES, Waiting, completed_stays, gate_labels,
                          gate_passages, gate_rejections, label_events,
                          open_queues, read_gate_issues, read_timelines,
@@ -140,6 +141,35 @@ class TestLabelEvents(unittest.TestCase):
         self.assertNotIn("2026-08-01", [ts for ts, _, _ in events])
         self.assertEqual(gate_passages(events), [])
 
+    def test_an_admitted_timestamp_is_normalised_to_utc_z_form(self):
+        # A ledger row's `at` is the first ten characters of a timestamp
+        # and its run_id embeds one: an offset form would date the row by
+        # its local day and key one instant two ways.
+        events = label_events([
+            labeled("2026-07-31T21:00:00-05:00", "wo:draft"),
+            labeled("2026-08-01T02:00:00.750000+00:00", "wo:prd-approved"),
+        ])
+        self.assertEqual([ts for ts, _, _ in events],
+                         ["2026-08-01T02:00:00Z", "2026-08-01T02:00:00Z"])
+
+    @unittest.skipIf(sys.version_info < (3, 11),
+                     "fromisoformat reads the basic format from 3.11")
+    def test_a_basic_format_timestamp_becomes_a_row_the_ledger_takes(self):
+        # Admitted verbatim, 20260801T110000Z gave gate_entry at
+        # '20260801T1', which line_problems refuses — and record_new
+        # refuses the whole batch on every later run, since timelines
+        # never change.
+        events = label_events([
+            labeled("20260801T100000Z", "wo:draft"),
+            labeled("20260801T110000Z", "wo:prd-approved"),
+            unlabeled("20260801T110000Z", "wo:draft"),
+        ])
+        (gate, waited, passed_at, started_at), = gate_passages(events)
+        row = cost_ledger.gate_entry("WO-0001", gate, waited, passed_at,
+                                     started_at)
+        self.assertEqual(cost_ledger.line_problems(row), [])
+        self.assertEqual(row["at"], "2026-08-01")
+
     def test_a_well_formed_timeline_is_unchanged_by_the_third_clause(self):
         # The same three flips with a parseable closing timestamp still
         # pass the gate — the guard rejects malformed input, not input.
@@ -149,7 +179,8 @@ class TestLabelEvents(unittest.TestCase):
             unlabeled("2026-08-02T00:00:00Z", "wo:draft"),
         ])
         self.assertEqual(gate_passages(events),
-                         [("prd", 86400, "2026-08-02T00:00:00Z")])
+                         [("prd", 86400, "2026-08-02T00:00:00Z",
+                          "2026-08-01T00:00:00Z")])
 
 
 def timeline_gh(pages_by_issue=None, **kwargs):
@@ -361,7 +392,8 @@ class TestGatePassages(unittest.TestCase):
             unlabeled("2026-07-02T09:00:00Z", "wo:draft"),
         ])
         self.assertEqual(gate_passages(events),
-                         [("prd", 86400, "2026-07-02T09:00:00Z")])
+                         [("prd", 86400, "2026-07-02T09:00:00Z",
+                          "2026-07-01T09:00:00Z")])
 
     def test_a_flip_to_anything_but_the_pass_label_is_not_a_passage(self):
         # wo:draft -> wo:blocked is a rejection, not a PRD-gate pass.
@@ -385,7 +417,8 @@ class TestGatePassages(unittest.TestCase):
             unlabeled("2026-07-06T09:00:00Z", "wo:draft"),
         ])
         self.assertEqual(gate_passages(events),
-                         [("prd", 86400, "2026-07-06T09:00:00Z")])
+                         [("prd", 86400, "2026-07-06T09:00:00Z",
+                          "2026-07-05T09:00:00Z")])
 
     def test_a_re_entered_gate_yields_one_passage_per_pair(self):
         events = label_events([
@@ -397,8 +430,10 @@ class TestGatePassages(unittest.TestCase):
             labeled("2026-07-05T11:00:00Z", "wo:merged"),
         ])
         self.assertEqual(gate_passages(events), [
-            ("merge", 3600, "2026-07-01T10:00:00Z"),
-            ("merge", 7200, "2026-07-05T11:00:00Z"),
+            ("merge", 3600, "2026-07-01T10:00:00Z",
+                          "2026-07-01T09:00:00Z"),
+            ("merge", 7200, "2026-07-05T11:00:00Z",
+                          "2026-07-05T09:00:00Z"),
         ])
 
 
@@ -415,8 +450,10 @@ class TestGatePassages(unittest.TestCase):
             unlabeled("2026-09-24T04:31:50Z", "wo:prd-approved"),
         ])
         self.assertEqual(gate_passages(events), [
-            ("prd", 1380, "2026-09-24T04:31:31Z"),
-            ("blueprint", 4, "2026-09-24T04:31:35Z"),
+            ("prd", 1380, "2026-09-24T04:31:31Z",
+                          "2026-09-24T04:08:31Z"),
+            ("blueprint", 4, "2026-09-24T04:31:35Z",
+                          "2026-09-24T04:31:31Z"),
         ])
 
     def test_a_lingering_queue_label_cannot_fold_in_the_next_gate(self):
@@ -430,7 +467,8 @@ class TestGatePassages(unittest.TestCase):
             unlabeled("2026-07-09T09:00:10Z", "wo:prd-approved"),
         ])
         self.assertEqual(gate_passages(events)[0],
-                         ("prd", 86400, "2026-07-02T09:00:00Z"))
+                         ("prd", 86400, "2026-07-02T09:00:00Z",
+                          "2026-07-01T09:00:00Z"))
 
 REJECTED_STAY = [
     labeled("2026-08-10T09:00:00Z", "wo:needs-review"),
@@ -540,9 +578,11 @@ class TestCompletedStays(unittest.TestCase):
             labeled("2026-07-01T11:30:00+02:00", "wo:prd-approved"),
             unlabeled("2026-07-01T10:00:00Z", "wo:draft"),
         ])
+        # Admission normalises every timestamp to UTC Z form, so the
+        # pass label reads back as the instant it is.
         self.assertEqual(completed_stays(events, self.PRD),
                          [("2026-07-01T08:00:00Z",
-                           "2026-07-01T11:30:00+02:00", True)])
+                           "2026-07-01T09:30:00Z", True)])
 
     def test_an_open_stay_is_absent_still_waiting(self):
         events = label_events([
@@ -561,7 +601,7 @@ class TestThePartition(unittest.TestCase):
 
     def stays(self):
         events = label_events(PARTITION_HISTORY)
-        passed = {(gate, end) for gate, _, end in gate_passages(events)}
+        passed = {(gate, end) for gate, _, end, _ in gate_passages(events)}
         rejected = set(gate_rejections(events))
         return passed, rejected
 

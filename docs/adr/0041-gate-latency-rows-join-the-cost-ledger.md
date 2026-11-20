@@ -1,6 +1,6 @@
 # Gate-latency observations are cost-ledger rows
 
-- Status: amended by ADR-0049
+- Status: amended by ADR-0132 (and earlier by ADR-0049)
 - Date: 2026-07-22
 
 Amends ADR-0034. Its ledger decision reads "one ledger, derived
