@@ -1260,6 +1260,29 @@ class TestRespondPost(unittest.TestCase):
         return dashboard.respond_post("/api/backlog-order", body,
                                       lambda: ([tmp], []))
 
+    def test_a_seed_appended_during_the_save_is_kept_not_overwritten(self):
+        """Producers append to docs/backlog.md with no lock (ADR-0029). A
+        seed appended after the hash check but before the write was
+        silently dropped and the save still answered 204."""
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.backlog(tmp)
+            appended = "- seed four (from: session:2026-11-20)\n"
+            real = dashboard.reorder_backlog
+
+            def racing(*args):
+                with open(path, "a", encoding="utf-8") as handle:
+                    handle.write(appended)
+                return real(*args)
+            body = json.dumps({"i": 0,
+                               "hash": dashboard.backlog_hash(self.TEXT),
+                               "order": [5, 3, 4]})
+            with mock.patch.object(dashboard, "reorder_backlog", racing):
+                status, payload = self.post(tmp, body)
+            self.assertEqual((status, payload),
+                             (409, {"problems": [dashboard._STALE]}))
+            self.assertEqual(path.read_text(encoding="utf-8"),
+                             self.TEXT + appended)
+
     def test_a_backlog_that_resolves_outside_the_repo_is_refused(self):
         """A symlinked docs/backlog.md let the console rewrite a file
         outside every configured repo."""
@@ -1379,8 +1402,8 @@ class TestRespondPost(unittest.TestCase):
             body = json.dumps({"i": 0,
                                "hash": dashboard.backlog_hash(self.TEXT),
                                "order": [5, 3, 4]})
-            with mock.patch.object(Path, "write_bytes",
-                                    side_effect=OSError("Permission denied")):
+            with mock.patch.object(dashboard, "write_atomic",
+                                   side_effect=OSError("Permission denied")):
                 status, payload = self.post(tmp, body)
             self.assertEqual(status, 500)
             self.assertEqual(len(payload["problems"]), 1)
