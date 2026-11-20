@@ -30,7 +30,7 @@ facts (CONTEXT.md).
 import json
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 import cli
@@ -351,11 +351,17 @@ def _git(args):
     return cli.runner("git")(args).stdout
 
 
+def utc_today():
+    """Today's UTC date: what the cloud routines stamp `checked:` with,
+    so a page is never 'after today' just by the machine's timezone."""
+    return datetime.now(timezone.utc).date()
+
+
 def lint(root, git=_git, today=None):
     """Every problem with the knowledge base at root, as problem strings.
-    today (a date) ages declared outside checks; None means the local
-    date."""
-    root, today = Path(root), today or date.today()
+    today (a date) ages declared outside checks; None means the UTC
+    date (utc_today)."""
+    root, today = Path(root), today or utc_today()
     if not (root / KB_DIR).is_dir():
         return [NO_KB]
     every = pages(root)
