@@ -154,6 +154,23 @@ software that already shipped.
 
 - [ ] Run scale chosen deliberately (product / feature / maintenance)
 
+Finished runs stay in the tree: nothing yet marks a run closed or
+compacts it (#2058). Run artifacts are records, not living docs, and on a
+busy repo `docs/features/` and `docs/fixes/` soon hold most of the
+markdown under `docs/`. Keep your own formatters and markdown audits off
+them, so a docs-only change doesn't pay for every finished run:
+
+```
+# .prettierignore, .markdownlintignore, or your audit script's skip list
+docs/features/
+docs/fixes/
+```
+
+The factory's own detectors still read these trees, and they must: run
+discovery, `next` and the gates work from the artifacts.
+
+- [ ] Formatters and markdown audits skip `docs/features/` and `docs/fixes/`
+
 ## 8. Project knowledge and reference files (optional)
 
 Two utility skills keep project-level files outside any run. Neither needs
