@@ -7,15 +7,19 @@ metadata:
 
 # Implement
 
-Work through `breakdown.md` item by item, test-first. This stage produces no
+Work through the run's breakdown item by item, test-first — `breakdown.md`,
+or in a maintenance run with `re-entry: implement` the `## Work items`
+checkboxes in `defect.md` (the protocol's "Where the breakdown lives"). This stage produces no
 document — the code is the artifact, and progress is the checkboxes.
 
 ## Process
 
 1. Read `../../docs/pipeline-protocol.md` for run discovery and gating.
 
-2. **Soft gate.** Predecessor artifact: `breakdown.md`. If missing, apply
-   soft gating (for a trivial change, the backfill can be a three-item
+2. **Soft gate.** Predecessor artifact: `breakdown.md` — or, in a
+   maintenance run with `re-entry: implement`, `defect.md` with its
+   `## Work items`; never backfill a `breakdown.md` there, the router reads
+   only `defect.md`'s boxes. If missing, apply soft gating (for a trivial change, the backfill can be a three-item
    breakdown — but make the items and criteria real).
 
 3. **Pick the next item.** The first unchecked item whose blockers are all
@@ -37,7 +41,8 @@ document — the code is the artifact, and progress is the checkboxes.
    - Write the minimum implementation that passes, matching the
      architecture's contracts and the codebase's existing style.
    - Refactor with the tests green.
-   - Check the item off in `breakdown.md`.
+   - Check the item off where it lives (`breakdown.md`, or `defect.md`'s
+     `## Work items`).
    - If the item carries a `(tracker: #NNN)` reference, close the mirrored
      issue via the harness's issue tooling when you check it off. Items
      with no tracker reference close nothing — a run without a tracker

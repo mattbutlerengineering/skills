@@ -19,7 +19,9 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    frontmatter conventions.
 
 2. **Soft gate.** Predecessor artifacts: `prd.md`, plus `ux.md` when the PRD
-   says `ux: required`. If missing, apply soft gating.
+   says `ux: required` — or, in a maintenance run (`re-entry: architect`),
+   `defect.md` alone; never backfill a PRD into `docs/fixes/`. If missing,
+   apply soft gating.
 
 3. **Study before drafting.** For feature runs, explore the existing
    codebase: patterns, layering, naming, prior art for similar features. The

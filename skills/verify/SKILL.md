@@ -16,13 +16,17 @@ verdict.
 1. Read `../../docs/pipeline-protocol.md` for run discovery, gating, and
    frontmatter conventions.
 
-2. **Soft gate.** Predecessor: `breakdown.md` with all items checked. If
+2. **Soft gate.** Predecessor: the run's breakdown with all items checked
+   (`breakdown.md`, or `defect.md`'s `## Work items` with
+   `re-entry: implement`). If
    items are open, say which and offer to route back to Implement (or
    verify the completed subset, noting the gap).
 
 3. **Build the criteria list.** Every success criterion from `prd.md`, plus
    every acceptance criterion from `breakdown.md` not already covered by a
-   PRD criterion.
+   PRD criterion. A maintenance run has no `prd.md`: its criteria are the
+   defect no longer reproducing (`defect.md`'s `## Reproduction / Evidence`)
+   plus every work item's acceptance criterion.
 
 4. **Verify each criterion.** Prefer automated evidence (run the test suite;
    quote the relevant results) over manual walkthroughs, but do the manual

@@ -97,7 +97,11 @@ table says when `conduct` or `implement-queue` fits instead.
    the artifact (`<run directory>/<file>`) and what it lacks when
    re-dispatching the stage and in the report. If the same stage fails
    twice in this invocation, stop and report — don't route past a
-   broken stage.
+   broken stage. One exception: a `release.md` with `outcome: prepared`
+   and a `pending-merge:` is ship's terminal state for an unauthorized
+   run (step 5) — the protocol keeps Ship pending until the merge is
+   written back, but that is the intended stop, not a failed stage;
+   never re-dispatch ship for it.
 
 5. **Repeat 2–4 through ship** (`release.md`), with ship held to the
    release authorization in the brief. Unless the brief explicitly

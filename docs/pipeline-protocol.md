@@ -279,8 +279,10 @@ recorded in frontmatter as `intake: #123` (the tracker's own notation;
 duplicates of the same defect join an `intake-duplicates:` list and
 close together) and is never re-read after seeding — from that moment
 the tracker copy is a mirror again, updates flowing one way, out. The
-intake issue closes at Ship, when `release.md` exists, with a closing
-comment referencing the run directory; a run abandoned before then
+intake issue closes at Ship, when `release.md` records
+`outcome: released` (a `prepared` release closes it at the write-back
+that records the merge), with a closing comment referencing the run
+directory; a run abandoned before then
 un-marks the issue, never silently closes it. An intake-marked feature
 request seeds nothing: a missing capability is a feature, and capture
 routes it to `idea`, leaving the issue open.
