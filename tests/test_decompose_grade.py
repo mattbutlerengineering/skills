@@ -295,6 +295,23 @@ class TestDependencyCheck(unittest.TestCase):
                          dg.grade(plain, ARCH)["feedback"])
         self.assertEqual(dg.grade(text, ARCH)["parts"]["dependencies"], 1.0)
 
+    def test_the_row_lines_own_clause_beats_a_sub_bullet(self):
+        # Regression from the sub-bullet preference: the inline key
+        # resolved, the sub-bullet's title never could (7 false findings
+        # on polish-blockers-and-patterns).
+        text = breakdown(row("A1"), row("A2", blocked="A1 Thing",
+                                       inline="A1"))
+        self.assertEqual(dg.grade(text, ARCH)["parts"]["dependencies"], 1.0)
+        text = text.replace("  - Blocked by: A1 Thing",
+                            "  - Blocked by: First")
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
+    def test_a_paren_in_a_later_code_span_still_ends_the_clause(self):
+        text = breakdown(row("A1"), row(
+            "A2", blocked=None,
+            inline="A1 — note: kept in the `runner('git')` group, and more"))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
     def test_a_blocker_whose_title_ends_in_a_code_span_resolves(self):
         # No id token: the title is the key, and its own closing
         # backtick was stripped from the element but kept in the key.
