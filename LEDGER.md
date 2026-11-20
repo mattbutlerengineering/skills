@@ -11,29 +11,29 @@ Trigger-eval results inform description quality but never graduate maturity
 
 | Skill | Maturity | Evidence | Trigger eval |
 |-------|----------|----------|--------------|
-| next | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/5 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| idea | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 3/3 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| prd | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| ux-design | draft | — | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| architect | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 3/3 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| decompose | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01.json) |
-| implement | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 3/4 — [2026-07-01](evals/results/trigger-2026-07-01-2.json) |
-| verify | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 2/3 — [2026-07-05](evals/results/trigger-2026-07-05-11.json) (unchanged from [2026-07-01](evals/results/trigger-2026-07-01.json)) |
-| review | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 2/5 — [2026-07-05](evals/results/trigger-2026-07-05-3.json), review-situational-1 2/5 on rerun [2026-07-05-13](evals/results/trigger-2026-07-05-13.json) |
-| ship | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 3/4 — [2026-07-05](evals/results/trigger-2026-07-05-9.json) (was 2/4 — [2026-07-01](evals/results/trigger-2026-07-01.json)) |
-| operate | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 2/4 — [2026-07-05](evals/results/trigger-2026-07-05-14.json), first widening [2026-07-05-10](evals/results/trigger-2026-07-05-10.json), direct-2 rerun [2026-07-05-12](evals/results/trigger-2026-07-05-12.json) |
-| capture | draft | — | — |
-| autorun | draft | — | 0/4 — [2026-07-05](evals/results/trigger-2026-07-05-4.json), autorun-vs-next-1 held [2026-07-05-5](evals/results/trigger-2026-07-05-5.json) (was 1/3 — [2026-07-03](evals/results/trigger-2026-07-03-2.json)) |
-| factory-init | draft | — | — |
-| doctor | draft | — | — |
-| animated-diagram | draft | — | — |
-| pipeline-board | draft | — | — |
+| next | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 5/7 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| idea | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| prd | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| ux-design | draft | — | 6/7 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| architect | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| decompose | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 5/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| implement | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/6 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| verify | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 3/3 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| review | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 7/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| ship | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 5/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| operate | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| capture | draft | — | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| autorun | draft | — | 3/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| factory-init | draft | — | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| doctor | draft | — | 7/7 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| animated-diagram | draft | — | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| pipeline-board | draft | — | 3/3 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | assembly-line | draft | — | — |
 | conduct | draft | — | — |
-| audit | draft | — | — |
-| deepen | draft | — | — |
-| automate | draft | — | — |
-| launch-demo | draft | — | — |
+| audit | draft | — | 10/11 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| deepen | draft | — | 6/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| automate | draft | — | 5/6 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| launch-demo | draft | — | 3/3 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | lean | draft | — | 8/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | polish | draft | — | 10/10 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | house-voice | draft | — | — |
@@ -85,3 +85,11 @@ simple or brief-handoff queries directly instead of consulting a
 skill. Further description roulette would overfit the eval; whether
 such queries should be expected to fire at all is an ADR-worthy
 calibration question.
+
+Reading of the 2026-10-10 full run ([2026-10-10-3](evals/results/trigger-2026-10-10-3.json),
+185 cases across every skill then shipped, 163 passed): it is now the
+cited run for every row it covers, so some counts read lower than their
+July runs on larger case sets (idea 4/5, implement 4/6). autorun reads
+3/5 on the same `claude -p` harness, so the July note that its
+under-triggering is structural to that harness no longer holds as
+stated.
