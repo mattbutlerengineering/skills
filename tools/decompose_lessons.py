@@ -705,7 +705,8 @@ def compare(records, treated_set, floor):
 
 def _hit_runs(records):
     """How many (signal, run) hits the records hold, with or without a
-    clean run to pair them with."""
+    clean run to pair them with — signal hits, not runs: one run can
+    hit more than one signal."""
     return sum(1 for field, num, _ in _signals() for rec in records
                if (_hit_label(rec[field], num) or (0, 0))[1] > 0)
 
@@ -716,7 +717,7 @@ def _pair_line(pair_list, records):
     per = {field: sum(1 for p in pair_list if p["signal"] == field)
            for field, _, _ in _signals()}
     return (f"{LABEL}: {len(pair_list)} contrast pair(s) from"
-            f" {_hit_runs(records)} hit run(s): re-plan {per['replan']},"
+            f" {_hit_runs(records)} signal hit(s): re-plan {per['replan']},"
             f" design gaps {per['design_gaps']}, review-traced"
             f" {per['review']}")
 

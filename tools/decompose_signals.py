@@ -67,7 +67,9 @@ def _git(run, root, args, input=None):
     """(stdout, problems) for one git call."""
     try:
         return run(args, input=input, cwd=str(root)).stdout, []
-    except CLI_FAILURES as err:
+    except (*CLI_FAILURES, UnicodeDecodeError) as err:
+        # A historical version not in UTF-8: the runner decodes strictly,
+        # and an uncaught decode error was a traceback in three tools.
         return None, [f"{LABEL}: git {args[0]} failed: {detail(err)}"]
 
 
