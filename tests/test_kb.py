@@ -403,6 +403,16 @@ class TestAge(Tree):
             "kb: docs/kb/gh.md checked 2026-10-01 is after today"
             " (2026-09-30)"])
 
+    def test_the_default_today_is_the_utc_date_not_the_local_one(self):
+        """The cloud routines write `checked:` in UTC; a local default
+        flagged their page 'after today' for up to a day by timezone."""
+        self.declare(self.FRESH)
+        with mock.patch.object(kb, "utc_today", return_value=date(2026, 9, 30)):
+            problems = kb.lint(self.root, git=lambda args: "")
+        self.assertEqual(problems, [
+            "kb: docs/kb/gh.md checked 2026-10-01 is after today"
+            " (2026-09-30)"])
+
     def test_max_age_that_is_not_whole_days(self):
         for value in ("0d", "30", "thirty"):
             with self.subTest(value=value):
