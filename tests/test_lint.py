@@ -645,6 +645,20 @@ class TestSkillRecitals(CheckerTreeTest):
             ["skills/verify/SKILL.md never names its artifact "
              "'verification.md'"])
 
+    def test_a_maintenance_entry_stage_must_name_its_artifact(self):
+        """The entry-stage loop owes the same artifact recital as the
+        spine; no test reached it, so a capture SKILL.md that stopped
+        naming `defect.md` passed lint."""
+        self.seed("capture",
+                  f"1. {_in_flight_line()}\n"
+                  "2. Record `re-entry: implement` or `re-entry: "
+                  "architect`.\n"
+                  "3. Write the defect brief.\n")
+        self.assertEqual(
+            lint.check_skill_recitals(self.root),
+            ["skills/capture/SKILL.md never names its artifact "
+             "'defect.md'"])
+
     def test_capture_must_record_both_re_entry_options(self):
         self.seed("capture",
                   f"1. {_in_flight_line()}\n"
@@ -1656,6 +1670,29 @@ class TestRouterConditionals(CheckerTreeTest):
         try:
             self.assertEqual(lint.check_router_conditionals(self.root), [
                 "protocol._ux_skipped no longer reads 'ux' — the router"
+                " prose is stale"])
+        finally:
+            lint.ROUTER_CONDITIONALS = original
+
+    def test_a_code_side_file_rename_is_flagged_not_missed(self):
+        """The field rename's sibling: protocol moving the file it reads
+        the conditional from must also turn the router prose stale."""
+        self.write(self.clean_body())
+
+        def moved(run_dir):
+            brief = run_dir / "brief.md"
+            if not brief.is_file():
+                return False
+            return (protocol.read_frontmatter(brief) or {}).get(
+                "ux") == "not-applicable"
+
+        moved.__name__ = "_ux_skipped"
+        original = lint.ROUTER_CONDITIONALS
+        lint.ROUTER_CONDITIONALS = (("ux", "prd.md", moved),) \
+            + original[1:]
+        try:
+            self.assertEqual(lint.check_router_conditionals(self.root), [
+                "protocol._ux_skipped no longer reads prd.md — the router"
                 " prose is stale"])
         finally:
             lint.ROUTER_CONDITIONALS = original
