@@ -194,6 +194,18 @@ class TestTables(Tree):
             " instruction file lists it",
         ])
 
+    def test_an_unreadable_agent_file_is_a_problem_not_a_crash(self):
+        bad = self.root / ".claude" / "agents" / "x.md"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_bytes(b"---\nname: x\n---\n\xff\n")
+        (self.root / ".claude" / "agents" / "y.md").mkdir()
+        self.file("CLAUDE.md", "# Notes\n")
+        problems = self.drift()
+        read = [p for p in problems if "cannot read" in p]
+        self.assertEqual(len(read), 1, problems)
+        self.assertTrue(read[0].startswith(
+            "drift: cannot read .claude/agents/x.md: "), problems)
+
     def test_no_table_means_no_undocumented_entry_finding(self):
         self.skill("deploy")
         self.file("CLAUDE.md", "# Notes\n")

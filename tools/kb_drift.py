@@ -40,7 +40,7 @@ from pathlib import Path
 
 import cli
 from knowledge_plane import fenced, local_link_targets, repo_path, resolve_link
-from protocol import read_frontmatter
+from protocol import parse_frontmatter
 
 LABEL = "drift"
 INSTRUCTION_FILES = ("CLAUDE.md", "AGENTS.md", ".claude/CLAUDE.md")
@@ -192,7 +192,13 @@ class Disk:
         found = {}
         for base in [self.root / ".claude"] + self._plugin_roots():
             for path in sorted(base.glob("agents/**/*.md")):
-                fields = read_frontmatter(path) or {}
+                rel = path.relative_to(self.root).as_posix()
+                text, problem = cli.read_file(path, rel, str)
+                if problem:
+                    self.problems.append(f"{LABEL}: {problem}")
+                if text is None:  # unreadable, or a directory the glob hit
+                    continue
+                fields = parse_frontmatter(text) or {}
                 found.setdefault(fields.get("name") or path.stem,
                                  path.relative_to(self.root).as_posix())
         return found

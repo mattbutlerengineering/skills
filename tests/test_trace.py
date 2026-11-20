@@ -157,6 +157,15 @@ class TestRunReport(Repo):
         self.assertEqual(out, "trace: --since takes YYYY-MM-DD, not"
                               " 'last week'\ntrace: 1 problem(s)\n")
 
+    def test_an_unreadable_kb_page_key_is_a_problem_string(self):
+        page = self.root / "docs" / "kb" / "bad.md"
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_bytes(b"---\nsources: x\n---\n\xff\n")
+        code, out = self.trace("docs/kb/bad.md")
+        self.assertEqual(code, 1)
+        self.assertTrue(out.startswith(
+            "trace: cannot read docs/kb/bad.md: "), out)
+
     def test_an_impossible_since_date_is_a_problem_string(self):
         for bad in ("2026-13-01", "2026-02-30"):
             code, out = self.trace("feature:demo", "--since", bad)

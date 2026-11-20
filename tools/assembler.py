@@ -47,9 +47,10 @@ from pathlib import Path
 
 import factory_config
 import orientation_pack
-from cli import gh_read, gh_runner, read_event, report, write_outputs
+from cli import (gh_read, gh_runner, read_event, read_file, report,
+                 write_outputs)
 from knowledge_plane import CLOSES_TOKEN, repo_root, work_orders
-from protocol import read_frontmatter
+from protocol import parse_frontmatter
 
 READY_LABEL = "wo:ready-for-agent"
 
@@ -173,7 +174,8 @@ def select_charter(labels):
 
 def charter_band(agents_dir, role):
     """(the charter's route: band, problems), read from its agent stub
-    frontmatter via protocol.read_frontmatter — the one parser (ADR-0021),
+    frontmatter via protocol.parse_frontmatter, behind the guarded
+    cli.read_file (ADR-0075) — the one parser (ADR-0021),
     so any form the charter tests accept is a form dispatch accepts. A
     charter names a band, never a model id (ADR-0034); the band is the
     charter's only routing claim, so this is where routing begins. A
@@ -181,7 +183,10 @@ def charter_band(agents_dir, role):
     stub = Path(agents_dir) / f"factory-{role}.md"
     if not stub.is_file():
         return None, [f"asm: charter stub {stub} is missing"]
-    fields = read_frontmatter(stub) or {}
+    text, problem = read_file(stub, str(stub), str)
+    if problem:
+        return None, [f"asm: {problem}"]
+    fields = parse_frontmatter(text) or {}
     band = (fields.get("route") or "").strip()
     if band:
         return band, []
