@@ -30,6 +30,7 @@ from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
                        ask_row, current_state, item_branch, item_view,
                        parsed_at, stamp, view)
 from conductor_spend import LOST
+from knowledge_plane import parse_row
 from protocol import read_frontmatter
 
 STEPS = ("spec", "build", "verify", "review", "ship")
@@ -48,7 +49,6 @@ HOLD_CHOICES = ("decline", "stop")
 FAILURE_PAUSE = 3
 GATE_PATH = re.compile(r"docs/adr/.+|docs/design/.+|(?:.+/)?"
                        r"(?:prd|architecture)\.md")
-UNCHECKED_ROW = re.compile(r"- \[ \] .*")
 VERDICTS = ("pass", "changes")
 
 
@@ -757,9 +757,16 @@ def gate_blobs(git, branch):
             if GATE_PATH.fullmatch(path)}, []
 
 
+def _unchecked(row):
+    return row is not None and not row["done"]
+
+
 def unchecked_rows(git, branch):
     """(unchecked top-level breakdown rows, problems) from the
-    breakdown.md or defect.md the item branch changes."""
+    breakdown.md or defect.md the item branch changes. A row is
+    knowledge_plane.parse_row's — any of `-`, `*`, `+` bullets, as
+    protocol counts boxes — so a build the protocol still calls
+    implement is never routed to verify here."""
     changed, problems = changed_files(git, branch)
     if problems:
         return None, problems
@@ -772,7 +779,7 @@ def unchecked_rows(git, branch):
         if problems:
             return None, problems
         rows += [line for line in out.splitlines()
-                 if UNCHECKED_ROW.fullmatch(line)]
+                 if not line[:1].isspace() and _unchecked(parse_row(line))]
     return rows, []
 
 

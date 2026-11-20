@@ -663,9 +663,13 @@ class TestGitFacts(unittest.TestCase):
         git = self.git(f"{path}\n", shows={
             f"conductor/b1-12:{path}":
                 "- [x] **WO-0170** done\n- [ ] **WO-0171** next\n"
-                "  - [ ] not a row\n- [ ] **WO-0172** later\n"})
+                "  - [ ] not a row\n- [ ] **WO-0172** later\n"
+                "* [ ] **WO-0173** star\n+ [X] **WO-0174** plus done\n"
+                "+ [ ] **WO-0175** plus\n"})
+        # Any bullet protocol counts as a box (-, *, +), top level only.
         self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"), ([
-            "- [ ] **WO-0171** next", "- [ ] **WO-0172** later"], []))
+            "- [ ] **WO-0171** next", "- [ ] **WO-0172** later",
+            "* [ ] **WO-0173** star", "+ [ ] **WO-0175** plus"], []))
 
     def test_a_failing_git_read_is_a_problem(self):
         git = FakeGit(failing=["diff"])
