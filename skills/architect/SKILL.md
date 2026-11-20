@@ -29,8 +29,9 @@ trade-off exists. Technical design only: no UX (upstream), no scheduling
    the ground rules instead (language, framework, storage, deployment
    target) — these are the questions to ask first.
 
-4. **Load applicable standards.** Read `../../docs/standards.json` if
-   present (an unbootstrapped repo has none yet — proceed). Filter to
+4. **Load applicable standards.** Read the target repo's
+   `docs/standards.json` if present — never the plugin's own copy beside
+   this skill (an unbootstrapped repo has none yet — proceed). Filter to
    statements whose `domain` is `factory` or `pipeline` — the
    design-relevant slice. A decision below that bears on one cites its
    `slug` in `TEMPLATE.md`'s "Decisions & alternatives" section.

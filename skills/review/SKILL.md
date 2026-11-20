@@ -62,8 +62,9 @@ arbitrate severity.
    `interface-review` ([jakubkrehel/skills](https://github.com/jakubkrehel/skills),
    MIT); nothing is copied.
 
-6. **Load applicable standards.** Read `../../docs/standards.json` if
-   present (an unbootstrapped repo has none yet — proceed). Filter to
+6. **Load applicable standards.** Read the target repo's
+   `docs/standards.json` if present — never the plugin's own copy beside
+   this skill (an unbootstrapped repo has none yet — proceed). Filter to
    statements whose `domain` matches what the diff touches: `factory` for
    root-tool/`factory/**` changes, `pipeline` or `docs` for skill-body/
    `docs/**` changes, `eval` for eval-set/harness changes. A finding that

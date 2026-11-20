@@ -32,9 +32,10 @@ the user's head at this stage, so this skill interviews — it does not draft.
    verify failed never opened a pull request and sits on an unmerged
    branch or worktree. Run `git branch -a --no-merged origin/main` and
    `git worktree list`; for candidates whose name touches the same surface,
-   `git ls-tree --name-only <branch> docs/features/ docs/fixes/`. A branch
-   carrying run artifacts for the same surface is something already doing
-   this work: stop and surface it. Say which of the three outcomes happened;
+   `git diff --name-only origin/main...<branch> -- docs/features
+   docs/fixes` (the run artifacts the branch added, not the runs it
+   inherited from main). A branch carrying run artifacts for the same
+   surface is something already doing this work: stop and surface it. Say which of the three outcomes happened;
    a check that could not run is reported as that, never as a clean one. A
    greenfield product run with no review surface to read satisfies this by
    saying so.

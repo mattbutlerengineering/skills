@@ -41,9 +41,11 @@ interviews — it does not draft.
    not the only place: a run whose verify failed never opened a pull
    request and sits on an unmerged branch or worktree. Run `git branch -a
    --no-merged origin/main` and `git worktree list`; for candidates whose
-   name touches the same surface, `git ls-tree --name-only <branch>
-   docs/features/ docs/fixes/`. A branch carrying run artifacts for the
-   same surface is something already doing this work. Reporting a
+   name touches the same surface, `git diff --name-only
+   origin/main...<branch> -- docs/features docs/fixes` — the run
+   artifacts the branch itself added, not the runs it inherited from
+   main. A branch carrying run artifacts for the same surface is
+   something already doing this work. Reporting a
    check that could not run as a clean result is the one failure this
    step must never produce.
 
@@ -74,8 +76,11 @@ interviews — it does not draft.
      re-walk?
 
    For a condition brief, cover instead: what is degraded, the evidence
-   of degradation (build times, incident count, versions behind), and the
-   target state that would end the run.
+   of degradation (build times, incident count, versions behind), the
+   target state that would end the run, and the blast radius (it still
+   drives downstream scale). Detector M requires every `defect.md` to
+   fill Root-cause hypothesis and Ruled out too: write "n/a — condition
+   brief" there rather than leave the template placeholder.
 
 6. **Decide re-entry depth.** A scoped fix with no design decisions
    re-enters at Implement; anything design-touching re-enters at

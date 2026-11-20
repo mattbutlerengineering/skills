@@ -27,12 +27,15 @@ table says when `conduct` or `implement-queue` fits instead.
    - the feature or product description (what and why);
    - run scale (product or feature) and, for a feature, its slug;
    - the inputs the interview-only early stages need, since the brief is
-     their only source — the Idea stage covers all of these (idea/SKILL.md):
+     their only source — the Idea stage asks for these (idea/SKILL.md):
      the problem from the sufferer's view; who has it and how they cope
      today; why now; what evidence exists the problem is real (anecdote
      counts, labelled as such); the rough shape of a solution (a hunch,
      not a design); a one-sentence success statement; and the biggest
-     unknowns or ways this dies. A brief that omits one of these makes that
+     unknowns or ways this dies; and, from Idea's ambition ladder, the
+     rung to build (or "accept Showstopper"), the demo moment, the step it
+     removes, and the riskiest piece with its two-day spike. A brief that
+     omits one of these makes that
      stage stop-and-surface by design — so collect them up front;
    - scope boundaries (in and out), success criteria, stack or design
      constraints, anything already decided;
@@ -133,10 +136,11 @@ table says when `conduct` or `implement-queue` fits instead.
    every assumption from the artifacts' frontmatter into one list; note
    that the run was autorun-driven and, when the brief said `skip` or
    its `operate:` condition was not yet met, that operate did not run
-   and the run stays active. Ship, or the brief's `stop-after:`
-   stage, is where autorun stops: the run stays active until `retro.md`
-   exists, and operate remains available once there is feedback to
-   capture.
+   and the run stays active. Autorun stops at Ship — or at Operate when
+   the brief's `operate:` section ran it (step 5) — or at the brief's
+   `stop-after:` stage: without a retro the run stays active until
+   `retro.md` exists, and operate remains available once there is
+   feedback to capture.
 
 ## Rules
 
