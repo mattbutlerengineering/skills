@@ -27,10 +27,13 @@ tool; the #491 refusal then had to be wired into each copy, and one
 copy missed it (#791). Everything else is events in, gate facts out,
 testable with a literal list.
 """
+import json
+import re
+import subprocess
 from collections import namedtuple
 from datetime import datetime, timezone
 
-from cli import gh_read, label_names
+from cli import CLI_FAILURES, GhResult, detail, gh_read, label_names
 
 # A gate's ledger name, the wo: label an issue carries while waiting,
 # the label whose application confirms the pass (a flip to anything else
@@ -197,23 +200,110 @@ def read_timelines(numbers, run, label, slug="{owner}/{repo}"):
     return events, problems
 
 
-# The issue listing the gate readers start from: every state, with the
-# fields both the digest and the miner read.
-ISSUE_LIST_ARGS = ("issue", "list", "--state", "all", "--json",
-                   "number,title,state,labels,body")
+# GitHub search answers at most 1000 results per query, whatever
+# --limit asks for, so a search read windowed any wider would be capped
+# silently. At exactly this window a capped search reads as a full one,
+# and cli.gh_read reports it.
+SEARCH_WINDOW = 1000
+# What makes a label a lifecycle label (plane_drift.issue_lifecycle).
+LIFECYCLE_PREFIX = "wo:"
+# The fields both the digest and the miner read.
+ISSUE_FIELDS = "number,title,state,labels,body"
+# gh's words for a REST read of a number that is no issue here: never
+# one (404) or deleted (410).
+ABSENT = re.compile(r"\(HTTP 4(?:04|10)\)$")
+
+
+def _issue_by_number(number, fields, run, label, slug):
+    """(entry, problems) for one issue read by number through the REST
+    API, projected to `fields` and spelled as an issue-list entry
+    (state upper-cased). entry is None, with no problem, for a number
+    the whole-tracker listing would not have held either: no such issue,
+    a pull request, or an issue transferred away (answered under another
+    number). Any other failure is a problem."""
+    operation = f"gh api issue #{number}"
+    try:
+        out = run(["api", f"repos/{slug}/issues/{number}"])
+    except subprocess.CalledProcessError as err:
+        if ABSENT.search(detail(err)):
+            return None, []
+        return None, [f"{label}: {operation} failed: {detail(err)}"]
+    except CLI_FAILURES as err:
+        return None, [f"{label}: {operation} failed: {detail(err)}"]
+    try:
+        value = json.loads(out)
+    except json.JSONDecodeError as err:
+        return None, [f"{label}: {operation} returned unparseable JSON:"
+                      f" {err}"]
+    if not isinstance(value, dict):
+        return None, [f"{label}: {operation} returned"
+                      f" {type(value).__name__} where dict was expected"]
+    if "pull_request" in value or value.get("number") != number:
+        return None, []
+    spelled = {**value, "state": str(value.get("state") or "").upper()}
+    return {name: spelled.get(name) for name in fields.split(",")}, []
+
+
+def read_work_order_issues(numbers, fields, run, label,
+                           slug="{owner}/{repo}"):
+    """GhResult(listing, problems, truncated): every issue carrying a
+    `wo:` label, plus each of `numbers` (the issues breakdown rows
+    mirror) that carries none — exactly the entries the reconcile sweep,
+    the gate digest and the rejection miner read from what used to be
+    one whole-tracker listing, which went red each time the tracker
+    outgrew its window.
+
+    Three reads. The repo's live labels, so a `wo:` label outside the
+    taxonomy is still searched for (an issue can carry only a label the
+    repo has). One search over all of them (GitHub reads comma-separated
+    label values as OR). Then each mirrored number the search did not
+    return, by number: a mirrored issue that lost its last `wo:` label
+    is still one the readers compare. listing is None when any read is
+    unusable or a by-number read fails — a missing mirrored issue is a
+    finding to reconcile, so a read that may have dropped one must not
+    look complete. A full window on either listing read flips
+    `truncated` and is the caller's to word, as gh_read's always is."""
+    labels = gh_read(["label", "list", "--json", "name"], "gh label list",
+                     label, run, window=SEARCH_WINDOW)
+    if labels.value is None:
+        return labels
+    lifecycle = sorted({name for name in label_names(labels.value)
+                        if name.startswith(LIFECYCLE_PREFIX)})
+    listing, problems = [], list(labels.problems)
+    truncated = labels.truncated
+    if lifecycle:
+        query = "label:" + ",".join(f'"{name}"' for name in lifecycle)
+        read = gh_read(["issue", "list", "--state", "all", "--search",
+                        query, "--json", fields], "gh issue list", label,
+                       run, window=SEARCH_WINDOW)
+        if read.value is None:
+            return GhResult(None, problems + read.problems, False)
+        listing, truncated = list(read.value), truncated or read.truncated
+        problems += read.problems
+    listed = {entry.get("number") for entry in listing
+              if isinstance(entry, dict)}
+    for number in sorted(set(numbers) - listed):
+        entry, failed = _issue_by_number(number, fields, run, label, slug)
+        if failed:
+            return GhResult(None, problems + failed, False)
+        if entry is not None:
+            listing.append(entry)
+    return GhResult(listing, problems, truncated)
+
+
 GateIssues = namedtuple("GateIssues",
                         "listing truncated mirrored events problems")
 
 
-def read_gate_issues(mirror, run, label, window):
-    """GateIssues for a gate reader's startup: the issue listing through
-    cli.gh_read, then read_timelines for the issues the dispatch plane
-    mirrors (`mirror`, knowledge_plane.mirror_map). An unusable listing
-    reads no timelines and answers listing None. A full window is the
-    caller's to word (`truncated`). The gate digest and the rejection
-    miner share it (two copies until the 2026-10-25 consolidation)."""
-    read = gh_read(list(ISSUE_LIST_ARGS), "gh issue list", label=label,
-                   run=run, window=window)
+def read_gate_issues(mirror, run, label):
+    """GateIssues for a gate reader's startup: read_work_order_issues
+    for the issues the dispatch plane mirrors (`mirror`,
+    knowledge_plane.mirror_map), then read_timelines for those it found.
+    An unusable listing reads no timelines and answers listing None. A
+    full window is the caller's to word (`truncated`). The gate digest
+    and the rejection miner share it (two copies until the 2026-10-25
+    consolidation)."""
+    read = read_work_order_issues(mirror, ISSUE_FIELDS, run, label)
     if read.value is None:
         return GateIssues(None, read.truncated, [], {}, list(read.problems))
     mirrored = sorted(entry["number"] for entry in read.value

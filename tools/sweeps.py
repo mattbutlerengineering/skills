@@ -61,7 +61,9 @@ import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
 from cli import gh_read, report
-from knowledge_plane import WO_TOKEN, breakdown_files, repo_root, sanitize
+from human_gates import read_work_order_issues
+from knowledge_plane import (WO_TOKEN, breakdown_files, breakdown_rows,
+                             repo_root, sanitize)
 from plane_drift import reconcile_drift
 from cli import gh_runner
 
@@ -241,17 +243,21 @@ def reconcile_intake(drift):
         labels=(source, work_type))
 
 
-def live_issues(run=gh_runner):
+def live_issues(mirrored, run=gh_runner):
     """(the issue listing, problems), or (None, problems) when it cannot be
     trusted — the caller must then report nothing.
+
+    Not the whole tracker, which outgrew each window it was given:
+    reconcile_drift reads only issues a row mirrors (`mirrored`) and
+    issues carrying a wo: label, so that is all this lists
+    (human_gates.read_work_order_issues).
 
     A truncated window ABORTS here rather than warning, unlike the dedupe
     listing in known_keys: past the window an issue is simply absent, and
     absence is exactly what two of the drift checks read as a finding. A
     windowed reconcile would file a report full of invented drift."""
-    read = gh_read(["issue", "list", "--state", "all", "--json",
-                    "number,state,labels"], "gh issue list",
-                   label="sweeps", run=run, window=LIST_WINDOW)
+    read = read_work_order_issues(mirrored, "number,state,labels", run,
+                                  "sweeps")
     if read.value is None or read.truncated:
         return None, read.problems
     return read.value, []
@@ -260,9 +266,6 @@ def live_issues(run=gh_runner):
 def reconcile(root, run=gh_runner):
     """The reconcile sweep (ADR-0032): the knowledge plane's rows against
     the dispatch plane's live labels, as one intake plan."""
-    issues, problems = live_issues(run)
-    if issues is None:
-        return [], problems
     unread = []
     rows = [(str(path.relative_to(root)), lines)
             for path, lines in breakdown_files(root, unread)]
@@ -270,6 +273,11 @@ def reconcile(root, run=gh_runner):
         # A dropped breakdown makes its mirrors look rowless: refuse the
         # partial view rather than file drift that is not there.
         return [], unread
+    mirrored = {row["issue"] for _, lines in rows
+                for row in breakdown_rows(lines) if row["issue"] is not None}
+    issues, problems = live_issues(mirrored, run)
+    if issues is None:
+        return [], problems
     drift, problems = reconcile_drift(rows, issues)
     intake = reconcile_intake(drift)
     return ([intake] if intake else []), problems

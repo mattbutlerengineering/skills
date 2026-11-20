@@ -64,13 +64,15 @@ from knowledge_plane import CLOSES_TOKEN, mirror_map, repo_root, sanitize
 MARKER = "<!-- factory-toolsmith-queue -->"
 QUEUE_TITLE = "Toolsmith queue — mined rejections"
 
-# How far back the two listings can see. cli.gh_read owns the window —
+# How far back the PR listing can see. cli.gh_read owns the window —
 # the limit it sends gh and the truncation it reports are the same
 # number, so the two can no longer drift apart. Matches the sibling
 # gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) — bumped
 # with the rest once the repo passed 1000 issues of all states
 # (2026-11-18); the weekly toolsmith mine had already started under-
-# reading (issue #294's TRUNCATED note).
+# reading (issue #294's TRUNCATED note). The issue side no longer reads
+# the whole tracker: read_gate_issues reads only the work-order issues
+# (human_gates.read_work_order_issues).
 LIST_WINDOW = 2000
 PR_ARGS = ("pr", "list", "--state", "all", "--json",
            "number,state,body,reviews")
@@ -278,7 +280,7 @@ def run_mine(root, run=gh_runner, clock=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
-    issues = read_gate_issues(mirror, run, "rm", window=LIST_WINDOW)
+    issues = read_gate_issues(mirror, run, "rm")
     if issues.listing is None:
         return {}, issues.problems
     # A failed timeline read is a problem, never a silently thinner

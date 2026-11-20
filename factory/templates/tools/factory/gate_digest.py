@@ -115,13 +115,13 @@ def compose_digest(queues, as_of, listing_truncated):
     return "\n".join(lines) + "\n"
 
 
-# How far back the issue listing can see. cli.gh_read owns the window —
-# the limit it sends gh and the truncation it reports are the same
-# number, so the two can no longer drift apart. Matches the sibling
-# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set) — bumped
-# with the rest once the repo passed 1000 issues of all states
-# (2026-11-18); the daily digest and its gate-latency capture were
-# failing on main (run 117, 118).
+# How far back the pinned-issue lookup can see. cli.gh_read owns the
+# window — the limit it sends gh and the truncation it reports are the
+# same number, so the two can no longer drift apart. Matches the sibling
+# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set). The gate
+# issue listing no longer reads the whole tracker under it: it went red
+# at 500 and again at 1000 (runs 117, 118), and read_gate_issues now
+# reads only the work-order issues (human_gates.read_work_order_issues).
 LIST_WINDOW = 2000
 
 
@@ -188,7 +188,7 @@ def run_daily(root, run=gh_runner, clock=None):
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()
     mirror = mirror_map(root)
-    issues = read_gate_issues(mirror, run, "gd", window=LIST_WINDOW)
+    issues = read_gate_issues(mirror, run, "gd")
     if issues.listing is None:
         return {"changed": "false"}, issues.problems
     # A failed timeline read is a problem, never a lost queue item: the

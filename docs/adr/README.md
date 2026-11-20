@@ -153,3 +153,4 @@ the canonical vocabulary.
 | [0130](0130-every-driver-claims-a-ready-issue-through-the-queues-claim-step.md) | Every driver claims a ready issue through the queue's claim step | provisional |
 | [0131](0131-the-repos-python-tools-live-in-tools.md) | The repo's Python tools live in tools/, not at the root | provisional |
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
+| [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
