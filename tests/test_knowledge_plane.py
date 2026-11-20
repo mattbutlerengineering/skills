@@ -950,3 +950,19 @@ class TestGuardedAdrRead(unittest.TestCase):
                         "docs/features/cafe/prd.md",
                         "docs/features/cafe/architecture.md",
                         "docs/adr/README.md")])
+
+
+class TestWorkOrdersReportsAnUnreadableBreakdown(unittest.TestCase):
+    """work_orders' default walk dropped a non-UTF-8 breakdown.md with no
+    problem, so a lookup missed its rows and said nothing."""
+
+    def test_the_unreadable_breakdown_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "docs" / "features" / "bad"
+            run.mkdir(parents=True)
+            (run / "breakdown.md").write_bytes(b"- [ ] **WO-0001** x \xff\n")
+            index, problems = knowledge_plane.work_orders(tmp)
+            self.assertEqual(index["wo"], {})
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "cannot read docs/features/bad/breakdown.md: "), problems)

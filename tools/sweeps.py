@@ -263,8 +263,13 @@ def reconcile(root, run=gh_runner):
     issues, problems = live_issues(run)
     if issues is None:
         return [], problems
+    unread = []
     rows = [(str(path.relative_to(root)), lines)
-            for path, lines in breakdown_files(root)]
+            for path, lines in breakdown_files(root, unread)]
+    if unread:
+        # A dropped breakdown makes its mirrors look rowless: refuse the
+        # partial view rather than file drift that is not there.
+        return [], unread
     drift, problems = reconcile_drift(rows, issues)
     intake = reconcile_intake(drift)
     return ([intake] if intake else []), problems

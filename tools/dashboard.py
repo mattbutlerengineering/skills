@@ -391,7 +391,8 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                 state["queues"] = _queues(slug, listing, mirror, run,
                                           now, state["problems"])
                 rows = [(str(path.relative_to(root)), lines)
-                        for path, lines in breakdown_files(root)]
+                        for path, lines in breakdown_files(
+                            root, state["problems"])]
                 # absent_is_drift=False: this listing is windowed and
                 # renders on when truncated, so a mirror it never saw
                 # says nothing. sweeps aborts instead, and claims True.

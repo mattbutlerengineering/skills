@@ -819,6 +819,22 @@ class TestReconcileSweep(unittest.TestCase):
                 "--json", "number,state,labels",
                 "--limit", str(sweeps.LIST_WINDOW)]])
 
+    def test_an_unreadable_breakdown_aborts_rather_than_filing_drift(self):
+        """a dropped breakdown would make its mirrors look rowless and
+        file false drift; the sweep refuses a partial view instead."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            bad = tree.root / "docs" / "features" / "bad"
+            bad.mkdir(parents=True)
+            (bad / "breakdown.md").write_bytes(b"- [ ] **WO-0005** y \xff\n")
+            runner = gh(issues=[issue(109, "CLOSED", ["wo:merged"]),
+                                issue(110, "OPEN", ["wo:ready-for-agent"])])
+            intakes, problems = sweeps.reconcile(tree.root, run=runner)
+            self.assertEqual(intakes, [])
+            self.assertEqual(len(problems), 1)
+            self.assertTrue(problems[0].startswith(
+                "cannot read docs/features/bad/breakdown.md: "), problems)
+
     def test_drift_becomes_one_plan_naming_the_breakdown_path(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.tree(tmp)

@@ -397,6 +397,17 @@ class TestGitFailures(unittest.TestCase):
 ALLOWED_VERBS = {"for-each-ref", "log", "show", "rev-parse", "status"}
 
 
+class TestUnreadableBreakdown(HistoryCase):
+    def test_a_non_utf8_breakdown_is_a_problem_not_a_silent_drop(self):
+        self.repo.commit("docs(demo): decompose — plan", **{BD: PLAN})
+        bad = self.repo.root / OTHER / "breakdown.md"
+        bad.parent.mkdir(parents=True, exist_ok=True)
+        bad.write_bytes(b"- [ ] **S1** x \xff\n")
+        result, problems = decompose_signals.measure(self.repo.root, self.run)
+        self.assertTrue(any(p.startswith(f"cannot read {OTHER}/breakdown.md")
+                            for p in problems), problems)
+
+
 class TestNoNetwork(HistoryCase):
     def test_only_local_read_only_verbs_are_run(self):
         real, verbs = self.run, []
