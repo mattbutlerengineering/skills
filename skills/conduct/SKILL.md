@@ -101,13 +101,22 @@ the next `next`, each runner found dead gets a run row and a spend row
 at its full ceiling (`runner-lost:cost-at-ceiling`, fail-closed like a
 wall-clock kill) on its item branch, then a stall ask; `retry` continues
 from what the Worker committed. Resuming a batch is running `next`
-again. If there is no batch yet, go to step 2. A `cd:` problem is a
-refusal; report it and stop.
+again — through the batch worktree's copy of the tool
+(`.claude/worktrees/conductor-<batch>/tools/conductor.py`, or its
+`tools/factory/` path in a stamped repo): until `close`, the batch
+ledger exists only in that worktree, so `next` run from the main
+checkout reports `no batch ledger at …` for a live batch. If there is
+no batch yet (and no such worktree), go to step 2. Any other `cd:`
+problem is a refusal; report it and stop.
 
 ### 2. Open a batch from the issues the Owner names
 
-    python3 tools/conductor.py plan <#N>...
-    python3 tools/conductor.py open <batch> <#N>...
+    python3 tools/conductor.py plan '#N'...
+    python3 tools/conductor.py open <batch> '#N'...
+
+Quote every item: the tool requires the literal `#`, and an unquoted
+word starting with `#` is a shell comment, so `plan #12` reaches the
+tool as bare `plan` and fails with usage.
 
 The plan reads each step's band from the charter stubs in
 `factory/agents/`. A stamped repo has none unless it authored its own;
@@ -199,20 +208,28 @@ with `conductor.py ask`:
   and it needs its own ask).
 - **Clarify asks**, when a Worker stopped on a question it could not
   answer. A Worker cannot ask mid-run, so its question reaches the Owner
-  only through you.
+  only through you. The tool does not pass the answer to any later
+  Worker brief: once the Owner answers, write the answer into the item's
+  issue or run artifact yourself before the retry, or the next run starts
+  without it.
+
+The `--kind` for both of your own merge asks and train asks is `merge`;
+for a clarify ask it is `clarify`.
 
 ### 4. Launch Workers in the background, up to the cap
 
 For each `ready` entry whose step is not `merge`:
 
-    python3 tools/conductor.py run <batch> <#N> <step>
+    python3 tools/conductor.py run <batch> '#N' <step>
 
 Launch each in the background with the harness's background-command
 mechanism, never in the foreground, and never more than `ready` lists:
 `next` has already applied `wip_cap` and holds every step while the
 spend ask is unanswered or an item has an unanswered ask. When a runner
-exits, read its one-line result and the Worker's output it names, then
-run `next`. A failed run already queued its own stall ask; do not
+exits, read its one-line result (`cd: run <run_id> <outcome>`) and the
+Worker's saved result at `docs/factory/batches/<batch>/runs/<run_id>.json`
+in the batch worktree — absent when the run timed out or never started —
+then run `next`. A failed run already queued its own stall ask; do not
 retry it. A stall whose cause is `delivery-failed` — the Worker
 finished; its spend commit, push or PR did not — is never relaunched:
 on a `retry` answer, `next` redoes that bookkeeping itself and resumes
@@ -250,7 +267,7 @@ profile that exports a token puts it back in the Worker's shell.
 
 For each `ready` entry whose step is `merge`, one at a time:
 
-    python3 tools/conductor.py merge <batch> <#N>
+    python3 tools/conductor.py merge <batch> '#N'
 
 The tool refuses unless the item is reviewed with a pass from a reviewer
 distinct from its authors and an answer, or a standing consent the

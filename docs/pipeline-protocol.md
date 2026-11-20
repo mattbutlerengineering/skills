@@ -113,13 +113,16 @@ which artifacts exist in the run directory:
 | UX Design | `ux.md` | file exists, **or** stage skipped (see below) |
 | Architect | `architecture.md` | file exists |
 | Decompose | `breakdown.md` | file exists |
-| Implement | code | every checkbox in `breakdown.md` is checked (a breakdown with no checkboxes is not yet implemented) |
+| Implement | code | every checkbox in `breakdown.md` is checked (a breakdown with no checkboxes is not yet implemented) (a box inside a fenced code block, or one not followed by whitespace, is not a work item) |
 | Verify | `verification.md` | file exists |
 | Review | `review.md` | file exists |
 | Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (see The Ship outcome below) |
-| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
+| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; a retro with neither field predates the line and is complete too; see The Operate population below) |
 
-**Next stage = the first stage in order that is not complete.**
+**Next stage = the first stage in order that is not complete.** An
+existing `retro.md` settles it first: populated (or predating the line)
+means the run is complete, unpopulated means Operate, whatever earlier
+stage is missing (ADR-0102, The Operate population below).
 
 ### Commit at the stage boundary
 
@@ -202,11 +205,11 @@ for a maintenance run is:
 | Capture | `defect.md` | file exists |
 | Architect | `architecture.md` | file exists — only when `re-entry: architect`, else skipped |
 | Decompose | `breakdown.md` | file exists — only when `re-entry: architect`, else skipped |
-| Implement | code | every checkbox in the run's breakdown is checked |
+| Implement | code | every checkbox in the run's breakdown is checked (a box inside a fenced code block, or one not followed by whitespace, is not a work item) |
 | Verify | `verification.md` | file exists — **never skippable**; the regression test is the point |
 | Review | `review.md` | file exists |
 | Ship | `release.md` | file exists and its `outcome:` is one the stage reached — `prepared` leaves Ship pending (The Ship outcome, above) |
-| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; see The Operate population below) |
+| Operate | `retro.md` | file exists and carries its population line — `users-observed:` with `signal-source:` (run complete; a retro with neither field predates the line and is complete too; see The Operate population below) |
 
 **Where the breakdown lives:** with `re-entry: implement`, the breakdown is
 inline in `defect.md` as checkboxes — no separate `breakdown.md`. With
@@ -224,7 +227,9 @@ completes the stage; a placeholder, a bad count, or either field
 without the other leaves Operate pending, and `next` routes back to
 `operate` to count. A `retro.md` with neither field predates the line
 and still counts as complete, as every retro written before ADR-0102
-does.
+does. A retro that exists settles orientation on its own: populated or
+predating the line, the run is complete; unpopulated, the next stage is
+Operate — whatever earlier stage is missing (ADR-0102 decision 2).
 
 `0` is a valid count, and the honest one for most runs on the day they
 close. It changes the retro's verdict vocabulary, not its validity:
