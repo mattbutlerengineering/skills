@@ -457,6 +457,82 @@ def numbered_adr_skips(copies, target):
     return skips
 
 
+ADR_INDEX = Path("docs/adr/README.md")
+
+
+def adr_seed_skips(copies, target, index_stays):
+    """{dest: why it is skipped} for each seed ADR stamp/update will not
+    land. A number a different target ADR holds is numbered_adr_skips'.
+    When the target's own docs/adr/README.md stands (index_stays: kept by
+    --keep-existing, or by update), an absent seed that index has no row
+    for is skipped too: landing it would be an ADR detector D finds
+    unindexed."""
+    skips = {dest: f"its number is already {holder} in this repo"
+             for dest, holder in numbered_adr_skips(copies, target).items()}
+    index = target / ADR_INDEX
+    if not (index_stays and index.is_file()):
+        return skips
+    indexed = {match.group("num") for match in (
+        gates.ADR_INDEX_ROW.match(line) for line in index.read_text(
+            encoding="utf-8", errors="replace").splitlines()) if match}
+    for _, dest in copies:
+        match = (_ADR_NUMBER.match(dest.name)
+                 if dest.parent.as_posix() == "docs/adr" else None)
+        if (match and dest not in skips and not (target / dest).exists()
+                and match.group(1) not in indexed):
+            skips[dest] = (f"the kept {ADR_INDEX.as_posix()} has no index"
+                           f" row for ADR-{match.group(1)}")
+    return skips
+
+
+def seed_skips(source, target, tools_only=False, index_stays=True):
+    """{dest: why} — adr_seed_skips over the payload stamp/update would
+    copy into target, for main to report before it runs them."""
+    copies, problems = payload_copies(Path(source), Path(target), tools_only)
+    return {} if problems else {
+        dest.as_posix(): why for dest, why in
+        adr_seed_skips(copies, Path(target), index_stays).items()}
+
+
+def own_adrs(target):
+    """gates.adr_record for every ADR the target holds, read through the
+    parse detector D runs on (gates.parse_run), before any seed lands."""
+    return [gates.adr_record(path, lines)
+            for path, lines in gates.parse_run(target)["adr_files"]]
+
+
+def seed_index(content, records):
+    """The seed docs/adr/README.md for a target that already has ADRs of
+    its own (`records`, own_adrs read before any seed lands): each seed
+    row whose number the target holds gives way to a row for the target's
+    file, and every target ADR gets a row, so the index detector D reads
+    names what stands and no skipped seed."""
+    if not records:
+        return content
+    lines = content.decode("utf-8").splitlines(keepends=True)
+    at = [i for i, line in enumerate(lines)
+          if gates.ADR_INDEX_ROW.match(line)]
+    held = {}
+    for record in records:
+        title = (record["title"] or record["path"].stem).replace("|", "/")
+        held.setdefault(record["number"], (
+            f"| [{record['number']}]({record['path'].name}) | {title}"
+            f" | {record['status'] or ''} |\n"))
+    rows = {gates.ADR_INDEX_ROW.match(lines[i]).group("num"): lines[i]
+            for i in at}
+    merged = [row for _, row in sorted({**rows, **held}.items())]
+    start = at[0] if at else len(lines)
+    rest = [line for i, line in enumerate(lines) if i not in at]
+    return "".join(rest[:start] + merged + rest[start:]).encode("utf-8")
+
+
+def _content(src, dest, records):
+    """The bytes a stamp/update writes at dest: the payload's, with the
+    ADR index fitted to the target's own ADRs (seed_index)."""
+    content = payload_bytes(src)
+    return seed_index(content, records) if dest == ADR_INDEX else content
+
+
 def _stamp(source, target, keepable, tools_only=False):
     """(kept, problems): stamp every copy whose destination is absent.
     An existing destination is kept when keepable(dest) says so and is a
@@ -465,18 +541,20 @@ def _stamp(source, target, keepable, tools_only=False):
     copies, problems = payload_copies(source, target, tools_only)
     if problems:
         return [], problems
-    skips = numbered_adr_skips(copies, target)
+    skips = adr_seed_skips(copies, target,
+                           keepable(ADR_INDEX) and not tools_only)
     copies = [(src, dest) for src, dest in copies if dest not in skips]
     existing = [dest for _, dest in copies if (target / dest).exists()]
     clashes = [f"factory-init: target already has {dest.as_posix()}"
                for dest in existing if not keepable(dest)]
     if clashes:
         return [], clashes
+    records = own_adrs(target)
     for src, dest in copies:
         if dest in existing:
             continue
         (target / dest).parent.mkdir(parents=True, exist_ok=True)
-        (target / dest).write_bytes(payload_bytes(src))
+        (target / dest).write_bytes(_content(src, dest, records))
     return sorted(dest.as_posix() for dest in existing), []
 
 
@@ -678,7 +756,10 @@ def update(source, target, tools_only=False):
     the mirror is already the documented remedy. Everything else is created
     only when absent — a seed that does not exist yet is safe to land, one
     that does is the repo's — and any kept file that differs from the
-    payload is reported so the user can reconcile it deliberately.
+    payload is reported so the user can reconcile it deliberately. A
+    seed ADR the repo's own docs/adr/README.md does not index is skipped
+    (adr_seed_skips) — one the repo deleted along with its row, or one a
+    release added — and main reports it.
 
     A payload file the release dropped is deleted from the target
     (retired_files); main reports it.
@@ -698,7 +779,8 @@ def update(source, target, tools_only=False):
         return [], [], problems
     for rel in retired_files(source, target):
         (target / rel).unlink()
-    skips = numbered_adr_skips(copies, target)
+    skips = adr_seed_skips(copies, target, not tools_only)
+    records = own_adrs(target)
     written, kept = [], []
     for src, dest in copies:
         if dest in skips:
@@ -709,7 +791,7 @@ def update(source, target, tools_only=False):
                 kept.append(dest.as_posix())
             continue
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(payload_bytes(src))
+        path.write_bytes(_content(src, dest, records))
         written.append(dest.as_posix())
     return (written, sorted(kept),
             [] if tools_only else missing_make_targets(target))
@@ -727,15 +809,12 @@ def _target(argv, command):
     return Path(rest[0]), tools_only
 
 
-def _report_adr_skips(source, target):
-    """Say which seed ADRs stamp/update will not land because the target's
-    own ADR holds the number (numbered_adr_skips)."""
-    copies, problems = payload_copies(source, target)
-    if problems:
-        return
-    for dest, holder in sorted(numbered_adr_skips(copies, target).items()):
-        print(f"factory-init: skipped {dest.as_posix()} (its number is"
-              f" already {holder} in this repo)")
+def _report_adr_skips(source, target, tools_only, index_stays):
+    """Say which seed ADRs stamp/update will not land, and why
+    (adr_seed_skips)."""
+    for dest, why in sorted(seed_skips(source, target, tools_only,
+                                       index_stays).items()):
+        print(f"factory-init: skipped {dest} ({why})")
 
 
 def main(argv):
@@ -746,9 +825,13 @@ def main(argv):
     stamping, updating = _target(argv, "stamp"), _target(argv, "update")
     keeping = (Path(argv[2]) if argv[:2] == ["stamp", "--keep-existing"]
                and len(argv) == 3 else None)
-    tgt = keeping or (stamping or updating or (None,))[0]
-    if tgt is not None:
-        _report_adr_skips(root, tgt)
+    if keeping:
+        _report_adr_skips(root, keeping, False, True)
+    elif stamping:
+        _report_adr_skips(root, stamping[0], stamping[1], False)
+    elif updating and not update_kind(*updating)[1]:
+        _report_adr_skips(root, updating[0], update_kind(*updating)[0],
+                          True)
     if argv == ["update-manifest"]:
         problems = update_manifest(root)
     elif stamping:
