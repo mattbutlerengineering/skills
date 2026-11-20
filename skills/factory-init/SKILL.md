@@ -36,7 +36,17 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
    `.github/workflows/`, the `factory/` mirror, the `Makefile`) and never
    overwrites. A kept file is the repo's version, not the factory's: a
    kept `labels.json` needs the labels detector J names, and a kept
-   `CODEOWNERS` needs the factory's gate paths added by hand.
+   `CODEOWNERS` needs the factory's gate paths added by hand. A kept
+   `docs/adr/README.md` decides which seed ADRs land: a seed it has no
+   index row for is skipped, as is a seed whose number one of the repo's
+   own ADRs already holds, and each prints `factory-init: skipped <path>`
+   with the reason, so detector D never finds a seed it does not index.
+   To take a skipped seed later, copy it from `factory/templates/docs/adr/`
+   and add its row to your index.
+
+   Without a kept index, a target that already has ADRs of its own gets
+   the seed `docs/adr/README.md` with a row for each of them in place of
+   any seed it skipped, so the plain stamp leaves no unindexed ADR either.
 3. What lands in the target — `factory/manifest.json` is the authority;
    the groups are:
    - `factory/` — the pristine mirror (manifest + templates) that the
@@ -45,7 +55,7 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
      the test suite; it is exactly what CI must run.
    - `.github/factory.json` — budgets, routing, WIP cap, monthly cap.
    - `.github/workflows/` — the validator, assembler, design,
-     cost-report, and gate-digest workflows.
+     cost-report, gate-digest, and toolsmith-mine workflows.
    - `.github/labels.json` + `.github/CODEOWNERS` — the label taxonomy
      and the code-owner gate.
    - `tools/factory/` — the detector suite and the tools the workflows
@@ -105,7 +115,10 @@ It splits the payload where detector E does:
   `.github/labels.json`, `.github/CODEOWNERS`, and the `docs/` seeds. A seed
   the repo does not have yet lands; one it has is the repo's. Each kept file
   that differs from the payload is reported so you can reconcile it
-  deliberately.
+  deliberately. A seed ADR the repo's `docs/adr/README.md` has no row for
+  is skipped and reported, as under `--keep-existing`: one the repo deleted
+  together with its row is not recreated, and one a release adds lands only
+  once the index lists it.
 
 It refuses a tree that was never stamped rather than quietly becoming a first
 stamp, and it refuses a `factory/manifest.json` it cannot read rather than

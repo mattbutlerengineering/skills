@@ -1,7 +1,7 @@
 ---
 summary: factory-init stamps CODEOWNERS, the Makefile, factory.json, labels.json, seeded ADRs and design docs outside FACTORY_OWNED; update never refreshes them, and only doctor checks most.
 sources: tools/factory_init.py, tools/factory_config.py, tools/gates.py, skills/doctor/SKILL.md
-verified: 81141d71acd1b524a9c5caeb4061922f6951b900
+verified: 6f0969e94e4bd99efdd280f7cca10ac70d1e836e
 related: manifest-regen
 ---
 
@@ -28,7 +28,11 @@ Consequences an agent gets wrong:
 - **`factory_init.py update` never writes over these files**, whichever
   stamp kind: it refreshes `FACTORY_OWNED` destinations and anything
   absent, and keeps an existing file outside that set that differs from
-  the payload (reported as `kept`). A fix to their templates does not
+  the payload (reported as `kept`). The absent files it skips are seed
+  ADRs (`factory_init.adr_seed_skips`, each reported as `skipped`): one
+  whose number another ADR already holds, and one the repo's own
+  `docs/adr/README.md` has no index row for, so a seed the repo deleted
+  with its row stays deleted. A fix to their templates does not
   reach an already-stamped repo, so `update` succeeding does not mean
   the Makefile or CODEOWNERS is current. On a tools-only target `update`
   refreshes only what its manifest lists and skips the make-target

@@ -59,7 +59,9 @@ the executable payload (`tools/factory/`, `.github/workflows/`, the `factory/`
 mirror, the `Makefile`) and never overwrites. Kept files are yours, so the
 checks in section 4 apply to them as they stand: a kept `labels.json` must
 carry the labels detector J names, and a kept `CODEOWNERS` needs the factory's
-gate paths added by hand.
+gate paths added by hand. A kept `docs/adr/README.md` decides which seed ADRs
+land: one it has no index row for is skipped and reported as
+`factory-init: skipped <path>`, so detector D finds no unindexed seed.
 
 105 files land: the 52-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
