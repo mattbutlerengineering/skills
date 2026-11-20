@@ -36,6 +36,44 @@ def count_claims(text):
     return COUNT_CLAIM.findall(text or "")
 
 
+class TestIndexSummaries(unittest.TestCase):
+    """The index printed each docstring's first physical line, so a dozen
+    summaries stopped mid-phrase ("(PRD-0001;", "every run exactly once")
+    and most repeated their own verb."""
+
+    def lines(self):
+        buffer = io.StringIO()
+        with redirect_stdout(buffer):
+            factory.main(["help"])
+        width = max(len(verb) for verb in factory.VERBS)
+        return {line.split()[0]: line[2 + width + 2:]
+                for line in buffer.getvalue().splitlines()
+                if line.startswith("  ") and line.strip()}
+
+    def test_every_summary_is_a_whole_sentence_within_the_limit(self):
+        lines = self.lines()
+        self.assertEqual(sorted(lines), sorted(factory.VERBS))
+        for verb, line in lines.items():
+            with self.subTest(verb=verb):
+                self.assertLessEqual(len(line), factory.SUMMARY_LIMIT + 1)
+                self.assertTrue(line.endswith((".", "?", "…")), line)
+                self.assertFalse(line.lower().startswith(verb + ":"), line)
+
+    def test_summary_joins_the_wrapped_first_sentence_and_drops_citations(self):
+        doc = ("tool: does a thing across the whole\n"
+               "repo (PRD-0001; ADR-0032), quickly. More text.\n\nBody.")
+        self.assertEqual(factory.summary(doc, ("tool",)),
+                         "Does a thing across the whole repo, quickly.")
+
+    def test_a_long_summary_is_cut_at_its_dash_clause_then_a_word(self):
+        long = "x " * 80
+        self.assertEqual(factory.summary(f"Short head — {long}.", ()),
+                         "Short head.")
+        cut = factory.summary(f"{long}.", ())
+        self.assertTrue(cut.endswith("…"))
+        self.assertLessEqual(len(cut), factory.SUMMARY_LIMIT + 1)
+
+
 class TestTheRouterCountsNothingByHand(unittest.TestCase):
     """The file's whole discipline is that it restates nothing the table
     owns — the verb from the module name, the index line from the
