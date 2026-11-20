@@ -367,19 +367,25 @@ def queue_stall(root, batch, now, item, reason, cause, recommended, why,
     refused unless the item may move to stalled and, given `run_id`, its
     last launch is that run's: a stale runner never writes a stall onto
     an item that stalled, blocked or relaunched in the meantime."""
-    def build(rows):
-        found = item_view(rows, item)
-        if found["unknown"]:
-            return None, [found["unknown"]]
-        problems = transition_problems(rows, item, "stalled", {})
-        if not problems and run_id is not None \
-                and found["last"].get("run_id") != run_id:
-            problems = [f"cd: {item}'s state moved on from run {run_id}"]
-        if problems:
-            return None, problems
-        return stall_rows(rows, now, found["entry"], reason, cause,
-                          recommended, why)
-    return append(root, batch, build)
+    return append(root, batch, lambda rows: guarded_stall(
+        rows, now, item, reason, cause, recommended, why, run_id))
+
+
+def guarded_stall(rows, now, item, reason, cause, recommended, why,
+                  run_id=None):
+    """(stall rows, problems) over `rows`, under queue_stall's refusals.
+    PURE: the runner writes them with its run row (#2160)."""
+    found = item_view(rows, item)
+    if found["unknown"]:
+        return None, [found["unknown"]]
+    problems = transition_problems(rows, item, "stalled", {})
+    if not problems and run_id is not None \
+            and found["last"].get("run_id") != run_id:
+        problems = [f"cd: {item}'s state moved on from run {run_id}"]
+    if problems:
+        return None, problems
+    return stall_rows(rows, now, found["entry"], reason, cause,
+                      recommended, why)
 
 
 OPTION_WORDS = {"retry": "retry", "retry-up": "retry one band up",

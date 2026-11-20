@@ -707,28 +707,55 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     stall = stall or failed
     if stall is None and ctx["briefed"] is not None:
         stall = _left_unchecked(git, branch, ctx["briefed"], ctx["wo"])
-    _, problems = append(root, batch, lambda rows: ({
+    stalled = stall and (stall, _stall_cause(stall, ended, failed))
+    written, problems = _record_run(root, batch, done, ctx, event, stalled, {
         "at": stamp(done), "kind": "run",
         "item": item, "step": step, "charter": policy["charter"],
         "band": band,
         "model": model, "models_reported": reported, "effort": effort,
-        "run_id": run_id, "pid": pid, "outcome": outcome}, []))
-    if problems:
+        "run_id": run_id, "pid": pid, "outcome": outcome})
+    if written is None:
         return None, problems
     if stall is None and step == "review":
         verdict = flow.review_verdict(git, worktree, branch)
         if verdict is None:
-            stall = "review.md carries no verdict: pass|changes line"
+            stall = flow.NO_VERDICT
+            recommended, why = flow.worker_advice(
+                ctx["rows"], entry, step, band, stall, event,
+                "agent-failed")
+            _, problems = flow.queue_stall(root, batch, done, item, stall,
+                                           "agent-failed", recommended,
+                                           why, run_id)
         else:
             _, problems = flow.record_verdict(root, batch, done, item,
                                               verdict, run_id, ctx["head"])
-    if stall is not None:
-        cause = _stall_cause(stall, ended, failed)
-        recommended, why = flow.worker_advice(ctx["rows"], entry, step,
-                                              band, stall, event, cause)
-        _, problems = flow.queue_stall(root, batch, done, item, stall,
-                                       cause, recommended, why, run_id)
     return {"run_id": run_id, "outcome": outcome, "stall": stall}, problems
+
+
+def _record_run(root, batch, done, ctx, event, stalled, run):
+    """(rows written or None, problems): the run's `run` row and, when
+    its own checks decided a stall (`stalled`: (reason, cause)), that
+    stall's rows, under the one lock (#2160; architecture.md, Worker
+    runner step 7). Written apart, a runner that died between them left
+    a completed run that skipped its stall, and `next` advanced it. A
+    stall queue_stall's refusals refuse leaves the run row written and
+    the refusal returned as a problem; None only when nothing was."""
+    refused = []
+
+    def build(rows):
+        if not stalled:
+            return [run], []
+        reason, cause = stalled
+        recommended, why = flow.worker_advice(
+            ctx["rows"], ctx["entry"], run["step"], run["band"], reason,
+            event, cause)
+        rows_out, problems = flow.guarded_stall(
+            rows + [run], done, run["item"], reason, cause, recommended,
+            why, run["run_id"])
+        refused.extend(problems)
+        return [run, *(rows_out or [])], []
+    written, problems = append(root, batch, build)
+    return written, problems or refused
 
 
 def run_cli(root, args, clock, git, gh, harness):
