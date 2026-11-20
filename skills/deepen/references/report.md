@@ -41,8 +41,10 @@ the coverage note.
 - **Title** — names the deepening, imperative: "Collapse the order
   intake pipeline".
 - **Badges** — recommendation strength (`Strong`, `Worth exploring`,
-  `Speculative`) and the dependency category (`in-process`,
-  `local-substitutable`, `ports & adapters`, `mock`).
+  `Speculative`) and the dependency category, named by how its seam is
+  tested: `in-process` (category 1, in-process), `local-substitutable`
+  (2, local-substitutable), `ports & adapters` (3, remote but owned),
+  `mock` (4, true external; [deepening.md](deepening.md)).
 - **Evidence** — monospaced, and it is not decoration: the files and line
   ranges, the number of call sites the deletion test actually walked, and
   the interface as it reads today. A card whose evidence block says

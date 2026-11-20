@@ -12,6 +12,7 @@
 #   ./migration-script.sh                    # Apply migrations
 #   ./migration-script.sh --backup           # Backup first, then apply
 #   ./migration-script.sh --dry-run          # Check status only
+#   ./migration-script.sh --help             # This usage; any other argument exits 2
 #
 # Required environment:
 #   DATABASE_URL - Production database connection string
@@ -28,6 +29,12 @@ NC='\033[0m' # No Color
 BACKUP=false
 DRY_RUN=false
 
+usage() {
+  sed -n '11,18p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# An unknown argument stops the script: a mistyped --dry-run must never
+# fall through to a production deploy.
 for arg in "$@"; do
   case $arg in
     --backup)
@@ -35,6 +42,14 @@ for arg in "$@"; do
       ;;
     --dry-run)
       DRY_RUN=true
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $arg (expected --backup, --dry-run or --help)" >&2
+      exit 2
       ;;
   esac
 done

@@ -181,8 +181,10 @@ subgraph present, verbatim.
 
 Capture caveat: CDP-based screenshot tools can hang on the infinite
 animations. For programmatic screenshots use headless Chrome directly
-(`chrome --headless=new --screenshot=out.png <file-url>`), or call
-`document.getElementById('diagram').pauseAnimations()` first.
+(`chrome --headless=new --screenshot=out.png <file-url>`), or pause the
+animations first: `document.getElementById('diagram').pauseAnimations()`
+for the `.html` target, `document.documentElement.pauseAnimations()` for
+the `.svg` target (its root `<svg>` carries no id).
 
 Done when: for the `.svg` target the check exits 0; it renders standalone
 (and embedded, for svg), loops clean, pauses (html), respects reduced
