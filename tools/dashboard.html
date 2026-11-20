@@ -14,24 +14,27 @@ h2 { font-size: .95rem; text-transform: uppercase; letter-spacing: .05em;
      border-bottom: 1px solid #ccc; padding-bottom: .25rem;
      margin-top: 1.5rem; }
 ul { list-style: none; padding-left: 0; }
-li { margin: .3rem 0; }
+li { margin: .3rem 0; overflow-wrap: anywhere; }
 .cards { display: flex; flex-wrap: wrap; gap: 1rem; }
 .card { border: 1px solid #ccc; border-radius: 4px; padding: .5rem 1rem;
         min-width: 16rem; }
 .card h3 { margin: .2rem 0 .5rem; font-size: .9rem; }
-.repo { color: #777; font-size: .85em; }
-.empty { color: #777; font-style: italic; }
+.repo { color: #666; font-size: .85em; }
+.empty { color: #666; font-style: italic; }
 .error { color: #b00020; }
-.claimed { color: #aaa; }
+.claimed { color: #767676; }
 .dirty { color: #8a6d00; font-size: .85em; }
 li[draggable] { cursor: grab; }
 button { font: inherit; font-size: .8rem; }
 table { border-collapse: collapse; font-size: .9rem; }
 th, td { text-align: left; padding: .2rem .8rem .2rem 0; }
-th { color: #777; font-weight: 600; }
+td { overflow-wrap: anywhere; }
+th { color: #666; font-weight: 600; }
 h3 { margin: .8rem 0 .3rem; font-size: .9rem; }
 a { color: #0b5cad; text-decoration: none; }
 a:hover { text-decoration: underline; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden;
+           clip: rect(0 0 0 0); white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -41,6 +44,7 @@ a:hover { text-decoration: underline; }
     <span id="as-of"></span></div>
 </header>
 <p id="page-error" class="error"></p>
+<p id="save-status" class="sr-only" role="status"></p>
 <section id="needs-you"></section>
 <section><h2>Runs</h2><div id="runs" class="cards"></div></section>
 <section id="backlog"></section>
@@ -56,6 +60,17 @@ a:hover { text-decoration: underline; }
 const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
 }[c]));
+
+// What the all-clear lines may claim: nothing while a repo is still
+// being gathered, and only with a warning when one could not be read —
+// "Nothing waits on you" over unread repos is a false all-clear.
+const gatherNote = (status) => {
+  const {pending = 0, failed = 0} = status || {};
+  if (pending) return {empty: `<p class="empty">Checking…</p>`, warn: ""};
+  return {empty: null, warn: failed
+    ? `<p class="error">${failed} repo(s) could not be read; this may be` +
+      ` incomplete.</p>` : ""};
+};
 
 // Mirrors gate_digest._format_wait so both surfaces age the same way.
 const fmtWait = (seconds) => {
@@ -78,7 +93,7 @@ const issueLinks = (text, remote) => (remote
       : esc(piece))).join("")
   : esc(text));
 
-const renderNeedsYou = (states) => {
+const renderNeedsYou = (states, status) => {
   const items = [];
   for (const {name, payload} of states) {
     const repoTag = `<span class="repo">[${esc(name)}]</span>`;
@@ -98,9 +113,10 @@ const renderNeedsYou = (states) => {
         ` ${repoTag}</li>`);
     }
   }
+  const note = gatherNote(status);
   const body = items.length ? `<ul>${items.join("")}</ul>`
-    : `<p class="empty">Nothing waits on you.</p>`;
-  return `<h2>Needs you (${items.length})</h2>${body}`;
+    : note.empty || `<p class="empty">Nothing waits on you.</p>`;
+  return `<h2>Needs you (${items.length})</h2>${note.warn}${body}`;
 };
 
 const renderRepoCard = (name, payload, error) => {
@@ -209,13 +225,16 @@ const renderOutput = (states) => {
     const body = rows
       ? `<table><tr><th>WO</th><th>title</th><th>size</th>` +
         `<th>state</th><th>PR</th><th>spend</th></tr>${rows}</table>`
-      : `<p class="empty">No factory stamped in this repo.</p>`;
+      : (payload.problems || []).length
+        ? `<p class="empty">Factory output unavailable — see the` +
+          ` problems on this repo's card.</p>`
+        : `<p class="empty">No factory output to show.</p>`;
     return `<h3>${esc(name)}</h3>${body}`;
   }).join("");
   return `<h2>Factory output</h2>${sections}`;
 };
 
-const renderMetrics = (states) => {
+const renderMetrics = (states, status) => {
   const present = states.filter((s) => s.payload.metrics);
   const rows = states.map(({name, payload}) => {
     const m = payload.metrics;
@@ -245,9 +264,9 @@ const renderMetrics = (states) => {
   const headline = present.length
     ? `<p>month spend ${esc(fmtMoney(spend))}` +
       `${caps ? esc(` / ${fmtMoney(caps)} caps`) : ""}</p>`
-    : `<p class="empty">No runs recorded yet.</p>`;
+    : gatherNote(status).empty || `<p class="empty">No runs recorded yet.</p>`;
   const list = present.length ? `<ul>${rows}</ul>` : "";
-  return `<h2>Metrics</h2>${headline}${list}`;
+  return `<h2>Metrics</h2>${gatherNote(status).warn}${headline}${list}`;
 };
 
 const renderStatus = (repos, answers) => repos.map((r) => {
@@ -270,8 +289,12 @@ const paint = () => {
     .filter((r) => state.answers[r.i] === "ok")
     .map((r) => ({i: r.i, name: r.name,
                   payload: state.payloads[r.i]}));
+  const status = {
+    pending: state.repos.filter((r) => !state.answers[r.i]).length,
+    failed: state.repos.filter((r) => state.answers[r.i] === "error")
+      .length};
   document.getElementById("needs-you").innerHTML =
-    renderNeedsYou(answered);
+    renderNeedsYou(answered, status);
   document.getElementById("runs").innerHTML = state.repos.map((r) =>
     renderRepoCard(r.name, state.payloads[r.i],
                    state.errors[r.i])).join("");
@@ -280,7 +303,7 @@ const paint = () => {
     state.saving);
   document.getElementById("output").innerHTML = renderOutput(answered);
   document.getElementById("metrics").innerHTML =
-    renderMetrics(answered);
+    renderMetrics(answered, status);
 };
 
 const gatherRepo = async (r) => {
@@ -304,10 +327,15 @@ const gatherRepo = async (r) => {
   paint();
 };
 
+const announce = (text) => {
+  document.getElementById("save-status").textContent = text;
+};
+
 const saveOrder = async (i) => {
   const backlog = (state.payloads[i] || {}).backlog;
   if (!backlog || state.saving[i]) return;
   state.saving[i] = true;
+  announce("Saving order…");
   paint();
   try {
     const res = await fetch("/api/backlog-order", {
@@ -326,11 +354,21 @@ const saveOrder = async (i) => {
     const repo = state.repos.find((r) => r.i === i);
     await gatherRepo(repo);
     if (state.answers[i] === "ok") delete state.saveErrors[i];
+    announce("Order saved");
   } catch (err) {
     state.saveErrors[i] = String(err.message || err);
+    announce(`Order not saved: ${state.saveErrors[i]}`);
   } finally {
     delete state.saving[i];
     paint();
+    // The repaint replaced the button that had focus; keep the keyboard
+    // user where they were rather than dropping them to the body.
+    const heading = document.querySelector(
+      `#backlog button[data-save="${i}"]`)?.closest("h3");
+    if (heading) {
+      heading.setAttribute("tabindex", "-1");
+      heading.focus();
+    }
   }
 };
 
@@ -401,8 +439,8 @@ const load = async () => {
   state.repos = listing.repos || [];
   if (!state.repos.length) {
     document.getElementById("page-error").textContent =
-      "No repos configured — add repo paths to " +
-      "~/.process-dashboard.json";
+      "No repos configured — add repo paths to the config this console" +
+      " reads (--config PATH, default ~/.process-dashboard.json)";
     return;
   }
   paint();
