@@ -297,7 +297,9 @@ def cited_work_order(root, body):
     cited = list(dict.fromkeys(WO_TOKEN.findall(body)))
     if not cited:
         return None, ["V: PR body cites no work-order id"]
-    closes = sorted({int(n) for n in CLOSES_TOKEN.findall(body)})
+    # GitHub acts on no closing keyword in a fence or a quote, so neither
+    # does the citation: a fenced template's Closes line closes nothing.
+    closes = sorted({int(n) for n in CLOSES_TOKEN.findall(_unquoted(body))})
     if not closes:
         return None, ["V: PR body has no Closes #N link, so the work order it"
                       " implements cannot be told from the ones it only"
@@ -379,9 +381,10 @@ def run_review(root, findings, status, env, run=gh_runner):
     return post_review(pr.get("number"), body, run)
 
 
-def _flip(number, label, lifecycle, run):
+def _flip(number, label, lifecycle, run, only_from=None):
     """(labels removed, problems): make `label` the only lifecycle label
-    on issue `number`. An already-correct issue is a no-op ([], [])."""
+    on issue `number`. An already-correct issue is a no-op ([], []), and
+    so is one that does not carry `only_from` when it is given."""
     read = gh_read(["issue", "view", str(number), "--json", "labels"],
                    f"gh issue view {number}", label="V", run=run,
                    expect=dict)
@@ -391,6 +394,8 @@ def _flip(number, label, lifecycle, run):
     # compared, added, or removed by name, and passing None through
     # would put a non-name into the lifecycle comparison below.
     names = label_names(read.value)
+    if only_from is not None and only_from not in names:
+        return [], []
     add, remove = transition(names, lifecycle, label)
     if not add and not remove:
         return [], []
@@ -424,10 +429,12 @@ def _unquoted(body):
     made this repo redact live ids to WO-00xx inside the very fences whose
     purpose is to show what the tool printed.
 
-    Only the gate reads this. Resolution (`cited_work_order`) still reads
-    the whole body, so a quoted token that DOES resolve to an issue the PR
-    closes still flips its label — the gate is reached only after
-    resolution has failed.
+    The gate reads this, and so does resolution's Closes half: a closing
+    keyword in a fence or quote closes nothing on GitHub. Resolution's
+    work-order tokens still come from the whole body, so a quoted token
+    that DOES resolve to an issue the PR closes (in its own prose) still
+    flips its label — the gate is reached only after resolution has
+    failed.
 
     Line numbers are not preserved: nothing downstream reads any. An
     unterminated fence swallows the rest of the body, which biases the
@@ -437,7 +444,8 @@ def _unquoted(body):
                      if not line.lstrip().startswith(">"))
 
 
-def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
+def run_lifecycle(root, label, env, run=gh_runner, uncited="problem",
+                  open_only=False):
     """The merged-label job: flip the cited work order's lifecycle label.
 
     uncited="skip" makes a PR that cites no work order at all a silent
@@ -472,6 +480,10 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     pr, problems = _pull_request(env)
     if problems:
         return problems
+    if open_only and pr.get("state", "open") != "open":
+        # A dispatched re-run of a merged or closed PR must not move its
+        # order back into the merge gate's queue.
+        return []
     body = pr.get("body") or ""
     wo, problems = cited_work_order(root, body)
     if problems:
@@ -490,7 +502,7 @@ def run_lifecycle(root, label, env, run=gh_runner, uncited="problem"):
     return problems
 
 
-def _known_issue_flip(root, label, issue, run, require=()):
+def _known_issue_flip(root, label, issue, run, require=(), only_from=None):
     """(labels removed, problems): the shared half of the two KNOWN-issue
     legs — the ones handed an issue number outright, with no PR to resolve
     a citation against. Loads the taxonomy once, refuses any label the
@@ -505,7 +517,7 @@ def _known_issue_flip(root, label, issue, run, require=()):
         if name not in lifecycle:
             return [], [f"V: {name} is not a lifecycle label in the"
                         " taxonomy"]
-    return _flip(issue, label, lifecycle, run)
+    return _flip(issue, label, lifecycle, run, only_from=only_from)
 
 
 def run_outcome(root, label, issue, run=gh_runner):
@@ -532,9 +544,13 @@ def run_claim(root, label, issue, env, run=gh_runner):
     # The verdict is "did the flip take the order out of ready" — a
     # taxonomy that lost the ready label would make every verdict false
     # and silently stop all dispatch. Fail loudly instead.
+    # Only an order still in ready is claimed, and only then is it
+    # edited: a stale or repeat event that finds it advanced must not
+    # pull it back to wo:in-progress (with transitioned=false nothing
+    # would ever move it on — ADR-0045), nor erase a terminal state.
     ready = assembler.READY_LABEL
     removed, problems = _known_issue_flip(root, label, issue, run,
-                                          require=(ready,))
+                                          require=(ready,), only_from=ready)
     if problems:
         return problems
     claimed = ready in removed
@@ -546,7 +562,7 @@ def pr_opened(root, env, run=gh_runner):
     """The PR-open leg: the cited work order enters the merge gate's
     queue. An uncited PR is a no-op (ADR-0057)."""
     return run_lifecycle(root, MERGE_GATE.queue, env, run=run,
-                         uncited="skip")
+                         uncited="skip", open_only=True)
 
 
 def pr_merged(root, env, run=gh_runner):

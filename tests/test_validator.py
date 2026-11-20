@@ -722,6 +722,36 @@ class TestRunLifecycle(unittest.TestCase):
                 "--add-label", "wo:merged",
                 "--remove-label", "wo:in-progress"]])
 
+    def test_a_fenced_closes_line_resolves_nothing(self):
+        """A "No work order:" PR that shows a template in a fence must not
+        mark the fenced order merged: GitHub acts on no closing keyword
+        inside a code block, so the issue would stay open while its order
+        reached wo:merged (ADR-0064: resolution keeps a fenced token only
+        when it resolves to an issue the PR closes)."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:needs-review", "size:M"])
+            body = ("No work order: fixes the assembler's PR-body template."
+                    "\n\n```\nWO-0004 (PRD-0001 §Solution)\nCloses #109\n"
+                    "```\n")
+            problems = validator.pr_merged(
+                tree.root, env=self.env(tmp, body=body), run=run)
+            self.assertEqual(problems, [])
+            self.assertEqual(run.called("issue", "edit"), [])
+
+    def test_the_open_leg_skips_a_pr_that_is_no_longer_open(self):
+        """A dispatched re-run (`gh workflow run validator.yml -f pr=N`,
+        the documented repair route) of a merged or closed PR must not
+        move its order back to wo:needs-review."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.tree(tmp)
+            run = gh(labels=["wo:merged", "size:M"])
+            env = pr_env(tmp, number=42, state="closed", merged=True,
+                         body="WO-0004 (PRD-0001 §Solution) Closes #109",
+                         user={"login": "mattb"})
+            self.assertEqual(validator.pr_opened(tree.root, env, run=run), [])
+            self.assertEqual(run.called("issue", "edit"), [])
+
     def test_a_fenced_citation_that_resolves_still_flips_the_label(self):
         """The passing direction, pinned before the skip gate narrows.
 
@@ -936,22 +966,25 @@ class TestRunClaim(unittest.TestCase):
             self.assertEqual(run.called("issue", "edit"), [])
             self.assertEqual(self.outputs(env), "transitioned=false\n")
 
-    def test_an_order_no_longer_ready_does_not_count_as_a_claim(self):
-        # The flip happens (exactly-one-label invariant) but the order
-        # was not in ready state, so this event did not claim it —
-        # transitioned=false keeps the agent step skipped.
-        with tempfile.TemporaryDirectory() as tmp:
-            tree = self.tree(tmp)
-            env = self.env(tmp)
-            run = gh(labels=["wo:blocked"])
-            problems = validator.run_claim(
-                tree.root, "wo:in-progress", "109", env=env, run=run)
-            self.assertEqual(problems, [])
-            self.assertEqual(run.called("issue", "edit"), [[
-                "issue", "edit", "109",
-                "--add-label", "wo:in-progress",
-                "--remove-label", "wo:blocked"]])
-            self.assertEqual(self.outputs(env), "transitioned=false\n")
+    def test_an_order_no_longer_ready_is_left_alone(self):
+        # A stale or repeat ready event (the assembler's concurrency group
+        # queues it behind the run that already claimed) finds the order
+        # advanced. Flipping it back to wo:in-progress with
+        # transitioned=false would strand it there — the false verdict
+        # skips the failure step, so nothing ever moves it again
+        # (ADR-0045) — and would erase a terminal state. No edit at all.
+        for current in ("wo:blocked", "wo:needs-review", "wo:failed",
+                        "wo:merged"):
+            with self.subTest(current=current), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = self.tree(tmp)
+                env = self.env(tmp)
+                run = gh(labels=[current])
+                problems = validator.run_claim(
+                    tree.root, "wo:in-progress", "109", env=env, run=run)
+                self.assertEqual(problems, [])
+                self.assertEqual(run.called("issue", "edit"), [])
+                self.assertEqual(self.outputs(env), "transitioned=false\n")
 
     def test_an_order_with_no_lifecycle_label_is_labelled_not_claimed(self):
         # The dispatch job's own if: saw the ready label at event time, so
@@ -965,9 +998,7 @@ class TestRunClaim(unittest.TestCase):
             problems = validator.run_claim(
                 tree.root, "wo:in-progress", "109", env=env, run=run)
             self.assertEqual(problems, [])
-            self.assertEqual(run.called("issue", "edit"), [[
-                "issue", "edit", "109",
-                "--add-label", "wo:in-progress"]])
+            self.assertEqual(run.called("issue", "edit"), [])
             self.assertEqual(self.outputs(env), "transitioned=false\n")
 
     def test_a_label_outside_the_state_machine_is_refused(self):

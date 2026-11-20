@@ -52,7 +52,7 @@
     "templates/tools/factory/rejection_mining.py": "6f6e3dfe946a51da3eb2b34e4e7eb53e7fa85b5c33b5a0fbd956c1ecf0abe733",
     "templates/tools/factory/standards_index.py": "a656c112025f34f5e0890660e7def511f5ee04a497a1593128fa976a17cc5aca",
     "templates/tools/factory/trace.py": "823e936de961019793f4c6e16e479fb368a033467f3ad624e0ab47f3177a47b4",
-    "templates/tools/factory/validator.py": "a32616cae68ab2a010660a3dc2b1a1941feff416d594b532bbced149a72a984b",
+    "templates/tools/factory/validator.py": "7513fcd6584e57fa2b2f082835eae7f278e5c62e06252d0d6684231fb5a14638",
     "templates/tools/factory/work_queue.py": "1d3c6c5d18088c5dc49ab997c93b5512e0f57ef16c65a03cd3c30d50ae0df658"
   }
 }
