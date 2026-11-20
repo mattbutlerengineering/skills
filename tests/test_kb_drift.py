@@ -206,6 +206,17 @@ class TestTables(Tree):
         self.assertTrue(read[0].startswith(
             "drift: cannot read .claude/agents/x.md: "), problems)
 
+    def test_an_unreadable_plugin_manifest_is_a_problem(self):
+        """Its read problem was dropped, so slash-command checks fell back
+        to the directory name with drift reporting 0 problems."""
+        manifest = self.root / ".claude-plugin" / "plugin.json"
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_bytes(b"\xff\xfe{")
+        self.file("CLAUDE.md", "# Notes\n")
+        read = [p for p in self.drift() if "plugin.json" in p]
+        self.assertEqual(len(read), 1, read)
+        self.assertTrue(read[0].startswith("drift: plugin.json "), read)
+
     def test_no_table_means_no_undocumented_entry_finding(self):
         self.skill("deploy")
         self.file("CLAUDE.md", "# Notes\n")
