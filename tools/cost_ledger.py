@@ -22,7 +22,7 @@ import re
 from datetime import date
 from pathlib import Path
 
-from cli import append_line, detail, json_lines, read_file
+from cli import append_line, detail, finite, json_lines, read_file
 from knowledge_plane import WO_TOKEN
 
 # The append-only cost ledger (ADR-0034). The outcome vocabulary is
@@ -351,8 +351,11 @@ def line_problems(entry):
                     or value < 0:
                 problems.append("tokens must be a non-negative integer")
         elif field == "cost":
+            # finite(): a huge int raised OverflowError here — a crash
+            # where read() and the cap check promise a problem string.
             if isinstance(value, bool) or not isinstance(value, (int, float)) \
-                    or not math.isfinite(value) or value < 0:
+                    or not finite(value) \
+                    or value < 0:
                 problems.append("cost must be a finite non-negative number")
             elif value != 0 and owner_session(entry):
                 # dispatched() drops markers from spend on the grounds
@@ -360,6 +363,12 @@ def line_problems(entry):
                 # one would escape the monthly cap unreported (#815).
                 problems.append("an owner-session marker must cost 0"
                                 f" (ADR-0069), not {value!r}")
+            elif value != 0 and gate_wait(entry) is not None:
+                # The same escape through the other $0 kind dispatched()
+                # drops: `budget_guard record` accepts any outcome, so a
+                # paid row given a gate_wait outcome left the cap unseen.
+                problems.append("a gate-latency row must cost 0"
+                                f" (ADR-0041), not {value!r}")
     for field in LEDGER_OPTIONAL_FIELDS:
         if field not in entry:
             continue

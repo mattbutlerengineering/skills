@@ -746,12 +746,10 @@ class TestWhatCountsAsSpend(unittest.TestCase):
     agreement after it; the row set is the same one, so the two figures
     cannot drift apart again.
 
-    The disagreement was never reachable through a production path:
-    cost_ledger.gate_entry writes every gate row 0 tokens and 0.0 cost BY
-    CONSTRUCTION, so both sums returned the same number over the real
-    ledger and always have. The costly gate row below is therefore
-    hand-assembled into a fixture, and exists nowhere else:
-    docs/factory/costs.jsonl is append-only and carries no such line.
+    gate_entry writes every gate row at $0 by construction, but
+    `budget_guard record` accepts any outcome and could write a paid one,
+    so the shape rule now refuses a costly gate row: read() reports it as
+    a problem (fail closed) rather than admitting it for either sum.
     """
 
     MONTH = "2026-08"
@@ -765,10 +763,11 @@ class TestWhatCountsAsSpend(unittest.TestCase):
                     "merged", "2026-08-02")
         gate = entry("WO-0001", "gate-merge-2026-08-03T05:17:00Z", "none",
                      500, 3.25, "gate_wait:merge:7260s", "2026-08-03")
-        # The row is a well-formed gate row: read() admits it and
-        # gate_wait recognises it, so nothing but the spend rule is at
-        # stake in the numbers below.
-        self.assertEqual(cost_ledger.line_problems(gate), [])
+        # The shape rule now refuses it (a gate row must cost 0),
+        # so read() reports it instead of admitting it; gate_wait still
+        # recognises it.
+        self.assertEqual(cost_ledger.line_problems(gate), [
+            "a gate-latency row must cost 0 (ADR-0041), not 3.25"])
         self.assertEqual(cost_ledger.gate_wait(gate), ("merge", 7260))
         path = Path(tmp) / cost_ledger.COST_LEDGER
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -779,13 +778,15 @@ class TestWhatCountsAsSpend(unittest.TestCase):
     def test_the_two_month_totals_agree_on_a_costly_gate_row(self):
         with tempfile.TemporaryDirectory() as tmp:
             self.fixture(tmp)
+            refused = ["ledger: docs/factory/costs.jsonl:2 a gate-latency"
+                       " row must cost 0 (ADR-0041), not 3.25"]
             entries, problems = cost_ledger.read(tmp)
-            self.assertEqual(problems, [])
+            self.assertEqual(problems, refused)
             report_total = cost_report.aggregate(
                 entries, self.MONTH)["total_cost"]
             queue_total, queue_problems = work_queue.month_to_date(
                 tmp, self.NOW)
-            self.assertEqual(queue_problems, [])
+            self.assertEqual(queue_problems, refused)
             # One number, $12.50: the $3.25 gate row is not spend to
             # either caller. Before the fold this read 12.50 versus
             # 15.75, and the second figure was the breaker's input.
@@ -865,6 +866,22 @@ class TestDispatched(unittest.TestCase):
             "an owner-session marker must cost 0 (ADR-0069), not 12.5"])
         self.assertEqual(
             cost_ledger.line_problems(dict(marker, cost=0)), [])
+
+    def test_a_gate_row_that_carries_a_cost_is_refused(self):
+        # `budget_guard record ... gate_wait:merge:10s` wrote a $50 row
+        # that dispatched() then dropped from the monthly cap (ADR-0041:
+        # a gate row is a $0 wait record, not spend).
+        gate = entry("WO-0001", "r1", "opus", 900000, 50,
+                     "gate_wait:merge:10s", "2026-11-20")
+        self.assertEqual(cost_ledger.line_problems(gate), [
+            "a gate-latency row must cost 0 (ADR-0041), not 50"])
+        self.assertEqual(cost_ledger.line_problems(dict(gate, cost=0)), [])
+
+    def test_an_integer_cost_too_large_for_a_float_is_a_problem(self):
+        row = entry("WO-0001", "r1", "m", 0, 10 ** 400, "merged",
+                    "2026-11-20")
+        self.assertEqual(cost_ledger.line_problems(row),
+                         ["cost must be a finite non-negative number"])
 
 
 
