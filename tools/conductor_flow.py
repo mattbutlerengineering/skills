@@ -126,6 +126,12 @@ def _stalled_problems(rows, found, to, fields):
     if to != resume or not found["retry"]:
         return [f"cd: {found['item']} leaves stalled only for"
                 f" {resume}, after a retry answer"]
+    # An idle stall names its live run (_in_flight): that run keeps its
+    # worktree until its finishing run row lands, or `next` writes a lost
+    # one for a runner found dead.
+    if found["in_flight"]:
+        return [f"cd: {found['item']}'s {stalled['from']} run"
+                f" {stalled['run_id']} is still in flight"]
     # A launch carries a fresh run id; `next`'s bookkeeping resume
     # carries the completed run's own (#939).
     run = delivered_run(rows, found)
@@ -581,8 +587,9 @@ def _in_flight(rows, now, entry, launched, alive):
     row first (#937): outcome LOST, under the policy it was launched
     with, so the stall offers retry-up by the band it ran at (#732) and
     the spend row `next` charges joins it like any failed run's. An
-    idle runner is alive and may yet write its own."""
-    pid, lost = launched["pid"], []
+    idle runner is alive and may yet write its own, so its stall row
+    names its run and pid: the run stays in flight (_stalled_flight)."""
+    pid, lost, running = launched["pid"], [], {}
     if not alive(pid):
         reason = f"its runner (pid {pid}) is gone with no finishing run row"
         lost = [lost_run_row(rows, now, entry, launched)]
@@ -592,9 +599,23 @@ def _in_flight(rows, now, entry, launched, alive):
         if idle <= limit:
             return True, []
         reason = f"no state change for over {limit} minutes"
+        running = {"run_id": launched["run_id"], "pid": pid}
     written, _ = stall_rows(rows + lost, now, entry, reason, "runner-lost",
-                            "retry", IDLE_WHY)
+                            "retry", IDLE_WHY, **running)
     return False, lost + written
+
+
+def _stalled_flight(rows, now, entry, stalled, alive):
+    """(in flight?, rows to write) for an idle stall's run with no
+    finishing run row: in flight while its runner lives; once that
+    runner is found dead, its lost run row (#937), which `next` charges
+    the ceiling, so the retry may launch."""
+    if alive(stalled["pid"]):
+        return True, []
+    launched = next(row for row in item_view(rows, entry["item"])["states"]
+                    if row["to"] == stalled["from"]
+                    and row.get("run_id") == stalled["run_id"])
+    return False, [lost_run_row(rows, now, entry, launched)]
 
 
 def lost_run_row(rows, now, entry, launched):
@@ -654,6 +675,9 @@ def _step(rows, now, entry, alive, facts, policy):
         return None, False, []
     if state == "merging":
         return None, False, _merge_gone(rows, now, entry, launched, alive)
+    if state == "stalled" and found["in_flight"]:
+        flying, written = _stalled_flight(rows, now, entry, launched, alive)
+        return None, flying, written
     if state == "stalled":
         # A finished run's bookkeeping is `next`'s own turn (#939), and
         # a merge turn that stalled resumes as a merge, not a step.

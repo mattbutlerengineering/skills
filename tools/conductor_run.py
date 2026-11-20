@@ -479,13 +479,16 @@ def preflight(root, git, netrc):
 
 def _in_flight_usd(rows):
     """The ceilings of every launched run with no finishing run row: each
-    may still spend up to its ceiling."""
+    may still spend up to its ceiling. An idle stall names its live run
+    (conductor_flow._in_flight), whose step is the one it stalled in."""
     read = view(rows)
     total = 0.0
     for entry in read["plan"]["items"]:
         found = read["items"][entry["item"]]
         if found["in_flight"]:
-            total += found["steps"][found["state"]]["ceiling_usd"]
+            step = found["last"]["from"] if found["state"] == "stalled" \
+                else found["state"]
+            total += found["steps"][step]["ceiling_usd"]
     return total
 
 
