@@ -369,6 +369,9 @@ shape, checked on write and on read (#814).
 
 - The brief has a fixed shape:
   - **objective**: the step, in one sentence;
+  - **owner answers**: the Owner's recorded answers to the item's
+    clarify asks (question, choice, note), in ledger order, when it has
+    any; never an ask's recommendation (#2227);
   - **output**: the stage artifact or code, commits on the item branch,
     and `pr-body.md` left uncommitted;
   - **tools**: the step's `--allowedTools` list, never `git push`, never
