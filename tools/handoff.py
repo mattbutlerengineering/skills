@@ -38,6 +38,9 @@ def compose(wo, reason, done, remaining, resume):
 
 
 def main(argv):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if len(argv) != 5:
         print(__doc__.strip())
         return 2

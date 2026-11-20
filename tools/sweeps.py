@@ -486,6 +486,9 @@ def sentry(path):
 
 
 def main(argv, run=gh_runner):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     kind = argv[0] if argv else ""
     rest = argv[1:]
     path = None

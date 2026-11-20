@@ -201,6 +201,9 @@ def run_report(root, clock=None, ledger_path=None):
 
 
 def main(argv, env=None, clock=None, root=None):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     env = os.environ if env is None else env
     root = root or repo_root()
     if argv == ["report"]:

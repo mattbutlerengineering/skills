@@ -312,6 +312,9 @@ def update(root):
 
 
 def main(argv):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if argv == ["update"]:
         problems = update(repo_root())
     else:

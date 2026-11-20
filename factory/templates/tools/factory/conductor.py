@@ -742,6 +742,9 @@ def _skip_hooks(run):
 
 def main(argv, env=None, clock=None, root=None, run=gh_runner, git=None,
          alive=None, harness=None, tool=None, sleep=None, netrc=None):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     env = os.environ if env is None else env
     clock = clock or (lambda: datetime.now(timezone.utc))
     now = clock()

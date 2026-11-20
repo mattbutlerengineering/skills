@@ -210,6 +210,9 @@ def ensure(root, names, run=gh_runner):
 
 
 def main(argv, run=gh_runner):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     apply = "--apply" in argv
     if [arg for arg in argv if arg != "--apply"]:
         print(__doc__.strip())

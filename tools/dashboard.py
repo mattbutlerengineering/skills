@@ -692,6 +692,9 @@ def _serve_args(argv):
 
 
 def main(argv):
+    if argv in (["-h"], ["--help"]):
+        print(__doc__.strip())
+        return 0
     if len(argv) == 2 and argv[0] == "gather":
         state = gather(argv[1])
         print(json.dumps(state, indent=2))
