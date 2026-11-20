@@ -672,7 +672,7 @@ class TestSpendRowPersistence(unittest.TestCase):
         # commits onto main; only the appended row may travel.
         text = self.WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("git worktree add", text)
-        self.assertIn('git -C "$RUNNER_TEMP/spend" push origin HEAD:main',
+        self.assertIn('git -C "$RUNNER_TEMP/spend" push origin "HEAD:$BASE"',
                       text)
 
     def test_the_worktree_dir_exists_before_the_row_is_appended(self):
@@ -840,11 +840,29 @@ class TestAgentCredentialBoundary(unittest.TestCase):
                          or "git -C" in line and " push " in line]
                   for name, text in self.jobs().items()}
         deliver = self.jobs()["deliver"]
-        self.assertIn('git push origin "refs/heads/$BRANCH:refs/heads/$BRANCH"',
+        self.assertIn('git push --force origin'
+                      ' "refs/heads/$BRANCH:refs/heads/$BRANCH"',
                       pushes["deliver"])
         self.assertIn("BRANCH: ${{ needs.dispatch.outputs.branch }}", deliver)
         self.assertEqual(pushes["agent"], [])
         self.assertEqual(pushes["dispatch"], [])
+
+    def test_the_deliver_job_names_the_default_branch_never_main(self):
+        """A stamped repo whose default branch is not main must still get
+        its PR and its spend row."""
+        deliver = self.jobs()["deliver"]
+        self.assertEqual(
+            deliver.count("BASE: ${{ github.event.repository.default_branch }}"),
+            2)
+        for line in run_lines(deliver):
+            if line.lstrip().startswith("#"):
+                continue
+            with self.subTest(line=line):
+                self.assertNotRegex(line, r"(?<![\w/$-])main\b")
+
+    def test_a_re_dispatch_reuses_the_earlier_attempts_pr(self):
+        deliver = self.jobs()["deliver"]
+        self.assertIn('|| gh pr view "$BRANCH" --json url', deliver)
 
     def test_the_hand_off_crosses_as_data(self):
         """Only the order's own ref leaves the bundle: a bundle that also
@@ -1035,7 +1053,7 @@ class TestBundleCannotReachMain(unittest.TestCase):
         runner_temp.mkdir()
         self.bash(deliver, step_script(self.deliver(),
                                        "Commit the run's spend row"),
-                  RUNNER_TEMP=str(runner_temp))
+                  RUNNER_TEMP=str(runner_temp), BASE="main")
 
         self.assertEqual(self.git(origin, "rev-parse", "main~1"), base)
         self.assertNotIn("agent work",
@@ -1047,7 +1065,7 @@ class TestBundleCannotReachMain(unittest.TestCase):
         deliver = self.deliver()
         self.assertIn('git fetch --no-tags "$HANDOFF/handoff.bundle"', deliver)
         self.assertIn('git worktree add "$RUNNER_TEMP/spend"'
-                      " refs/remotes/origin/main", deliver)
+                      ' "refs/remotes/origin/$BASE"', deliver)
 
 
 if __name__ == "__main__":

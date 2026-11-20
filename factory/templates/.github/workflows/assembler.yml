@@ -267,10 +267,18 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: ${{ needs.dispatch.outputs.branch }}
           HANDOFF: ${{ runner.temp }}/handoff
+          # A stamped repo's default branch need not be main (ADR-0098's
+          # validator resolves it the same way).
+          BASE: ${{ github.event.repository.default_branch }}
+        # The order branch is machine-owned and named per order
+        # (assembler.branch_for), so a re-dispatch after a failed attempt
+        # replaces what that attempt pushed: a plain push would be
+        # rejected as non-fast-forward, and the earlier attempt's PR is
+        # reused rather than refused as a duplicate head.
         run: |
           git fetch --no-tags "$HANDOFF/handoff.bundle" "refs/heads/$BRANCH:refs/heads/$BRANCH"
-          git push origin "refs/heads/$BRANCH:refs/heads/$BRANCH"
-          gh pr create --base main --head "$BRANCH" --title "$(git log -1 --format=%s "refs/heads/$BRANCH")" --body-file "$HANDOFF/pr-body.md"
+          git push --force origin "refs/heads/$BRANCH:refs/heads/$BRANCH"
+          gh pr create --base "$BASE" --head "$BRANCH" --title "$(git log -1 --format=%s "refs/heads/$BRANCH")" --body-file "$HANDOFF/pr-body.md" || gh pr view "$BRANCH" --json url
       # The run's own spend, machine-written to the append-only cost ledger
       # (issue #222; ADR-0034): tokens and cost come from the action's
       # execution file — the harness's record, never a hand-typed figure.
@@ -309,11 +317,13 @@ jobs:
           always()
           && steps.record.outcome == 'success'
         continue-on-error: true
+        env:
+          BASE: ${{ github.event.repository.default_branch }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git fetch origin main
-          git worktree add "$RUNNER_TEMP/spend" refs/remotes/origin/main
+          git fetch origin "$BASE"
+          git worktree add "$RUNNER_TEMP/spend" "refs/remotes/origin/$BASE"
           mkdir -p "$RUNNER_TEMP/spend/docs/factory"
           ledger="$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
           # A main ledger lacking its final newline would fuse the new row onto its last line.
@@ -321,7 +331,7 @@ jobs:
           tail -n 1 docs/factory/costs.jsonl >> "$ledger"
           git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
           git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"
-          git -C "$RUNNER_TEMP/spend" push origin HEAD:main
+          git -C "$RUNNER_TEMP/spend" push origin "HEAD:$BASE"
       # GitHub suppresses pull_request events for PRs the GITHUB_TOKEN
       # opens, so the agent's PR would otherwise reach gate 3 with no
       # check, no reviewer, and no queue entry (WO-0030). find-pr joins
