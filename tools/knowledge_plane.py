@@ -543,7 +543,8 @@ def work_orders(root, files=None):
     parse_run already read rather than reading it again (issue #886)."""
     root = Path(root)
     index, problems = {"wo": {}, "issue": {}}, []
-    for path, lines in breakdown_files(root) if files is None else files:
+    walk = breakdown_files(root, problems) if files is None else files
+    for path, lines in walk:
         for row in breakdown_rows(lines):
             record = {**row, "path": path, "clashes": []}
             for kind, key, shown in (

@@ -500,7 +500,7 @@ def measure(root, run):
     read = _reader(root, run, problems)
     runs = [_run_record(root, path.parent, lines, history["commits"], read,
                         problems)
-            for path, lines in sorted(breakdown_files(root))]
+            for path, lines in sorted(breakdown_files(root, problems))]
     return {"refs": history["refs"], "refs_digest": history["digest"],
             "rule": RULE, "runs": runs, "aggregate": _aggregate(runs)}, \
         problems
