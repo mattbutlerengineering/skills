@@ -14,7 +14,10 @@ and no product repo runs it in CI).
   python3 tools/dashboard.py gather <repo-path>   one repo's state dict as
                                             JSON on stdout — the
                                             testable seam and the
-                                            scripting hook
+                                            scripting hook — then the
+                                            summary line every tool
+                                            ends with (strip the last
+                                            line before parsing)
   python3 tools/dashboard.py serve [--port N] [--config PATH]
                                             the localhost console:
                                             binds 127.0.0.1 only,
