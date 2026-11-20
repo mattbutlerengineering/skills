@@ -349,6 +349,12 @@ past a missing predecessor (above), or taking a skill-recommended default for
 a question the user never answered (e.g. an autorun brief gap). It is the
 only place assumptions live.
 
+Proceeding does not complete the skipped stage: orientation reads artifacts,
+so the predecessor's stage stays pending and `next` routes back to it. A run
+that means to enter later — a feature run entering at PRD — takes option 1:
+a minimal backfilled `idea.md` (a few lines from what the user already said)
+is what lets orientation move past Idea.
+
 ## Run scale
 
 Feature runs scale artifact depth to feature size — a feature PRD is a page,
