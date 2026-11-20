@@ -2023,6 +2023,18 @@ class TestNeedsClarification(unittest.TestCase):
             "N: docs/features/demo/architecture.md:2 unresolved"
             " [NEEDS CLARIFICATION] marker"])
 
+    def test_a_marker_wrapped_across_a_line_break_is_flagged(self):
+        """Docs hard-wrap near 72 columns, so an agent can split the
+        marker; matched one line at a time it passed the approval gate."""
+        parsed = parsed_run(runs=[run_entry(
+            self.ROOT / "docs/features/demo",
+            prd=["# PRD", "",
+                 "Times are stored in UTC, but display is still [NEEDS",
+                 "CLARIFICATION: which timezone?]."])])
+        self.assertEqual(gates.check_needs_clarification(self.ROOT, parsed), [
+            "N: docs/features/demo/prd.md:3 unresolved"
+            " [NEEDS CLARIFICATION] marker"])
+
     def test_quoted_markers_are_mentions_not_markers(self):
         """A code span or a fenced block quotes the syntax (the templates'
         own guidance comment does); only a bare marker is live. So is the
