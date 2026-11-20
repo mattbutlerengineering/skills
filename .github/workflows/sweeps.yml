@@ -39,8 +39,8 @@ jobs:
     if: github.event.inputs.sweep == null || github.event.inputs.sweep == 'all' || github.event.inputs.sweep == 'label-drift'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       # Always BEFORE the sweep: `gh issue create --label X` resolves X
@@ -68,8 +68,8 @@ jobs:
     if: github.event.inputs.sweep == null || github.event.inputs.sweep == 'all' || github.event.inputs.sweep == 'reconcile'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Ensure the triage labels exist
@@ -91,8 +91,8 @@ jobs:
       && vars.SENTRY_ORG != '' && vars.SENTRY_PROJECT != ''
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Ensure the triage labels exist
