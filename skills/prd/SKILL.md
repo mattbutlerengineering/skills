@@ -18,7 +18,9 @@ lives in the user's head, not in the codebase.
 
 2. **Soft gate.** Predecessor artifact: `idea.md`. If missing, apply the
    protocol's soft-gating options (backfill interview or proceed with logged
-   assumptions).
+   assumptions). A feature run entering at PRD backfills: write a minimal
+   `idea.md` from what the user has said, because proceeding with
+   assumptions leaves Idea pending and `next` routes the run back to it.
 
 3. **Interview.** One question at a time, with your recommended answer where
    you have one. Cover:
