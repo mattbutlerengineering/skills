@@ -30,7 +30,7 @@ from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
                        ask_row, current_state, item_branch, item_view,
                        parsed_at, stamp, view)
 from conductor_spend import LOST
-from knowledge_plane import parse_row
+from knowledge_plane import parse_row, unfenced
 from protocol import read_frontmatter
 
 STEPS = ("spec", "build", "verify", "review", "ship")
@@ -898,7 +898,10 @@ def unchecked_rows(git, branch):
                              f"show {branch}:{path}")
         if problems:
             return None, problems
-        rows += [line for line in out.splitlines()
+        # A row quoted in a fence (a defect's evidence) is not work:
+        # protocol.checkbox_progress skips it too, so the protocol and
+        # this routing agree on implement vs verify.
+        rows += [line for _, line in unfenced(out.splitlines())
                  if not line[:1].isspace() and _unchecked(parse_row(line))]
     return rows, []
 

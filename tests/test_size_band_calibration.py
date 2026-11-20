@@ -95,7 +95,8 @@ class TestSelect(unittest.TestCase):
 
     def test_each_row_is_counted_once_in_the_architecture_order(self):
         gate = cost_ledger.gate_entry(wo(1), "human", 30,
-                                      "2026-10-01T00:00:00Z")
+                                      "2026-10-01T00:00:00Z",
+            "2026-09-30T23:59:30Z")
         owner = ledger(wo(1), 0.0, "o1", "owner-session:unmetered")
         zero_joined = ledger(wo(1), 0.0, "z1")
         zero_unknown = ledger("#12", 0.0, "z2")
@@ -458,7 +459,8 @@ class TestReport(unittest.TestCase):
                        row(3, "M"), row(4))
         repo.ledger(
             ledger(wo(1), 3.0, "a"), ledger(wo(1), 4.0, "b"),
-            cost_ledger.gate_entry(wo(1), "human", 30, "2026-10-01T00:00:00Z"),
+            cost_ledger.gate_entry(wo(1), "human", 30, "2026-10-01T00:00:00Z",
+            "2026-09-30T23:59:30Z"),
             ledger(wo(1), 0.0, "o", "owner-session:unmetered"),
             ledger(wo(2), 0.0, "z"), ledger("#9", 5.0, "i"),
             ledger(wo(4), 6.0, "n"), ledger(wo(3), 7.0, "c"))

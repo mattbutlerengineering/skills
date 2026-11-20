@@ -251,7 +251,7 @@ def _metrics(root, entries, month, problems):
     yet: an absent or empty ledger is "no runs recorded yet", never a
     $0.00 that reads as measured-and-free. cost_report.aggregate owns
     the rollup math (gate rows out of every spend figure),
-    cost_ledger.gate_wait the gate rows, factory_config the cap. The
+    cost_ledger.gate_rows the gate rows, factory_config the cap. The
     cap resolves only once entries exist, so a plain pipeline repo
     never reports a missing factory.json."""
     if not entries:
@@ -262,8 +262,10 @@ def _metrics(root, entries, month, problems):
     if not config_problems:
         cap, config_problems = factory_config.resolve_cap(config)
     problems.extend(config_problems)
-    waits = [wait[1] for wait in map(cost_ledger.gate_wait, entries)
-             if wait is not None]
+    # One wait per stay (ADR-0132): a stay the ledger recorded twice
+    # counts once.
+    waits = [cost_ledger.gate_wait(row)[1]
+             for row in cost_ledger.gate_rows(entries)]
     # ADR-0084: an issue-keyed group is not a work order, so neither its
     # spend nor its key counts toward the per-WO mean.
     wo_costs = [cost for key, cost in lifetime["by_wo"].items()
@@ -384,6 +386,9 @@ def gather(repo_path, run=gh_runner, git=git_runner, clock=None):
                                 state["problems"])
     mirror = mirror_map(root)
     if mirror:
+        # None until the listing is read: an unread queue is not an empty
+        # one, and the page must not render it as "Nothing waits on you".
+        state["queues"] = None
         slug, remote_problems = remote_slug(root, git)
         state["repo"]["remote"] = slug
         state["problems"].extend(remote_problems)

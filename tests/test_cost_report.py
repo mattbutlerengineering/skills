@@ -105,9 +105,11 @@ class TestAggregate(unittest.TestCase):
         entries = [
             entry("WO-0001", "r-1", "m", 1000, 12.50, "merged", "2026-07-06"),
             cost_ledger.gate_entry("WO-0001", "merge", 7260,
-                                   "2026-07-22T05:17:00Z"),
+                                   "2026-07-22T05:17:00Z",
+            "2026-07-22T03:16:00Z"),
             cost_ledger.gate_entry("WO-0002", "prd", 86400,
-                                   "2026-07-21T09:00:00Z"),
+                                   "2026-07-21T09:00:00Z",
+            "2026-07-20T09:00:00Z"),
         ]
         self.assertEqual(cost_report.aggregate(entries), {
             "total_cost": 12.50,

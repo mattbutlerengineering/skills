@@ -462,11 +462,33 @@ def _row_block(lines, index):
     stripped, plus the lines under it — indented sub-bullets, blank
     lines between them included (a loose list) — up to the next row or
     the first unindented line, prose or heading. Trailing blank lines
-    are not the block's."""
-    block = [lines[index].strip()]
+    are not the block's.
+
+    Not every checkbox under the row ends it: one nested deeper that
+    names no work order is a sub-task, and an indented fenced block is
+    quoted — cutting the block there lost the Accept: and Blocked by:
+    lines after it, and dispatch ran before a dependency. A nested row
+    that names a work order is its own row (its blockers are its own)."""
+    head = lines[index]
+    indent = len(head) - len(head.lstrip())
+    block, fence = [head.strip()], None
     for line in lines[index + 1:]:
-        if ROW.match(line) or (line.strip() and not line[:1].isspace()):
+        if fence is not None:
+            if _fence_closes(line, fence):
+                fence = None
+            block.append(line.rstrip())
+            continue
+        if line.strip() and not line[:1].isspace():
             break
+        opened = _fence_open(line, 0)
+        if opened is not None:
+            fence = opened
+        else:
+            row = parse_row(line)
+            if row is not None and (
+                    row["wo"] is not None
+                    or len(line) - len(line.lstrip()) <= indent):
+                break
         block.append(line.rstrip())
     return "\n".join(block).rstrip()
 

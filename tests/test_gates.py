@@ -717,7 +717,8 @@ class TestCostLedger(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             tree = self.build(
                 tmp, cost_ledger.gate_entry("WO-0001", "merge", 2379,
-                                            "2026-07-12T03:12:55Z"))
+                                            "2026-07-12T03:12:55Z",
+            "2026-07-12T02:33:16Z"))
             self.assertEqual(gates.check_cost_ledger(tree.root), [
                 "G: docs/features/demo/breakdown.md:1 merged work order"
                 " WO-0001 has no line in docs/factory/costs.jsonl"])
@@ -727,7 +728,8 @@ class TestCostLedger(unittest.TestCase):
             tree = self.build(
                 tmp, self.LINE,
                 cost_ledger.gate_entry("WO-0001", "merge", 2379,
-                                       "2026-07-12T03:12:55Z"))
+                                       "2026-07-12T03:12:55Z",
+            "2026-07-12T02:33:16Z"))
             self.assertEqual(gates.check_cost_ledger(tree.root), [])
 
     def test_a_gate_row_still_needs_a_breakdown_row(self):
@@ -738,7 +740,8 @@ class TestCostLedger(unittest.TestCase):
             tree = self.build(
                 tmp, self.LINE,
                 cost_ledger.gate_entry("WO-0002", "merge", 10,
-                                       "2026-07-12T03:12:55Z"))
+                                       "2026-07-12T03:12:55Z",
+            "2026-07-12T03:12:45Z"))
             self.assertEqual(gates.check_cost_ledger(tree.root), [
                 "G: docs/factory/costs.jsonl:2 wo WO-0002 has no breakdown"
                 " row"])

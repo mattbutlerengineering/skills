@@ -64,8 +64,9 @@ const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({
 // What the all-clear lines may claim: nothing while a repo is still
 // being gathered, and only with a warning when one could not be read —
 // "Nothing waits on you" over unread repos is a false all-clear.
-const gatherNote = (status) => {
-  const {pending = 0, failed = 0} = status || {};
+const gatherNote = (status, unread = 0) => {
+  const {pending = 0} = status || {};
+  const failed = ((status || {}).failed || 0) + unread;
   if (pending) return {empty: `<p class="empty">Checking…</p>`, warn: ""};
   return {empty: null, warn: failed
     ? `<p class="error">${failed} repo(s) could not be read; this may be` +
@@ -113,7 +114,11 @@ const renderNeedsYou = (states, status) => {
         ` ${repoTag}</li>`);
     }
   }
-  const note = gatherNote(status);
+  // A repo that answered but could not read its gate queues (queues
+  // null: the gh listing or the remote failed) is as unread as one that
+  // failed outright.
+  const note = gatherNote(status,
+    states.filter(({payload}) => payload.queues === null).length);
   const body = items.length ? `<ul>${items.join("")}</ul>`
     : note.empty || `<p class="empty">Nothing waits on you.</p>`;
   return `<h2>Needs you (${items.length})</h2>${note.warn}${body}`;

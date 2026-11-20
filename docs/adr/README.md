@@ -61,7 +61,7 @@ the canonical vocabulary.
 | [0038](0038-harness-adapter-registry.md) | One registration per harness in the trigger-eval runner | amended by ADR-0045 |
 | [0039](0039-tracker-grammar-joins-the-knowledge-plane.md) | Tracker-mirror grammar joins the knowledge plane | amended by ADR-0040 (roster further amended by ADR-0058; walk widened to parse_run by ADR-0068) |
 | [0040](0040-write-outputs-joins-the-cli-seam.md) | write_outputs joins the cli seam | amended by ADR-0042 |
-| [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | amended by ADR-0049 |
+| [0041](0041-gate-latency-rows-join-the-cost-ledger.md) | Gate-latency observations are cost-ledger rows | amended by ADR-0132 (and earlier by ADR-0049) |
 | [0042](0042-gh-runner-and-event-read-join-the-cli-seam.md) | gh_runner and the event read join the cli seam | amended by ADR-0051 |
 | [0043](0043-pre-ledger-rows-are-annotated-in-the-knowledge-plane.md) | Pre-ledger rows are annotated in the knowledge plane | accepted |
 | [0044](0044-daily-improvement-routine.md) | A daily routine drives the factory's improvement loop | superseded in part by ADR-0083 (the queue is read from GitHub issues, not the beads export) |
@@ -152,3 +152,4 @@ the canonical vocabulary.
 | [0129](0129-a-re-review-converges-on-the-first-reviews-findings.md) | A re-review converges on the first review's findings | accepted |
 | [0130](0130-every-driver-claims-a-ready-issue-through-the-queues-claim-step.md) | Every driver claims a ready issue through the queue's claim step | provisional |
 | [0131](0131-the-repos-python-tools-live-in-tools.md) | The repo's Python tools live in tools/, not at the root | provisional |
+| [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |

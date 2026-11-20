@@ -294,7 +294,7 @@ class TestQueues(unittest.TestCase):
             gh = queue_gh(failing=["issue", "list"])
             state = dashboard.gather(tmp, run=gh, git=git_remote(),
                                      clock=clock)
-        self.assertEqual(state["queues"], [])
+        self.assertIsNone(state["queues"])
         self.assertEqual(state["problems"],
                          ["dashboard: gh issue list failed: boom"])
         self.assertEqual(len(state["runs"]), 1)
@@ -351,7 +351,7 @@ class TestQueues(unittest.TestCase):
             state = dashboard.gather(tmp, run=gh, git=git, clock=clock)
         self.assertEqual(gh.calls, [])
         self.assertIsNone(state["repo"]["remote"])
-        self.assertEqual(state["queues"], [])
+        self.assertIsNone(state["queues"])
         self.assertEqual(state["problems"], [
             f"dashboard: {tmp} has no readable remote.origin.url"])
 
@@ -626,6 +626,35 @@ class TestMetrics(unittest.TestCase):
             "month_spend": 5.0, "cap": 300.0, "cost_per_wo": 3.0,
             "gate_wait_median": 200, "acceptance": None,
             "rework": None})
+
+    def test_a_stay_recorded_twice_feeds_the_median_once(self):
+        """ADR-0132: ADR-0074's walk change re-recorded WO 0074's merge
+        stay under a second end key (558s, then 557s). The median takes
+        that stay once, at its last-recorded wait."""
+        rows = [
+            {"wo": "WO-0101", "run_id": "r0", "model": "m", "tokens": 1,
+             "cost": 1.0, "outcome": "completed", "at": "2026-08-01"},
+            {"wo": "WO-0101", "run_id": "gate-prd-2026-08-02T00:01:40Z",
+             "model": "none", "tokens": 0, "cost": 0.0,
+             "outcome": "gate_wait:prd:100s", "at": "2026-08-02"},
+            {"wo": "WO-0101", "run_id": "gate-merge-2026-09-25T04:20:47Z",
+             "model": "none", "tokens": 0, "cost": 0.0,
+             "outcome": "gate_wait:merge:558s", "at": "2026-09-25"},
+            {"wo": "WO-0101", "run_id": "gate-merge-2026-09-25T04:20:46Z",
+             "model": "none", "tokens": 0, "cost": 0.0,
+             "outcome": "gate_wait:merge:557s", "at": "2026-09-25"},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = factory_repo(tmp)
+            tree.write("docs/factory/costs.jsonl",
+                       "".join(json.dumps(row) + "\n" for row in rows))
+            tree.write(".github/factory.json",
+                       '{"monthly_cap_usd": 300.0}')
+            state = dashboard.gather(tmp, run=queue_gh(),
+                                     git=git_remote(), clock=clock)
+        self.assertEqual(state["problems"], [])
+        self.assertEqual(state["metrics"]["gate_wait_median"],
+                         round((100 + 557) / 2))
 
     def test_issue_keyed_spend_is_not_counted_as_work_orders(self):
         """ADR-0084: `#N` groups are not orders. WO-0001 at $10 plus
@@ -978,6 +1007,9 @@ console.log(JSON.stringify({
   needsYouEmpty: renderNeedsYou([]),
   needsYouPending: renderNeedsYou([], {pending: 1, failed: 0}),
   needsYouFailed: renderNeedsYou([], {pending: 0, failed: 2}),
+  needsYouUnreadQueues: renderNeedsYou(
+    [{name: "alpha", payload: {queues: null, drift: []}}],
+    {pending: 0, failed: 0}),
   metricsPending: renderMetrics([], {pending: 1, failed: 0}),
   outputUnavailable: renderOutput([{name: "beta", payload: {
     output: [], problems: ["dashboard: gh issue list failed"]}}]),
@@ -1098,6 +1130,12 @@ console.log(JSON.stringify({
         self.assertIn("2 repo(s) could not be read", got["needsYouFailed"])
         self.assertIn("Nothing waits on you", got["needsYouFailed"])
         self.assertIn("Nothing waits on you", got["needsYouEmpty"])
+
+    def test_unread_gate_queues_are_not_an_all_clear(self):
+        """gather leaves queues null when its gh listing failed; the
+        page rendered that answering repo as 'Nothing waits on you'."""
+        got = self.rendered()["needsYouUnreadQueues"]
+        self.assertIn("1 repo(s) could not be read", got)
 
     def test_empty_output_with_problems_does_not_claim_no_factory(self):
         """A failed gh listing left output [] and the page said 'No
