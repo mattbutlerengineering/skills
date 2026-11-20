@@ -52,7 +52,8 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
 
 6. **Retrospect on the environment.** The run's own record of its
    mistakes is `verification.md`'s failures, `review.md`'s findings and
-   `breakdown.md`'s Notes. For each mistake, name the check, pointer or
+   the run breakdown's Notes (`breakdown.md`, or `defect.md` in a
+   maintenance run with `re-entry: implement`). For each mistake, name the check, pointer or
    rule that would have caught it, and classify it: **mechanical** (a
    deterministic check would have caught it — a lint rule, a hook, a CI
    job, a gate detector) or **judgement** (only a reader could — a
