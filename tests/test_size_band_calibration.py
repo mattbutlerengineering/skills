@@ -57,6 +57,13 @@ class TestBands(unittest.TestCase):
             wo(3): {"size": "L", "run": RUN_B}})
         self.assertEqual(ambiguous, frozenset())
 
+    def test_a_row_quoted_in_a_fence_is_not_a_size(self):
+        mapping, ambiguous = sbc.bands(
+            [breakdown(RUN_A, row(1, "S"), "```markdown",
+                       row(1, "L", "example row"), "```")], ROOT)
+        self.assertEqual(mapping, {wo(1): {"size": "S", "run": RUN_A}})
+        self.assertEqual(ambiguous, frozenset())
+
     def test_the_join_adds_no_field_to_a_ledger_entry(self):
         entries = [ledger(wo(1), 2.0)]
         before = copy.deepcopy(entries)

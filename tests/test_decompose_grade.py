@@ -284,6 +284,25 @@ class TestDependencyCheck(unittest.TestCase):
         text = breakdown(row("A1"), row("A2", blocked="A1"))
         self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
 
+    def test_a_blocked_by_in_a_code_span_is_not_the_clause(self):
+        # An Accept line that talks about "a `blocked by:` clause" won
+        # over the real sub-bullet below it.
+        plain = breakdown(row("A1"), row("A2", blocked="A1"))
+        text = breakdown(row("A1"), row(
+            "A2", blocked="A1", accept=GOOD_ACCEPT + " A row whose only"
+            " key sits in its `blocked by:` clause is not a split."))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"],
+                         dg.grade(plain, ARCH)["feedback"])
+        self.assertEqual(dg.grade(text, ARCH)["parts"]["dependencies"], 1.0)
+
+    def test_a_blocker_whose_title_ends_in_a_code_span_resolves(self):
+        # No id token: the title is the key, and its own closing
+        # backtick was stripped from the element but kept in the key.
+        held = row("A1").replace("A1 Thing", "Add the export `route`")
+        text = breakdown(held, row("A2",
+                                   blocked="**Add the export `route`**"))
+        self.assertEqual(dg.grade(text, ARCH)["feedback"], [])
+
     def test_the_clause_may_be_inline_and_any_case(self):
         text = breakdown(row("A1"), row("A2", blocked=None, inline="A9"))
         self.assertEqual(

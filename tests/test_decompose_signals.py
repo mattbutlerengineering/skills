@@ -386,6 +386,17 @@ class TestGitFailures(unittest.TestCase):
             read_history(Path("."), run),
             (None, ["decompose-signals: git log failed: fatal: boom"]))
 
+    def test_a_historical_version_not_in_utf8_is_a_problem(self):
+        # The runner decodes strictly; a Latin-1 breakdown in history
+        # was a UnicodeDecodeError traceback in three tools.
+        err = UnicodeDecodeError("utf-8", b"\xe9", 0, 1, "invalid byte")
+        self.assertEqual(
+            read_version(Path("."), failing(err), "a" * 40,
+                         f"{RUN}/breakdown.md"),
+            (None, ["decompose-signals: git show failed: 'utf-8' codec"
+                    " can't decode byte 0xe9 in position 0: invalid"
+                    " byte"]))
+
     def test_show_failure(self):
         self.assertEqual(
             read_version(Path("."), failing(OSError("no git")), "a" * 40,

@@ -27,7 +27,7 @@ import factory_config
 from cli import read_file, report, runner
 from factory_config import (SIZES as BANDS, resolve_budget,
                             resolve_calibrate_floor)
-from knowledge_plane import parse_row, repo_root, run_dirs
+from knowledge_plane import breakdown_rows, repo_root, run_dirs
 
 LABEL = "size-band-calibration"
 USAGE = "python3 tools/size_band_calibration.py"
@@ -43,7 +43,9 @@ def bands(files, root):
     found = {}
     for path, lines in files:
         run = path.parent.relative_to(root).as_posix()
-        for record in filter(None, map(parse_row, lines)):
+        # breakdown_rows, not every line: a row quoted in a fence is an
+        # example, and joined a real ledger row to a made-up band.
+        for record in breakdown_rows(lines):
             if record["wo"] is not None and record["size"] is not None:
                 found.setdefault(record["wo"], set()).add(
                     (record["size"], run))
