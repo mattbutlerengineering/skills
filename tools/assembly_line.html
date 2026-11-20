@@ -23,6 +23,8 @@
     --ground: #e9f6ee; --ink: #23262c; --muted: #5f6873;
     --belt: #a6e07a; --accent: #8f6fd8; --hot: #e0903a; --panel: #ffffff;
     --line: #2f3238; --ok: #5cb85c;
+    /* Amber text on white: --hot itself is 2.55:1, under WCAG AA. */
+    --hot-text: #a4570f;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%;
@@ -255,14 +257,14 @@
   #fallback h2 .count { color: var(--muted); font-weight: normal; }
   #fallback ul { margin: 0; padding-left: 1.1rem; }
   #fallback li { overflow-wrap: anywhere; }
-  #fallback section.attention h2 { color: var(--hot); }
+  #fallback section.attention h2 { color: var(--hot-text); }
   /* An empty station is one muted line: with its "No runs here" box,
      the six empty stations ahead of Implement filled a phone's whole
      first screen. The pile-up is amber, as its sign is on the floor. */
   #fallback section.none { padding: .35rem .75rem; }
   #fallback section.none h2 { margin: 0; color: var(--muted); font-weight: 600; }
   #fallback section.hot { box-shadow: inset 0 0 0 2px var(--hot); }
-  #fallback section.hot h2 { color: var(--hot); }
+  #fallback section.hot h2 { color: var(--hot-text); }
   .card { position: absolute; pointer-events: none; background: var(--panel);
     border: 2px solid var(--line); border-radius: 8px; padding: .5rem .7rem;
     max-width: 22.86rem; box-shadow: 0 6px 18px rgba(31,42,35,.18); z-index: 3; }
@@ -346,7 +348,7 @@
      behind it keeps night: dusk stone, lit windows — setCityNight). */
   @media (prefers-color-scheme: dark) {
     :root { --ink: #e7ebe6; --muted: #98a39a; --panel: #1c221e;
-      --line: #4a524b; }
+      --line: #4a524b; --hot-text: var(--hot); }
     html, body { background: radial-gradient(1100px 700px at 50% 10%,
       #232c25 0%, #161c18 55%, #0e130f 100%); }
     #find, #legend-open, #tour-open, .chip, #transport button {
@@ -588,7 +590,7 @@
     <div class="body" id="panel-body"></div>
   </aside>
 </div>
-<main id="fallback" hidden></main>
+<main id="fallback" tabindex="0" aria-label="Runs by station" hidden></main>
 <footer id="transport" hidden>
   <button id="play" aria-label="Play the replay" aria-keyshortcuts="Space" disabled>▶ Play</button>
   <span id="scrub-wrap"><canvas id="activity" aria-hidden="true"></canvas><span

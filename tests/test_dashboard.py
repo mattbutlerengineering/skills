@@ -976,6 +976,11 @@ console.log(JSON.stringify({
   needsYouAges: renderNeedsYou([{name: "alpha", payload: AGES}]),
   needsYou: renderNeedsYou([{name: "alpha", payload: PAYLOAD}]),
   needsYouEmpty: renderNeedsYou([]),
+  needsYouPending: renderNeedsYou([], {pending: 1, failed: 0}),
+  needsYouFailed: renderNeedsYou([], {pending: 0, failed: 2}),
+  metricsPending: renderMetrics([], {pending: 1, failed: 0}),
+  outputUnavailable: renderOutput([{name: "beta", payload: {
+    output: [], problems: ["dashboard: gh issue list failed"]}}]),
   card: renderRepoCard("alpha", PAYLOAD, null),
   cardEmpty: renderRepoCard("alpha", {runs: [], problems: []}, null),
   cardError: renderRepoCard("alpha", null, "HTTP 500"),
@@ -1080,7 +1085,26 @@ console.log(JSON.stringify({
         self.assertIn("drift &lt;i&gt;x&lt;/i&gt;", table)
         self.assertIn('href="https://github.com/octo/alpha/issues/8"',
                       table)
-        self.assertIn("No factory stamped in this repo.", table)
+        self.assertIn("No factory output to show.", table)
+
+    def test_no_all_clear_while_repos_are_unread(self):
+        """'Nothing waits on you' showed before any repo answered, and
+        stayed up when every repo failed — a false all-clear."""
+        got = self.rendered()
+        self.assertIn("Checking…", got["needsYouPending"])
+        self.assertNotIn("Nothing waits on you", got["needsYouPending"])
+        self.assertIn("Checking…", got["metricsPending"])
+        self.assertNotIn("No runs recorded yet", got["metricsPending"])
+        self.assertIn("2 repo(s) could not be read", got["needsYouFailed"])
+        self.assertIn("Nothing waits on you", got["needsYouFailed"])
+        self.assertIn("Nothing waits on you", got["needsYouEmpty"])
+
+    def test_empty_output_with_problems_does_not_claim_no_factory(self):
+        """A failed gh listing left output [] and the page said 'No
+        factory stamped' about a stamped repo."""
+        got = self.rendered()["outputUnavailable"]
+        self.assertIn("Factory output unavailable", got)
+        self.assertNotIn("No factory", got)
 
     def test_metrics_renders_headline_and_per_repo_rows(self):
         metrics = self.rendered()["metrics"]
