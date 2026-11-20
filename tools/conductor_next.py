@@ -278,24 +278,12 @@ def _spend_committed(git, root, batch, worktree, branch, item, run, now):
 
 def _review_outcome(git, rows, now, run, worktree, branch):
     """(stall reason or None, verdict rows, problems) for a completed
-    review run whose bookkeeping was retried: the verdict in review.md
-    and the rows record_verdict would have written, over `rows` (the
-    ledger with the resume row). The head the run was launched on is
-    its launch row's reviewed_head."""
-    run_id = run["run_id"]
-    item = run["item"]
-    launch = next((row for row in reversed(rows) if row["kind"] == "state"
-                   and row["item"] == item and row["to"] == "review"
-                   and row.get("run_id") == run_id and "pid" in row), {})
+    review run whose bookkeeping was retried: the verdict in review.md,
+    recorded over `rows` (the ledger with the resume row) as
+    conductor_flow.recorded_verdict reads it."""
     verdict = flow.review_verdict(git, worktree, branch)
-    if verdict is None:
-        return "review.md carries no verdict: pass|changes line", [], []
-    if "reviewed_head" not in launch:
-        return (f"review run {run_id}'s launch recorded no reviewed head,"
-                " so its verdict cannot be recorded"), [], []
-    written, problems = flow.verdict_rows(rows, now, item, verdict, run_id,
-                                          launch["reviewed_head"])
-    return None, written or [], problems
+    return flow.recorded_verdict(rows, now, run["item"], run["run_id"],
+                                 verdict)
 
 
 def retry_bookkeeping(git, gh, root, batch, rows, now, due):
@@ -395,6 +383,21 @@ def standing_facts(gh, rows, facts, policy):
     return verdicts, []
 
 
+def review_facts(git, batch, rows):
+    """({item: {"verdict"}}, problems): the review.md verdict (or None)
+    of each review conductor_flow.unrecorded_reviews names — a completed
+    run with no verdict row, which the survey records once its runner is
+    gone (stall rule 1)."""
+    facts = {}
+    for item in flow.unrecorded_reviews(rows):
+        worktree, problems = worktree_path(git, batch, item)
+        if problems:
+            return None, problems
+        facts[item] = {"verdict": flow.review_verdict(
+            git, worktree, item_branch(batch, item))}
+    return facts, []
+
+
 def landed_facts(gh, batch, rows):
     """({item: {"merged_pr": {"pr", "sha"} or None}}, problems): the
     merged PR of each item conductor_landed.due names (#938), one read
@@ -422,6 +425,10 @@ def _facts(git, gh, batch, rows, policy):
     if problems:
         return None, problems
     facts.update(shipped)
+    verdicts, problems = review_facts(git, batch, rows)
+    if problems:
+        return None, problems
+    facts.update(verdicts)
     standing, problems = standing_facts(gh, rows, facts, policy)
     if problems:
         return None, problems

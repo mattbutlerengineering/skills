@@ -362,6 +362,37 @@ class TestBlueprintDrift(unittest.TestCase):
                 " missing file 0009-ghost.md",
                 "D: docs/adr/README.md has no index row for ADR-0001"])
 
+    def test_a_row_linking_another_adrs_file_is_flagged(self):
+        """D only checked the linked file existed, so a row for ADR-0004
+        pointing at ADR-0005's file — or a phantom row borrowing a real
+        file — passed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0001](0002-other.md) | Spine | accepted |\n",
+                "| [0002](0002-other.md) | Other | accepted |\n")
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: accepted\n")
+            tree.write("docs/adr/0002-other.md",
+                       "# Other\n\n- Status: accepted\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/adr/README.md:5 index row ADR-0001 links to"
+                " 0002-other.md, which is ADR-0002"])
+
+    def test_a_duplicate_index_row_is_flagged_and_the_first_is_judged(self):
+        """The last row used to win, so a wrong first row — the one a
+        reader sees — hid behind a correct duplicate further down."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.build(
+                tmp, "| [0001](0001-spine.md) | Spine | accepted |\n",
+                "| [0001](0001-spine.md) | Spine | superseded by ADR-0002 |\n")
+            tree.write("docs/adr/0001-spine.md",
+                       "# Spine\n\n- Status: superseded by ADR-0002\n")
+            self.assertEqual(gates.check_blueprint_drift(tree.root), [
+                "D: docs/adr/README.md:6 ADR-0001 is indexed twice"
+                " (first at line 5)",
+                "D: docs/adr/README.md:5 ADR-0001 index status 'accepted'"
+                " does not match the file's 'superseded by ADR-0002'"])
+
     def test_titled_index_row_link_resolves(self):
         # issue #773: ADR_INDEX_ROW read the title into the filename.
         with tempfile.TemporaryDirectory() as tmp:
@@ -1990,6 +2021,18 @@ class TestNeedsClarification(unittest.TestCase):
             "N: docs/features/demo/prd.md:3 unresolved"
             " [NEEDS CLARIFICATION] marker",
             "N: docs/features/demo/architecture.md:2 unresolved"
+            " [NEEDS CLARIFICATION] marker"])
+
+    def test_a_marker_wrapped_across_a_line_break_is_flagged(self):
+        """Docs hard-wrap near 72 columns, so an agent can split the
+        marker; matched one line at a time it passed the approval gate."""
+        parsed = parsed_run(runs=[run_entry(
+            self.ROOT / "docs/features/demo",
+            prd=["# PRD", "",
+                 "Times are stored in UTC, but display is still [NEEDS",
+                 "CLARIFICATION: which timezone?]."])])
+        self.assertEqual(gates.check_needs_clarification(self.ROOT, parsed), [
+            "N: docs/features/demo/prd.md:3 unresolved"
             " [NEEDS CLARIFICATION] marker"])
 
     def test_quoted_markers_are_mentions_not_markers(self):

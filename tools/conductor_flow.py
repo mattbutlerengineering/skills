@@ -459,6 +459,40 @@ def record_verdict(root, batch, now, item, verdict, reviewer_run, head):
         rows, now, item, verdict, reviewer_run, head))
 
 
+NO_VERDICT = "review.md carries no verdict: pass|changes line"
+
+
+def unrecorded_reviews(rows):
+    """The plan's items whose review run completed with no verdict row
+    after it (record_verdict moves the item out of `review`): the ones
+    whose review.md verdict `next` reads, in case their runner died
+    before recording it (stall rule 1). PURE."""
+    read = view(rows)
+    found = [read["items"][entry["item"]]
+             for entry in (read["plan"] or {}).get("items", [])]
+    return [one["item"] for one in found
+            if one["state"] == "review" and one["completed"]]
+
+
+def recorded_verdict(rows, now, item, run_id, verdict):
+    """(stall reason or None, verdict rows, problems) for review run
+    `run_id`, completed with `verdict` read from review.md (None: none
+    read): the rows record_verdict would have written, over `rows`. The
+    head the run was launched on is its launch row's reviewed_head.
+    PURE."""
+    launch = next((row for row in reversed(rows) if row["kind"] == "state"
+                   and row["item"] == item and row["to"] == "review"
+                   and row.get("run_id") == run_id and "pid" in row), {})
+    if verdict is None:
+        return NO_VERDICT, [], []
+    if "reviewed_head" not in launch:
+        return (f"review run {run_id}'s launch recorded no reviewed head,"
+                " so its verdict cannot be recorded"), [], []
+    written, problems = verdict_rows(rows, now, item, verdict, run_id,
+                                     launch["reviewed_head"])
+    return None, written or [], problems
+
+
 def review_verdict(git, worktree, branch):
     """The review.md verdict on the item branch, or None."""
     changed, problems = changed_files(git, branch)
@@ -623,6 +657,42 @@ def lost_run_row(rows, now, entry, launched):
             "pid": launched["pid"], "outcome": LOST}
 
 
+def _unrecorded(rows, now, entry, found, alive, facts):
+    """Rows for a finished run its runner recorded nothing after (stall
+    rule 1): a run that did not complete, or a completed review with no
+    verdict row. While its runner is alive and within twice the step's
+    wall-clock limit of the run row, [] — it may yet record its own.
+    Once it is not, a failed run stalls, and a review's verdict, read
+    from review.md into facts[item]["verdict"], is recorded as the
+    runner would have, or the item stalls; [] until that read is in."""
+    item, run, launched = entry["item"], found["finishing"], found["last"]
+    limit = 2 * WALL_CLOCK_MINUTES[entry["size"]]
+    ended = f"its run {run['run_id']} ended {run['outcome']}, and"
+    if not alive(run["pid"]):
+        reason = (f"{ended} its runner (pid {run['pid']}) is gone with"
+                  " nothing recorded after it")
+    elif (now - parsed_at(run["at"])).total_seconds() / 60 > limit:
+        reason = (f"{ended} nothing was recorded after it for over {limit}"
+                  " minutes")
+    else:
+        return []
+    if found["completed"]:
+        if "verdict" not in facts.get(item, {}):
+            return []
+        # verdict_rows cannot refuse here: the item is in review with no
+        # pending ask and its run finished, so its problems are unused.
+        failed, written, _ = recorded_verdict(
+            rows, now, item, run["run_id"], facts[item]["verdict"])
+        if failed is None:
+            return written
+        reason = failed
+    recommended, why = worker_advice(rows[:rows.index(launched)], entry,
+                                     launched["to"], run["band"], reason)
+    written, _ = stall_rows(rows, now, entry, reason, "agent-failed",
+                            recommended, why)
+    return written
+
+
 def _merge_gone(rows, now, entry, merging, alive):
     """Stall rows for a merge turn whose process is gone with no merged
     row (an interrupted turn), else []. A stall from `merging` resumes
@@ -695,8 +765,9 @@ def _step(rows, now, entry, alive, facts, policy):
     if found["in_flight"]:
         flying, written = _in_flight(rows, now, entry, launched, alive)
         return None, flying, written
-    if not found["completed"]:
-        return None, False, []
+    if not found["completed"] or state == "review":
+        return None, False, _unrecorded(rows, now, entry, found, alive,
+                                        facts)
     ready, written = _after_step(rows, now, entry, launched, facts,
                                  policy)
     return ready, False, written
