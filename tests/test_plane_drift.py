@@ -187,6 +187,15 @@ class TestReconcileDrift(unittest.TestCase):
                            [issue(109, "OPEN", ["wo:in-progress"])])
         self.assertEqual(drift, [])
 
+    def test_only_the_first_row_mirroring_an_issue_is_compared(self):
+        # The duplicate unchecked row disagreed with the merged issue the
+        # FIRST row owns, and the sweep filed that as plane drift.
+        done = self.ROW.replace("- [ ]", "- [x]")
+        other = self.ROW.replace("WO-0004", "WO-0005")
+        drift = self.drift(rows(done, other),
+                           [issue(109, "CLOSED", ["wo:merged"])])
+        self.assertEqual(drift, [])
+
     def test_an_issue_on_two_lifecycle_labels_at_once(self):
         self.assertEqual(
             self.drift(rows(self.ROW),

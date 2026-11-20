@@ -89,7 +89,10 @@ def reconcile_drift(rows, issues, absent_is_drift=True):
     for path, lines in rows:
         for row in breakdown_rows(lines):
             number = row["issue"]
-            if number is None:
+            if number is None or number in mirrored:
+                # The first row mirroring a tracker owns it, as dispatch
+                # resolves it (knowledge_plane.work_orders); a duplicate
+                # row is the knowledge plane's own disagreement (#886).
                 continue
             mirrored.add(number)
             issue = index.get(number)

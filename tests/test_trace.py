@@ -230,6 +230,9 @@ class TestKeyResolution(Repo):
             "banana": "trace: banana is not a run ref, typed id, issue"
                       " number (#N) or docs/kb/ page",
             "feature:nope": "trace: feature:nope names no run directory",
+            # docs/ is a candidate directory but holds no run artifact
+            # here: no product run, not an empty view and exit 0.
+            "product": "trace: product names no run directory",
             "ADR-0003": "trace: ADR-0003 is declared or cited by no run",
             "docs/kb/none.md": "trace: docs/kb/none.md does not exist",
             "#30": "trace: #30 has no tracker row or Closes line in any"

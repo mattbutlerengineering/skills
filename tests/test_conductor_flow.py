@@ -676,6 +676,15 @@ class TestGitFacts(unittest.TestCase):
             "- [ ] **WO-0171** next", "- [ ] **WO-0172** later",
             "* [ ] **WO-0173** star", "+ [ ] **WO-0175** plus"], []))
 
+    def test_an_unchecked_row_quoted_in_a_fence_is_not_work(self):
+        path = "docs/fixes/x/defect.md"
+        git = self.git(f"{path}\n", shows={
+            f"conductor/b1-12:{path}":
+                "- [x] **Fix** export\n\n```markdown\n"
+                "- [ ] **Export** — the row that never got checked\n```\n"})
+        self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"),
+                         ([], []))
+
     def test_a_failing_git_read_is_a_problem(self):
         git = FakeGit(failing=["diff"])
         self.assertEqual(flow.gate_blobs(git, "conductor/b1-12"), (None, [
