@@ -31,9 +31,14 @@ the correct stage skill. This skill never produces an artifact itself.
    `defect.md` frontmatter, maintenance runs), the Ship outcome (`outcome:`
    field in `release.md` frontmatter — `prepared` is Ship not yet complete,
    the protocol's "The Ship outcome" section), the Operate population
-   (`users-observed:` field in `retro.md` frontmatter — a retro without
-   its population line is Operate not yet complete, the protocol's "The
-   Operate population" section), and the Implement checkbox rule.
+   (`users-observed:` field in `retro.md` frontmatter — a retro carrying
+   a placeholder or half of the line is Operate not yet complete, while a
+   retro with neither field predates the line and is complete; the
+   protocol's "The Operate population" section), and the Implement checkbox rule
+   (boxes inside a fenced code block, or not followed by whitespace, are
+   not work items). An existing `retro.md` settles the
+   walk first: populated or predating the line means complete,
+   unpopulated means Operate, whatever earlier stage is missing.
 
 4. **Announce.** Tell the user, in one or two sentences: which run this is,
    what exists, what's next, and why. Example: "Feature run `dark-mode`: PRD
@@ -71,8 +76,9 @@ the correct stage skill. This skill never produces an artifact itself.
    skill can be invoked directly").
 
 6. **Completed run?** If `retro.md` exists and carries its population
-   line, the run is complete (a retro without the line is Operate not yet
-   complete, routed in step 5). Offer to start the next run — the retro's "seeds for next ideas" section is the
+   line, or carries neither field (it predates the line), the run is
+   complete (a retro with a placeholder or half the line is Operate not
+   yet complete, routed in step 5). Offer to start the next run — the retro's "seeds for next ideas" section is the
    natural input to a fresh `idea` invocation, and if `docs/backlog.md`
    exists, list its unclaimed seeds and offer to start from one, routing
    each by what it describes exactly as in step 2.

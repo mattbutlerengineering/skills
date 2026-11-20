@@ -84,7 +84,9 @@ branch.
    `rolled-back`, or `prepared` with its `pending-merge:` — as the
    protocol's "The Ship outcome" section defines them.
 
-8. **Hand off.** Next stage is Operate. Commit the artifact on the run's
+8. **Hand off.** Next stage is Operate once `outcome:` is `released` or
+   `rolled-back`; with `outcome: prepared` the run stays at Ship until the
+   merge is written back (step 5). Commit the artifact on the run's
    branch — the protocol's "Commit at the stage boundary" section owns the
    rule and the commit subject.
 
