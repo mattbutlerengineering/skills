@@ -524,12 +524,16 @@ def hold_dispatch(root, batch, now, item, step, refusals):
                        f" is paused behind {held_by[-1]['id']}"]
 
 
-def _launch(root, batch, now, launch, spent, cap):
+def _launch(root, batch, now, launch, git, cap):
     """(problems): the launch state row, written under the ledger lock
     only while the month's spend, every in-flight ceiling and this run's
-    ceiling fit the monthly cap (review major 2). Otherwise dispatch is
-    paused behind a batch-level spend ask, reusing a pending one, and
-    nothing is launched."""
+    ceiling fit the monthly cap (review major 2). The spend is read
+    under the lock too (amendment 11): a run finishing in between moves
+    its ceiling out of flight and its spend row onto its branch, and a
+    figure read before the lock would miss that spend. Otherwise
+    dispatch is paused behind a batch-level spend ask, reusing a pending
+    one, and nothing is launched; a spend read that fails launches
+    nothing either."""
     item, step, ceiling = launch["item"], launch["step"], launch["ceiling"]
     refused = []
 
@@ -538,6 +542,9 @@ def _launch(root, batch, now, launch, spent, cap):
                                             launch["fields"])
         if problems:
             return None, problems
+        spent, unread, malformed = month_spend(git, rows, batch, now)
+        if unread or malformed:
+            return None, unread + malformed
         month = spent + _in_flight_usd(rows) + ceiling
         if month <= cap:
             return flow.state_row(now, item, current_state(rows, item),
@@ -635,8 +642,9 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
     setup_argv, _ = factory_config.resolve_worktree_setup(config or {})
     refusals = problems or found or unusable
     if not refusals:
-        spent, problems, refusals = month_spend(git, ctx["rows"], batch,
-                                                now)
+        # Read once before the lock for the refusals no retry fixes,
+        # which pause dispatch; _launch reads the figure under the lock.
+        _, problems, refusals = month_spend(git, ctx["rows"], batch, now)
     if refusals:
         return None, hold_dispatch(root, batch, now, item, step, refusals)
     if not problems:
@@ -644,7 +652,7 @@ def run_step(root, batch, item, step, clock, git, gh, harness=harness_run,
             "item": item, "step": step, "ceiling": ceiling,
             "fields": {"run_id": run_id, "pid": pid,
                    **({"reviewed_head": ctx["head"]} if step == "review"
-                      else {})}}, spent, cap)
+                      else {})}}, git, cap)
     if problems:
         return None, problems
     # pr-body.md is this step's output only (review minor 7): one left by
