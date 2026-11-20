@@ -58,7 +58,7 @@ from pathlib import Path
 
 import factory_config
 import gates
-from cli import read_file, report
+from cli import read_file, report, write_atomic
 
 
 def identity(text):
@@ -356,8 +356,8 @@ def update_manifest(root):
     # detector E diffs against, so writer and verifier cannot diverge
     manifest = {"plugin": meta.get("name"), "version": meta.get("version"),
                 "files": gates.manifest_files(root)}
-    (root / "factory" / "manifest.json").write_text(
-        json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    write_atomic(root / "factory" / "manifest.json",
+                 json.dumps(manifest, indent=2) + "\n")
     return []
 
 

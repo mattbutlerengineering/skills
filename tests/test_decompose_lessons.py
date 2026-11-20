@@ -359,8 +359,8 @@ class TestFile(TempFile):
     def test_a_failing_replace_leaves_the_original_byte_identical(self):
         text = jsonl(["replan:feature:a"], lesson())
         self.path.write_text(text, encoding="utf-8")
-        with mock.patch.object(dl.os, "replace",
-                               side_effect=OSError("disk full")):
+        with mock.patch("cli.os.replace",
+                        side_effect=OSError("disk full")):
             problems = dl.dump(self.path, [lesson(
                 "replan/feature/dropped", text=DROPPED_TEXT)], [])
         self.assertEqual(
