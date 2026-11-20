@@ -468,3 +468,15 @@ class TestHandOffProducesOneCappedOutput(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestMergedLabelBase(unittest.TestCase):
+    """GitHub honours `Closes #N` only on a merge into the default branch;
+    a stacked child merged into its parent passes no gate, so the
+    merged-label leg must not mark its order wo:merged."""
+
+    def test_merged_label_runs_only_on_a_merge_into_the_default_branch(self):
+        condition = job_if(workflow_jobs(WORKFLOW.read_text(
+            encoding="utf-8"))["merged-label"])
+        self.assertIn("github.event.pull_request.base.ref =="
+                      " github.event.repository.default_branch", condition)
