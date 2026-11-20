@@ -1,7 +1,7 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
 sources: tools/gates.py, tools/knowledge_plane.py
-verified: 81141d71acd1b524a9c5caeb4061922f6951b900
+verified: 63608e4be39def1cb11f8b353944d5361f592455
 related: pr-body-contract, manifest-regen
 ---
 
@@ -15,7 +15,9 @@ as text: fenced blocks and inline code are not skipped.
 - **C** requires every four-digit `PRD-`, `ADR-` and `WO-` token to
   resolve (a `prd.md` declaring it, a `docs/adr/` file, a breakdown row).
   A `breakdown.md` is no longer exempt from the work-order check: every
-  `WO-` token in it must resolve to a row too.
+  `WO-` token in it must resolve to a row too. A row quoted inside a
+  fenced block is not a row (`knowledge_plane.breakdown_rows`, #2174),
+  so it resolves nothing.
   An illustrative id in prose — a made-up work order in a research note,
   an example in a fix brief — is a dangling-token failure.
 - **I** requires every markdown link target that is not a URL or an
