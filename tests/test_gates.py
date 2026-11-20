@@ -2387,6 +2387,24 @@ class TestPrBodyProblems(unittest.TestCase):
         self.assertEqual(gates.pr_body_problems(multi),
                          ["B: PR body cites no work-order id"])
 
+    def test_a_mid_line_comment_opener_hides_nothing(self):
+        """GitHub renders a `<!--` that does not open a line (prose, a
+        code span) as literal text; only a line-opening one starts a
+        hidden block. Swallowing the rest of the body from any `<!--`
+        failed a valid PR that merely mentioned the token."""
+        for body in ("No work order: fix stripping of `<!--` in bodies."
+                     "\n\nCloses #12\n",
+                     "No work order: an unclosed <!-- mid-line is text."
+                     "\nCloses #12\n"):
+            with self.subTest(body=body):
+                self.assertEqual(gates.pr_body_problems(body), [])
+
+    def test_an_unterminated_comment_opening_a_line_hides_the_rest(self):
+        body = "No work order: reason\n<!-- template note\nCloses #12\n"
+        self.assertEqual(gates.pr_body_problems(body), [self.NO_CLOSES])
+        indented = "No work order: reason\n   <!-- note\nCloses #12\n"
+        self.assertEqual(gates.pr_body_problems(indented), [self.NO_CLOSES])
+
     def test_the_unfilled_template_with_only_closes_filled_still_fails(self):
         template = (Path(__file__).resolve().parents[1]
                     / ".github" / "PULL_REQUEST_TEMPLATE.md").read_text(

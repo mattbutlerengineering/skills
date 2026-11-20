@@ -111,7 +111,12 @@ from protocol import frontmatter_end, parse_frontmatter
 # deliberate lie the same as any other gamed gate. The Closes-#N audit link is
 # still required in both cases. (ADR-0033, amended: merge stays gated, but the
 # gate no longer assumes every PR is a work order.)
-HTML_COMMENT = re.compile(r"<!--.*?(?:-->|\Z)", re.DOTALL)
+# A closed comment anywhere, or an unclosed one that opens a line (up to
+# three spaces in): that is an HTML block GitHub hides to the end of the
+# body. A `<!--` mid-line or in a code span with no `-->` is rendered as
+# literal text, so it hides nothing.
+HTML_COMMENT = re.compile(r"<!--.*?-->|^ {0,3}<!--.*\Z",
+                          re.DOTALL | re.MULTILINE)
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
