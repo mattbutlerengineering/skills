@@ -354,10 +354,11 @@ def pid_alive(pid):
 
 
 def shipped_facts(git, batch, rows):
-    """({item: {"gate_blobs"}}, problems) for the shipped items, which
-    conductor_consent.cover reads (issue #734)."""
+    """({item: {"gate_blobs"}}, problems) for the shipped items and the
+    items stalled in a merge turn, which conductor_consent.cover reads
+    (issue #734)."""
     facts = {}
-    for item in flow.shipped_items(rows):
+    for item in flow.shipped_items(rows) + flow.stalled_merges(rows):
         blobs, problems = flow.gate_blobs(git, item_branch(batch, item))
         if problems:
             return None, problems
