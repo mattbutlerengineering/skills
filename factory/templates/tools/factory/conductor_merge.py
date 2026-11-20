@@ -259,6 +259,28 @@ def _mechanical(git, worktree, conflicted):
     return True
 
 
+def rollback_writes(git, worktree, item):
+    """(problems): restore the Conductor's own write slots, plugin.json
+    and the manifest, to HEAD in the item worktree when a stalled turn
+    left them uncommitted (#2211): left dirty, a retry's merge of
+    origin/main is refused once main changes either. Only those two
+    paths; any other uncommitted change is left for the retry to report.
+    Nothing to do in a consumer repo, where the turn writes neither."""
+    if not factory_source(worktree):
+        return []
+    slots = [PLUGIN, MANIFEST]
+    try:
+        if git(["-C", str(worktree), "status", "--porcelain", "--",
+                *slots]).stdout.strip():
+            git(["-C", str(worktree), "checkout", "HEAD", "--", *slots])
+    except CLI_FAILURES as err:
+        return [f"cd: merge of {item} stalled, but rolling back its"
+                f" uncommitted {', '.join(slots)} failed:"
+                f" {detail(err, every_line=True)}; restore them to HEAD by"
+                " hand before a retry"]
+    return []
+
+
 def update_branch(git, tool, worktree, branch):
     """Steps 1-2: merge origin/main into the item branch. Item branches
     do not edit docs/factory/costs.jsonl — spend is a per-run file — so a
@@ -856,11 +878,12 @@ def merge_turn(root, batch, item, clock, git, gh, tool, sleep, pid=None,
             problems = []
             reason = f"merged by the repo as PR #{merged['pr']}"
     except Stall as stall:
+        rolled = rollback_writes(git, worktree, item)
         _, problems = flow.queue_stall(
             root, batch, clock(), item, stall.reason, "merge-failed",
             stall.recommended,
             RETRY_WHY if stall.recommended == RETRY else BLOCK_WHY)
-        return {"item": item, "stall": stall.reason}, problems
+        return {"item": item, "stall": stall.reason}, problems + rolled
     if problems:
         return None, problems
     _, problems = flow.move(root, batch, clock(), item, "merged",

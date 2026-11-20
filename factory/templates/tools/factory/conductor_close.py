@@ -540,14 +540,20 @@ def append_scorecard(root, card):
     return []
 
 
-def pr_body(batch, finals, kept=()):
-    blocked = ", ".join(finals["blocked"]) or "none"
+def pr_body(batch, finals, kept=(), outside=()):
+    """`outside` is the merged-outside items (merged_outside) whose spend
+    close carried beside the blocked items' (#2211)."""
+    spend = (f"its blocked items ({', '.join(finals['blocked']) or 'none'})"
+             if finals["blocked"] or not outside else "")
+    if outside:
+        spend += (" and of " if spend else "") + (
+            f"its items merged outside the batch ({', '.join(outside)})")
     closes = "".join(f"Closes {item}\n" for item in finals["merged"])
     keeps = (f"Kept on origin, holding work beyond spend rows:"
              f" {', '.join(kept)}.\n\n" if kept else "")
     return (f"Conductor batch {batch}'s closing PR: its batch ledger, run"
-            " evidence, scorecard, and the spend rows of its blocked items"
-            f" ({blocked}).\n\n{keeps}{closes}\nNo work order: the"
+            f" evidence, scorecard, and the spend rows of {spend}"
+            f".\n\n{keeps}{closes}\nNo work order: the"
             f" Conductor's closing PR for batch {batch}.")
 
 
@@ -575,7 +581,7 @@ def _record_close(root, batch, now, finals):
     return (written[1]["id"] if written else None), problems
 
 
-def _publish(root, batch, git, gh, finals, reasons, branches):
+def _publish(root, batch, git, gh, finals, reasons, branches, outside=()):
     """Commit, push (never forced), open the closing PR, label each
     blocked item, then delete its spend-only branches from origin: only
     once the push carried their spend rows. A problem names the step
@@ -607,7 +613,7 @@ def _publish(root, batch, git, gh, finals, reasons, branches):
                     " needs-human labels by hand"]
     calls = [["pr", "create", "--head", branch, "--base", "main", "--title",
               f"conductor batch {batch}: ledger and scorecard", "--body",
-              pr_body(batch, finals, branches["keep"])]]
+              pr_body(batch, finals, branches["keep"], outside)]]
     for item in finals["blocked"]:
         calls += [["issue", "edit", item[1:], "--add-label", NEEDS_HUMAN],
                   ["issue", "comment", item[1:], "--body",
@@ -688,8 +694,8 @@ def close_batch(root, batch, clock, git, gh):
             else _final_items(rows, batch)
         if problems:
             return None, problems
-    carried = sorted(finals["blocked"]
-                     + merged_outside(rows, finals["merged"]),
+    outside = merged_outside(rows, finals["merged"])
+    carried = sorted(finals["blocked"] + outside,
                      key=lambda item: int(item[1:]))
     problems = (update_from_main(git, root, batch_branch(batch))
                 or carry_blocked_spend(git, root, batch, carried, rows))
@@ -711,7 +717,7 @@ def close_batch(root, batch, clock, git, gh):
     reasons = {item: item_view(rows, item)["last"]["reason"]
                for item in finals["blocked"]}
     return {"batch": batch, **finals, "ask": ask_id, "landed": landed}, \
-        _publish(root, batch, git, gh, finals, reasons, branches)
+        _publish(root, batch, git, gh, finals, reasons, branches, outside)
 
 
 def _closing_answer(rows, batch):

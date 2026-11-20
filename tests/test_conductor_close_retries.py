@@ -79,6 +79,25 @@ class TestMergedOutsideSpendIsCarried(CloseCase):
                          (["#12", "#13", "#14"], []))
         self.assertEqual(self.run_file_ids(), ["conductor-b1-13-build-1"])
 
+    def test_the_closing_pr_names_the_merged_outside_items_carried(self):
+        # #2211: not "its blocked items (none)" when #13's was carried.
+        self.close(STALLED_MERGED, costs=SPEND, gh=FakeGh(NO_LANDED))
+        self.assertEqual(self.gh.calls[-1][-1], "Conductor batch b1's"
+                         " closing PR: its batch ledger, run evidence,"
+                         " scorecard, and the spend rows of its items"
+                         " merged outside the batch (#13).\n\nCloses #12"
+                         "\nCloses #13\nCloses #14\n\nNo work order: the"
+                         " Conductor's closing PR for batch b1.")
+
+    def test_the_closing_pr_names_blocked_and_merged_outside_items(self):
+        self.assertEqual(close.pr_body(
+            "b1", {"merged": ["#12", "#14"], "blocked": ["#13"]},
+            outside=["#14"]), "Conductor batch b1's closing PR: its batch"
+            " ledger, run evidence, scorecard, and the spend rows of its"
+            " blocked items (#13) and of its items merged outside the batch"
+            " (#14).\n\nCloses #12\nCloses #14\n\nNo work order: the"
+            " Conductor's closing PR for batch b1.")
+
     def test_a_conductor_merged_items_branch_is_not_read(self):
         # Its merge turn pushed the head it landed: nothing is local only.
         self.close(ROWS)
