@@ -13,6 +13,10 @@ modules (#916).
   manifest and plugin.json's version line: a turn that committed its
   bump and stalled conflicts on that line once main's version moves, and
   every retry would stall on it.
+- A stalled turn rolls back its own uncommitted writes to plugin.json
+  and the manifest before recording the stall (#2211): left dirty, a
+  retry's merge of origin/main is refused once main changes either.
+  Nothing else in the worktree is touched.
 """
 import json
 import sys
@@ -22,11 +26,13 @@ from pathlib import Path
 import conductor_merge as merge
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fake_git import default_error  # noqa: E402
 from test_conductor_flow import START, answered  # noqa: E402
 from test_conductor_merge import (BRANCH, SEED, SHIPPED,  # noqa: E402
                                   TurnCase, sh, write)
 
 PLUGIN = ".claude-plugin/plugin.json"
+MANIFEST = "factory/manifest.json"
 RED_RUN = {"name": "validate", "status": "completed", "conclusion": "failure"}
 
 
@@ -164,6 +170,90 @@ class TestPluginVersionConflict(RetryCase):
         self.assertEqual(problems, [])
         self.assertEqual(summary["stall"], f"merging origin/main into"
                          f" {BRANCH} conflicts in {PLUGIN}")
+
+
+
+class TestStallRollsBackTheBump(RetryCase):
+    def failing_git(self, *words):
+        """The real git port, failing any call that carries all of
+        `words` as fake_git states a failed git."""
+        real = self.git
+
+        def git(args):
+            if all(word in args for word in words):
+                self.log.append(("git", list(args)))
+                raise default_error()
+            return real(args)
+        return git
+
+    def stall_then_main_moves(self, **turn):
+        self.item({"skills/x/SKILL.md": "x\n"})
+        summary, problems = self.turn(SHIPPED, **turn)
+        self.assertEqual(problems, [])
+        self.assertIsNotNone(summary["stall"])
+        self.main_moves({PLUGIN: plugin("0.7.5"),
+                         MANIFEST: '{"files": "main"}\n'})
+        return summary
+
+    def test_a_retry_after_main_moves_merges_and_bumps_from_main(self):
+        # The issue's scenario: the bump is written, regeneration fails,
+        # main's version moves, the Owner answers retry.
+        self.stall_then_main_moves(tool=self.tool(fail="update-manifest"))
+        self.assertEqual(sh(self.wt, "status", "--porcelain"), "")
+        summary, problems = self.retry()
+        self.assertEqual((problems, summary["stall"]), ([], None))
+        self.assertEqual(self.version("origin/" + BRANCH), "0.7.6")
+        self.assertEqual(self.reserved(), [["0.7.6"]])
+        sh(self.repo, "merge-base", "--is-ancestor", "origin/main", BRANCH)
+
+    def test_a_staged_bump_whose_commit_failed_is_rolled_back(self):
+        self.git = self.failing_git("commit", "-m")
+        summary = self.stall_then_main_moves()
+        self.assertEqual(summary["stall"], "committing the version bump"
+                         " failed: fatal: rejected")
+        self.assertEqual(sh(self.wt, "status", "--porcelain"), "")
+        del self.git
+        summary, problems = self.retry()
+        self.assertEqual((problems, summary["stall"]), ([], None))
+        self.assertEqual(self.version("origin/" + BRANCH), "0.7.6")
+
+    def test_any_other_uncommitted_change_is_left(self):
+        failing = self.tool(fail="update-manifest")
+
+        def tool(args, cwd=None):
+            if "update-manifest" in args:
+                write(self.wt, {MANIFEST: '{"files": "half"}\n',
+                                "README.md": "a stray edit\n"})
+            return failing(args, cwd)
+        self.item({"skills/x/SKILL.md": "x\n"})
+        summary, problems = self.turn(SHIPPED, tool=tool)
+        self.assertEqual(problems, [])
+        self.assertEqual(sh(self.wt, "status", "--porcelain"),
+                         " M README.md\n")
+
+    def test_a_failed_rollback_is_a_problem_on_the_stall(self):
+        self.git = self.failing_git("checkout", "HEAD")
+        self.item({"skills/x/SKILL.md": "x\n"})
+        summary, problems = self.turn(
+            SHIPPED, tool=self.tool(fail="update-manifest"))
+        self.assertEqual(summary["stall"], "regenerating the manifest"
+                         " failed: make: *** [check] Error 1")
+        self.assertEqual(problems, [
+            "cd: merge of #12 stalled, but rolling back its uncommitted"
+            f" {PLUGIN}, {MANIFEST} failed: fatal: rejected; restore them to"
+            " HEAD by hand before a retry"])
+        self.assertEqual(self.rows[-1]["ask_kind"], "stall")
+        self.assertEqual(sh(self.wt, "status", "--porcelain"),
+                         f" M {PLUGIN}\n")
+
+    def test_a_consumer_repo_rolls_nothing_back(self):
+        sh(self.wt, "rm", "-q", "tools/factory_init.py")
+        sh(self.wt, "commit", "-q", "-m", "consumer")
+        self.git = self.failing_git("checkout", "HEAD")
+        summary, problems = self.turn(
+            SHIPPED, gh=self.fake_gh(checks=([RED_RUN],)))
+        self.assertEqual(problems, [])
+        self.assertTrue(summary["stall"].startswith("checks failed"))
 
 
 if __name__ == "__main__":

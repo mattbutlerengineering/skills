@@ -555,7 +555,7 @@ class TestClose(CloseCase):
              "--title", "conductor batch b1: ledger and scorecard",
              "--body", "Conductor batch b1's closing PR: its batch"
              " ledger, run evidence, scorecard, and the spend rows of its"
-             " blocked items (none).\n\nCloses #12\nCloses #13\nCloses #14"
+             " items merged outside the batch (#13).\n\nCloses #12\nCloses #13\nCloses #14"
              "\n\nNo work order: the Conductor's closing PR for batch b1."]])
 
     def test_a_block_over_an_already_asked_merged_pr_is_kept(self):
