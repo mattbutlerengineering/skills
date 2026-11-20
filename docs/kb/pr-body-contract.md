@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: tools/gates.py, tools/knowledge_plane.py, tools/validator.py, tools/pr_body_preflight.py, .github/workflows/validator.yml
-verified: 964ec14ecbdfd39a818feff6a959d26892fa70c5
+verified: 1d0a195ec88bd46d270580eccea3dd49c851dff6
 related: gates-scan-every-doc
 ---
 
