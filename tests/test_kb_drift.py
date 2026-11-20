@@ -217,6 +217,13 @@ class TestTables(Tree):
         self.assertEqual(len(read), 1, read)
         self.assertTrue(read[0].startswith("drift: plugin.json "), read)
 
+    def test_an_unreadable_instruction_file_is_a_problem(self):
+        (self.root / "CLAUDE.md").write_bytes(b"# Notes\n\xff\n")
+        read = [p for p in self.drift() if "CLAUDE.md" in p]
+        self.assertEqual(len(read), 1, read)
+        self.assertTrue(read[0].startswith("drift: cannot read CLAUDE.md: "),
+                        read)
+
     def test_no_table_means_no_undocumented_entry_finding(self):
         self.skill("deploy")
         self.file("CLAUDE.md", "# Notes\n")

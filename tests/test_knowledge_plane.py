@@ -966,3 +966,32 @@ class TestWorkOrdersReportsAnUnreadableBreakdown(unittest.TestCase):
             self.assertEqual(len(problems), 1)
             self.assertTrue(problems[0].startswith(
                 "cannot read docs/features/bad/breakdown.md: "), problems)
+
+
+class TestGrammarEdgeForms(unittest.TestCase):
+    """Forms the row and ADR grammars accept on purpose but no test
+    pinned: a mutation removing any of them passed the whole suite."""
+
+    def test_a_tracker_reference_without_a_space_still_reads(self):
+        self.assertEqual(knowledge_plane.row_tracker_issue(
+            "- [ ] **WO-0001** x (tracker:#7)"), 7)
+
+    def test_a_title_glued_to_the_work_order_still_names_it(self):
+        self.assertEqual(knowledge_plane.row_work_order(
+            "- [ ] **WO-0001**title"), "WO-0001")
+
+    def test_an_en_dash_is_the_written_form_of_no_blocker(self):
+        line = "- [ ] **WO-0001** x — blocked by: –"
+        self.assertEqual(knowledge_plane.row_blockers(line), [])
+        self.assertIsNone(knowledge_plane.row_unreadable_blockers(line))
+
+    def test_a_plus_bullet_blocked_by_clause_is_read(self):
+        [row] = knowledge_plane.breakdown_rows(
+            ["- [ ] **WO-0003** x", "  + blocked by: WO-0002"])
+        self.assertEqual(row["blockers"], ["WO-0002"])
+
+    def test_a_dashless_adr_filename_keys_at_four_digits(self):
+        self.assertEqual(knowledge_plane.adr_file_number("ADR0063-x.md"),
+                         ("0063", "0063"))
+        self.assertEqual(knowledge_plane.adr_file_number("adr7-y.md"),
+                         ("0007", "7"))
