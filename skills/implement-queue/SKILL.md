@@ -343,6 +343,16 @@ An iteration in flight:
 | `agent-failed` | No usable change this time |
 | `stealable` | Failed twice; needs a different approach |
 
+The repo must have every label above (or the profile's own state labels)
+before Phase 1 claims anything: `gh issue edit` refuses a label the repo
+lacks, so a claim that removes `ready` and then fails to add
+`in-progress` strands the issue with no state label. A fresh repo has
+none of them (the factory's `labels.json` carries only `wo:*`
+lifecycle labels). In Phase 0, list the repo's labels
+(`gh label list --limit 1000 --json name`), create each missing one with
+`gh label create <name>`, and if a label cannot be created, claim
+nothing and report which are missing.
+
 ## Rules
 
 - One queue session per repo at a time.
