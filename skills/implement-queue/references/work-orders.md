@@ -195,7 +195,7 @@ overlap rather than pretending the batch was disjoint.
 
 Then record that spend, once per work order:
 
-    python3 tools/budget_guard.py record <WO-####> <run-id> <model> <tokens> <cost>
+    python3 tools/budget_guard.py record <WO-####> <run-id> <model> <tokens> <cost>   # or tools/factory/budget_guard.py
 
 The numbers come from the harness's own report of that worker's usage.
 Never estimate them, never round them to something plausible, and never

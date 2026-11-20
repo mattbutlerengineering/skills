@@ -35,7 +35,12 @@ Run after step 4, every iteration, before Phase 1.
 Skip any issue whose PR is in this session's gate or train. For each
 of the others, read the PRs that refer to it from its timeline:
 
-    gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null and .source.issue.repository.full_name == "{owner}/{repo}") | [.source.issue.number, .source.issue.state, (.source.issue.pull_request.merged_at // "-")] | @tsv' | sort -u
+    gh api repos/{owner}/{repo}/issues/<N>/timeline --paginate --jq '.[] | select(.event == "cross-referenced" and .source.issue.pull_request != null and .source.issue.repository.full_name == "<owner>/<repo>") | [.source.issue.number, .source.issue.state, (.source.issue.pull_request.merged_at // "-")] | @tsv' | sort -u
+
+gh fills `{owner}/{repo}` in the endpoint only, never inside `--jq`:
+replace `<owner>/<repo>` in the filter with the real slug (`gh repo view
+--json nameWithOwner -q .nameWithOwner`), or the filter matches nothing
+and every issue reads as having no PR.
 
 A PR appears once per event that references the issue, so `sort -u`
 leaves one row per PR, and every count below counts distinct PR

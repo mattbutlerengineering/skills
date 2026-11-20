@@ -146,10 +146,10 @@ Under `source: work-orders`, the planner and the `wo:*` claim in
 [references/work-orders.md](references/work-orders.md) replace this
 phase.
 
-    gh issue list --label ready --state open --json number,title,body,labels
+    gh issue list --label ready --state open --limit 1000 --json number,title,body,labels
 
 In a cloud session (see [Cloud sessions](references/cloud-sessions.md) above):
-`gh api 'repos/{owner}/{repo}/issues?labels=ready&state=open&per_page=100'`,
+`gh api 'repos/{owner}/{repo}/issues?labels=ready&state=open&per_page=100' --paginate`,
 dropping every entry that carries a `pull_request` key — the REST
 issues endpoint lists pull requests too.
 
