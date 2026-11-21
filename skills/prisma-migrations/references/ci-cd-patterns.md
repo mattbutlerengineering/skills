@@ -365,8 +365,12 @@ npx prisma migrate resolve --rolled-back 20240101_add_feature
 
 Store in repository secrets:
 
-- `DATABASE_URL` - Production database URL
+- `PROD_DATABASE_URL` - Production database URL
 - `STAGING_DATABASE_URL` - Staging database URL
+
+The `a && b || c` expression below falls through to `c` whenever `b` is
+empty, so a missing or misnamed production secret silently migrates
+**staging** from main. Create both secrets under exactly these names.
 
 ### Environment-Specific URLs
 

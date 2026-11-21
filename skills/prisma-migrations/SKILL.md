@@ -174,7 +174,11 @@ has no migration history, so `migrate deploy` would try to create
 tables that already exist. Baseline it first:
 
 1. Make `schema.prisma` match the database (`prisma db pull`).
-2. Generate an initial migration with `--create-only`.
+2. Generate the initial migration from the schema alone —
+   `prisma migrate diff --from-empty --to-schema-datamodel
+   prisma/schema.prisma --script` into
+   `prisma/migrations/0_initial_baseline/migration.sql` — never
+   `migrate dev`, which would offer to reset the drifted database.
 3. Record it as already applied on every existing database with
    `migrate resolve --applied`.
 4. Every later migration works normally.
