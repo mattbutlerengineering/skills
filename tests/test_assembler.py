@@ -741,8 +741,16 @@ class TestSpendRowPersistence(unittest.TestCase):
         text = self.WORKFLOW.read_text(encoding="utf-8")
         mkdir = text.index(
             'mkdir -p "$RUNNER_TEMP/spend/docs/factory"')
-        tail = text.index("tail -n 1 docs/factory/costs.jsonl")
-        self.assertLess(mkdir, tail)
+        append = text.index('printf \'%s\\n\' "$row" >> "$ledger"')
+        self.assertLess(mkdir, append)
+
+    def test_a_rejected_spend_push_re_appends_onto_the_new_tip(self):
+        # Two orders delivering, or gate-digest, can push to main in the
+        # window: the step retries the append on a refetched tip.
+        text = self.WORKFLOW.read_text(encoding="utf-8")
+        self.assertIn("for attempt in 1 2 3; do", text)
+        self.assertIn('reset -q --hard "refs/remotes/origin/$BASE"', text)
+        self.assertIn("spend row not pushed after 3 attempts", text)
 
 
 class TestMechanicalStops(unittest.TestCase):

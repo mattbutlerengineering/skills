@@ -327,16 +327,29 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          row="$(tail -n 1 docs/factory/costs.jsonl)"
           git fetch origin "$BASE"
           git worktree add "$RUNNER_TEMP/spend" "refs/remotes/origin/$BASE"
-          mkdir -p "$RUNNER_TEMP/spend/docs/factory"
           ledger="$RUNNER_TEMP/spend/docs/factory/costs.jsonl"
-          # A main ledger lacking its final newline would fuse the new row onto its last line.
-          if [ -s "$ledger" ] && [ -n "$(tail -c 1 "$ledger")" ]; then echo >> "$ledger"; fi
-          tail -n 1 docs/factory/costs.jsonl >> "$ledger"
-          git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
-          git -C "$RUNNER_TEMP/spend" commit -m "chore(factory): run-spend row (assembler)"
-          git -C "$RUNNER_TEMP/spend" push origin "HEAD:$BASE"
+          # Another order delivering, or gate-digest, can push to main in
+          # between: a rejected push re-appends the row onto the new tip
+          # (a rebase of two appends at EOF would conflict), up to 3 tries.
+          for attempt in 1 2 3; do
+            git -C "$RUNNER_TEMP/spend" reset -q --hard "refs/remotes/origin/$BASE"
+            mkdir -p "$RUNNER_TEMP/spend/docs/factory"
+            # A main ledger lacking its final newline would fuse the new row onto its last line.
+            if [ -s "$ledger" ] && [ -n "$(tail -c 1 "$ledger")" ]; then echo >> "$ledger"; fi
+            printf '%s\n' "$row" >> "$ledger"
+            git -C "$RUNNER_TEMP/spend" add docs/factory/costs.jsonl
+            git -C "$RUNNER_TEMP/spend" commit -q -m "chore(factory): run-spend row (assembler)"
+            if git -C "$RUNNER_TEMP/spend" push origin "HEAD:$BASE"; then
+              exit 0
+            fi
+            echo "spend-row push rejected (attempt $attempt); refetching $BASE"
+            git -C "$RUNNER_TEMP/spend" fetch origin "$BASE"
+          done
+          echo "::error::spend row not pushed after 3 attempts"
+          exit 1
       # GitHub suppresses pull_request events for PRs the GITHUB_TOKEN
       # opens, so the agent's PR would otherwise reach gate 3 with no
       # check, no reviewer, and no queue entry (WO-0030). find-pr joins
