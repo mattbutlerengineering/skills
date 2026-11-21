@@ -918,8 +918,8 @@ class TestStandardsDrift(unittest.TestCase):
             self.adr(tree, "docs/adr/0001-x.md", "accepted",
                      "- **some-slug** (factory): Something MUST happen.")
             self.standards(tree, [
-                {"statement": "no slug"},
-                {"slug": "a", "statement": "x"}])
+                {"statement": "no slug", "status": "advisory"},
+                {"slug": "a", "statement": "x", "status": "advisory"}])
             self.assertEqual(gates.check_standards_drift(tree.root), [
                 "K: docs/standards.json has drifted from a fresh ADR"
                 " regeneration (run `python3 standards_index.py"
@@ -2233,6 +2233,8 @@ class TestConfigShape(unittest.TestCase):
             self.assertEqual(gates.check_config_shape(root), [
                 f"F: {rel} budgets_usd must map exactly S, M, L",
                 f"F: {rel} routing must map exactly mechanical,"
+                " implementation, architecture_review",
+                f"F: {rel} effort must map exactly mechanical,"
                 " implementation, architecture_review",
                 f"F: {rel} wip_cap must be a positive integer",
                 f"F: {rel} monthly_cap_usd must be a positive number",
