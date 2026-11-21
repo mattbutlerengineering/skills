@@ -65,6 +65,8 @@ snapshot line), one lane per run **in the model's order**, glyph per
 ladder state, progress count under an in-progress implement mark,
 attention strip only when non-empty, legend kept. Update root `width`/`height`,
 `viewBox`, the ground rect, and the `<title>`/`<desc>` to match the real content.
+XML-escape every model string you write (`&`, `<`, `>`; quotes inside
+attributes) — see the grammar's "The model, verbatim".
 
 Done when: the file exists and contains every run from the model
 exactly once.
@@ -75,7 +77,9 @@ Walk the render against the model: every `runs` entry has one lane,
 every lane's marks match its `ladder` states in order, counts equal
 `progress`, attention rows match `attention`. Walk the aesthetic
 checklist in the grammar reference item by item. Confirm the file
-makes no external requests (the only URL is the SVG namespace).
+parses as XML (`python3 -c "import xml.etree.ElementTree as E;
+E.parse('<file>')"`) and makes no external requests (the only URL is
+the SVG namespace).
 
 Then show the file — open it or hand its path to the user, whichever
 the session supports. Regenerate any time by running the steps again;
