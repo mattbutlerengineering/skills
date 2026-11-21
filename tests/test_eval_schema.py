@@ -76,6 +76,17 @@ class TestValidate(unittest.TestCase):
         self.assertIn("evals/routing.json case 'next-0' has no query",
                       problems)
 
+    def test_a_missing_expected_or_a_non_string_query_is_refused(self):
+        # the runner subscripts case["expected"] after every paid run
+        data = valid_data()
+        del data["cases"][0]["expected"]
+        data["cases"][1]["query"] = ["not", "a", "string"]
+        problems = eval_schema.validate(data, SKILLS, LABEL)
+        self.assertIn("evals/routing.json case 'next-0' missing field:"
+                      " expected", problems)
+        self.assertIn(f"evals/routing.json case"
+                      f" {data['cases'][1]['id']!r} has no query", problems)
+
     def test_thin_skill_coverage(self):
         data = valid_data()
         data["cases"] = [c for c in data["cases"] if c["id"] != "idea-0"]
@@ -277,6 +288,16 @@ class TestValidateOutput(unittest.TestCase):
         self.assertEqual(
             eval_schema.validate_output(data, "idea", self.LABEL),
             ["evals/output/idea.json eval 1 missing field: expectations"])
+
+    def test_expectations_that_check_nothing_count_as_missing(self):
+        for value in ("a single string", {"a": 1}, True, [1, None, ""]):
+            with self.subTest(value=value):
+                data = valid_output_data()
+                data["evals"][0]["expectations"] = value
+                self.assertEqual(
+                    eval_schema.validate_output(data, "idea", self.LABEL),
+                    ["evals/output/idea.json eval 1 missing field:"
+                     " expectations"])
 
     def test_skill_name_mismatch(self):
         data = valid_output_data()

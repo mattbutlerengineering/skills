@@ -256,7 +256,11 @@ def _output_field_missing(record, field):
     # any other field is missing only when absent or null — falsy values
     # are values, mirroring validate()'s is-None handling
     if field == "expectations":
-        return not record.get(field)
+        # a list of non-empty strings: a bare string, an object or a list
+        # holding a non-string checks nothing either
+        value = record.get(field)
+        return not (isinstance(value, list) and value
+                    and all(isinstance(x, str) and x.strip() for x in value))
     if field == "run_fixture":
         return not (isinstance(record.get(field), str) and record[field])
     return record.get(field) is None
@@ -331,11 +335,16 @@ def validate(data, skills, label):
            for c in cases
            if c.get("expected") is not None
            and c.get("expected") not in skills]
+        # a distractor says so with an explicit null: the runner
+        # subscripts case["expected"] after every paid run
+        + [f"{label} case {c.get('id')!r} missing field: expected"
+           for c in cases if isinstance(c, dict) and "expected" not in c]
         + [f"{label} case {c.get('id')!r} has invalid "
            f"kind {c.get('kind')!r}"
            for c in cases if c.get("kind") not in KINDS]
         + [f"{label} case {c.get('id')!r} has no query"
-           for c in cases if not c.get("query")]
+           for c in cases
+           if not (isinstance(c.get("query"), str) and c["query"].strip())]
     )
 
     coverage = [c.get("expected") for c in cases]
