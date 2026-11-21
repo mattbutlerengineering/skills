@@ -127,6 +127,19 @@ class TestReconcileDrift(unittest.TestCase):
             ["docs/features/demo/breakdown.md: a checked row mirrors #109,"
              " which carries wo:in-progress — the row says merged"])
 
+    def test_a_row_naming_no_work_order_is_not_compared(self):
+        # decompose's tracker import writes rows like this; the issue
+        # never gets wo:merged, so its state is no drift (#2191) — and
+        # it still counts as mirrored, so a wo: label on it is no
+        # "unmirrored work order" either.
+        imported = "- [x] **Imported item** — x (tracker: #12)"
+        self.assertEqual(self.drift(rows(imported),
+                                    [issue(12, "CLOSED", ["type:defect"])]),
+                         [])
+        self.assertEqual(self.drift(rows(imported),
+                                    [issue(12, "CLOSED", ["wo:merged"])]),
+                         [])
+
     def test_a_checked_row_whose_merged_issue_is_still_open(self):
         self.assertEqual(
             self.drift(rows(self.DONE), [issue(109, "OPEN", ["wo:merged"])]),

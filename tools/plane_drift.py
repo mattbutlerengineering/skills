@@ -95,6 +95,13 @@ def reconcile_drift(rows, issues, absent_is_drift=True):
                 # row is the knowledge plane's own disagreement (#886).
                 continue
             mirrored.add(number)
+            if row["wo"] is None:
+                # A row naming no work order (decompose's tracker import
+                # and export) mirrors an issue the dispatch plane never
+                # moves, so that issue never gets wo:merged — comparing
+                # its state was permanent drift (#2191). It still counts
+                # as mirrored, so its issue is no "unmirrored" order.
+                continue
             issue = index.get(number)
             if issue is None:
                 if absent_is_drift:
