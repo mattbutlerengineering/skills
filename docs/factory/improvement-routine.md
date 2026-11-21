@@ -62,13 +62,18 @@ Read, in order:
    `<!-- routine-state last-scan=... -->` marker. Missing marker or
    first run → the scan window defaults to 7 days back.
 4. `git log --oneline` on main since last-scan.
-5. Open PRs (`gh pr list`), with age. Note the routine's own, if any
+5. Open PRs (`gh pr list --state open --limit 1000`; `gh`'s default
+   stops at 30, and a count equal to the limit is truncated — fail
+   closed), with age. Note the routine's own, if any
    (that decision already happened in §1).
-6. The latest CI runs on main (`gh run list --branch main --limit 5`).
+6. The latest CI runs on main (`gh run list --branch main --workflow
+   validator --limit 5` — the `check` job lives in validator.yml; an
+   unfiltered list mixes in assembler and pages runs).
 7. `LEDGER.md` — skills stuck at draft or used-once and bouncy trigger
    scores are Proposals material: paid eval runs are proposed, never
    run (§8).
-8. The issue queue — `gh issue list --state open` (ADR-0083: GitHub
+8. The issue queue — `gh issue list --state open --limit 1000`, a count
+   equal to the limit truncated (ADR-0083: GitHub
    issues are the only tracker). Read-only intel: status changes the
    routine would have made (close, relabel) go in the report for the
    human to apply, except closing the day's own issue through its PR.
@@ -104,6 +109,7 @@ Run the verify suite at the repo root, exactly:
 ```
 python3 -m unittest discover tests
 python3 tools/lint.py
+python3 tools/kb.py drift
 python3 tools/gates.py && python3 tools/gates.py --selftest
 ```
 
@@ -124,9 +130,11 @@ never work:
    comment.
 2. **A ready queue item.** Eligible: an open issue that is not a work
    order (no `wo:*` label — those move only through the dispatch plane),
-   not a permanent state issue (gate-queue digest #178, journal #181),
-   not labelled `ready-for-human` or `needs-human`, and not blocked by
-   an issue that is still open; oldest first. Only if it fits the size
+   not a permanent-state issue (a journal, digest, queue or cost report:
+   #178, #181, #294, #586, #587, #590, #925, #930), not labelled
+   `ready-for-human` or `needs-human`, not covered by an open PR (a body
+   that `Closes` it), and not blocked by an issue that is still open;
+   oldest first. Only if it fits the size
    bound.
 3. **A graduated reflect candidate** (§6): a candidate rule with two or
    more distinct correction events across the journal history. The edit
@@ -239,7 +247,7 @@ Exactly one journal comment per run:
 **YYYY-MM-DD — <PR | comments-addressed | propose-only | stopped>**: <one line>
 - Pick: <what and why — or which rung ended the search>
 - Health: <verify suite, main CI, open PRs with age>
-- Queue: <export freshness; top ready items>
+- Queue: <open issues by type; top ready items>
 - Reflect: <corrections harvested; candidate rules with counts>
 - Proposals: <eval runs to fund, splits, playbook diffs, escalations>
 - Spend: <estimate for this run>
