@@ -360,6 +360,21 @@ def bump_version(git, tool, worktree, branch):
     return version
 
 
+def _main_bytes(worktree, path):
+    """origin/main's copy of PATH decoded with surrogateescape, for a
+    blob the strict git runner cannot decode. A read that fails here,
+    after the strict read reached the blob, is a Stall: never "new"."""
+    try:
+        blob = subprocess.run(
+            ["git", "-C", str(worktree), "show", f"origin/main:{path}"],
+            capture_output=True, check=True, timeout=60).stdout
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired,
+            OSError) as err:
+        raise Stall(f"{path} on origin/main is not UTF-8 and could not be"
+                    f" read as bytes: {detail(err)}") from None
+    return blob.decode("utf-8", errors="surrogateescape")
+
+
 def _texts(git, worktree, path):
     """(origin/main's lines, the branch's lines) of one changed path: a
     path new on the item has no main lines; a deleted one no branch
@@ -367,11 +382,12 @@ def _texts(git, worktree, path):
     try:
         main = git(["show", f"origin/main:{path}"]).stdout
     except UnicodeDecodeError:
-        # Not "absent": read as new, every line on main would count as
-        # added and a renumber could rewrite them (CLI_FAILURES carries
-        # decode errors since #2254, so this must come first).
-        raise Stall(f"{path} on origin/main is not UTF-8; renumber it"
-                    " by hand") from None
+        # Not "absent" (read as new, every line on main would count as
+        # added and a renumber could rewrite them), and not a stall (a
+        # binary file on main is ordinary): read the blob's bytes the way
+        # the head side reads its file. CLI_FAILURES carries decode
+        # errors since #2254, so this must come first.
+        main = _main_bytes(worktree, path)
     except CLI_FAILURES:
         main = ""
     head = worktree / path

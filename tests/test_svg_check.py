@@ -320,9 +320,14 @@ class TestSmallestText(unittest.TestCase):
         self.assertAlmostEqual(r.smallest_px, 5.0)
 
     def test_a_shorthand_with_no_readable_size_is_unread(self):
-        r = reading('<g font-size="14"><text style="font: inherit">x</text>'
-                    '</g>', embed=400.0)
+        r = reading('<g font-size="14"><text style="font: bold serif">x'
+                    '</text></g>', embed=400.0)
         self.assertEqual((r.unread, r.note), (1, "no text size resolved"))
+
+    def test_a_css_wide_shorthand_keeps_inheriting(self):
+        r = reading('<style>text{font:inherit}</style><g font-size="14">'
+                    '<text>x</text></g>', embed=400.0)
+        self.assertAlmostEqual(r.smallest_px, 14.0)
 
     def test_an_important_rule_beats_a_normal_inline_style(self):
         r = reading('<style>.t{font-size:4px !important}</style>'

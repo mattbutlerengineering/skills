@@ -113,6 +113,16 @@ class TestLocate(Tree):
         self.assertEqual(kb_harvest.project_dirs(REPO, self.projects),
                          [worktree])
 
+    def test_a_legacy_main_dir_beats_new_slug_worktrees(self):
+        # #2285 stopped at the new slug's worktrees and never tried the
+        # legacy slug's main dir, the interactive sessions.
+        self.dir.rmdir()
+        legacy = self.projects / "-work-acme.app"
+        legacy.mkdir()
+        (self.projects / f"{self.slug}--claude-worktrees-x").mkdir()
+        self.assertEqual(kb_harvest.project_dirs(REPO, self.projects),
+                         [legacy])
+
     def test_falls_back_to_the_legacy_slug(self):
         self.dir.rmdir()
         legacy = self.projects / "-work-acme.app"

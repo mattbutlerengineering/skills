@@ -121,22 +121,31 @@ def project_dirs(root, projects):
     if not projects.is_dir():
         return []
     names = {entry.name for entry in projects.iterdir() if entry.is_dir()}
-    found = []
-    for name in (slug(root), legacy_slug(root)):
+    candidates = (slug(root), legacy_slug(root))
+
+    def worktrees(name):
+        return sorted(n for n in names
+                      if n.startswith((name + "--claude-worktrees-",
+                                       name + "-.claude-worktrees-")))
+
+    for name in candidates:
         if len(name) > SLUG_LIMIT:
-            found += sorted(n for n in names
-                            if n.startswith(name[:SLUG_LIMIT] + "-"))
-        else:
-            # A repo worked only through worktrees (agents, routines) has
-            # worktree slugs and no main one: scan those too.
-            if name in names:
-                found.append(name)
-            found += sorted(n for n in names
-                            if n.startswith((name + "--claude-worktrees-",
-                                             name + "-.claude-worktrees-")))
+            found = sorted(n for n in names
+                           if n.startswith(name[:SLUG_LIMIT] + "-"))
+            if found:
+                return [projects / n for n in found]
+    # A main directory under either slug wins (an old harness filed the
+    # interactive sessions under the legacy one), with its worktrees.
+    for name in candidates:
+        if len(name) <= SLUG_LIMIT and name in names:
+            return [projects / n for n in [name] + worktrees(name)]
+    # A repo worked only through worktrees (agents, routines) has no
+    # main directory at all: scan its worktrees'.
+    for name in candidates:
+        found = worktrees(name) if len(name) <= SLUG_LIMIT else []
         if found:
-            break
-    return [projects / name for name in found]
+            return [projects / n for n in found]
+    return []
 
 
 def select(dirs, days, session, now):
