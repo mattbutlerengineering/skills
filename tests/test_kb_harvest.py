@@ -105,6 +105,14 @@ class TestLocate(Tree):
         self.assertEqual(kb_harvest.project_dirs(REPO, self.projects),
                          [self.dir, worktree])
 
+    def test_worktree_dirs_are_found_without_a_main_dir(self):
+        # A repo worked only through worktrees has no main slug dir.
+        self.dir.rmdir()
+        worktree = self.projects / f"{self.slug}--claude-worktrees-w1"
+        worktree.mkdir()
+        self.assertEqual(kb_harvest.project_dirs(REPO, self.projects),
+                         [worktree])
+
     def test_falls_back_to_the_legacy_slug(self):
         self.dir.rmdir()
         legacy = self.projects / "-work-acme.app"
@@ -206,6 +214,12 @@ class TestSelect(Tree):
         self.save(Session("new"))
         self.assertEqual(kb_harvest.select(
             [self.dir], days=None, session="abc", now=self.now), [wanted])
+
+    def test_a_session_path_is_scanned_once_however_many_dirs(self):
+        path = self.save(Session("s1"))
+        dirs = [self.dir, self.projects / "a", self.projects / "b"]
+        self.assertEqual(kb_harvest.select(
+            dirs, days=None, session=str(path), now=self.now), [path])
 
     def test_session_is_found_in_a_worktree_dir(self):
         # Issue #1995: --session only looked in the first dir.
@@ -795,6 +809,17 @@ class TestMain(Tree):
                                    str(self.projects)])
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out)["arcs"], [])
+
+    def test_an_unreadable_transcript_keeps_the_others_results(self):
+        self.save(Session("good").bash("ls", "a"))
+        (self.dir / "bad.jsonl").write_bytes(b'{"type": "caf\xc3')
+        code, out = self.run_main(["harvest", REPO, "--days", "1",
+                                   "--projects-dir", str(self.projects)])
+        self.assertEqual(code, 1)
+        data = json.loads(out)
+        self.assertEqual(data["scanned"]["transcripts"], 1)
+        self.assertEqual(len(data["problems"]), 1)
+        self.assertIn("bad.jsonl", data["problems"][0])
 
     def test_bad_days_is_a_problem(self):
         code, out = self.run_main(["harvest", REPO, "--days", "zero",

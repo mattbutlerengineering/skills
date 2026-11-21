@@ -126,8 +126,11 @@ def project_dirs(root, projects):
         if len(name) > SLUG_LIMIT:
             found += sorted(n for n in names
                             if n.startswith(name[:SLUG_LIMIT] + "-"))
-        elif name in names:
-            found.append(name)
+        else:
+            # A repo worked only through worktrees (agents, routines) has
+            # worktree slugs and no main one: scan those too.
+            if name in names:
+                found.append(name)
             found += sorted(n for n in names
                             if n.startswith((name + "--claude-worktrees-",
                                              name + "-.claude-worktrees-")))
@@ -139,6 +142,10 @@ def project_dirs(root, projects):
 def select(dirs, days, session, now):
     """The transcripts to scan: one named session, every one modified in
     the last `days`, or the newest top-level session."""
+    if session is not None and Path(session).is_file():
+        # A path names one file: emitting it once per directory scanned
+        # it N times and invented "recurring" errors.
+        return [Path(session)]
     if session is not None:
         return [path for d in dirs
                 for path in [Path(session) if Path(session).is_file()
@@ -553,7 +560,10 @@ def harvest(root, projects=None, days=None, session=None, now=None,
     if not dirs:
         return None, [f"{LABEL}: no Claude Code transcripts for {root}"
                       f" under {projects} (looked for {slug(checkout)})"]
-    memory_dir = dirs[0] / MEMORY_DIR
+    main_dir = next((d for d in dirs if d.name in (slug(checkout),
+                                                   legacy_slug(checkout))),
+                    projects / slug(checkout))
+    memory_dir = main_dir / MEMORY_DIR
     if memory and not memory_dir.is_dir():
         return None, [f"{LABEL}: no memory directory at {memory_dir}"]
     paths = select(dirs, days, session, time.time() if now is None else now)
@@ -610,7 +620,13 @@ def main(argv, kb_dir=None):
     if problems:
         return cli.report(LABEL, problems)
     result, problems = harvest(root, kb_dir=kb_dir, **options)
-    if problems:
+    if problems and result is None:
         return cli.report(LABEL, problems)
+    if problems:
+        # One unreadable transcript (often the session still being
+        # written) no longer hides what the others found: the JSON
+        # carries its problems, and the exit says some were not read.
+        print(json.dumps({**result, "problems": problems}, indent=2))
+        return 1
     print(json.dumps(result, indent=2))
     return 0

@@ -202,6 +202,15 @@ class TestOrientationPack(unittest.TestCase):
         self.assertNotIn("Human gates", pack)
         self.assertNotIn("Three gates.", pack)
 
+    def test_a_cited_adr_with_no_file_is_a_note_not_a_silent_drop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).orientation()
+            pack = orientation_pack.orientation_pack(
+                tree.root, "WO-0097", "- thing\n  - Notes: ADR-0999 decides")
+        self.assertIn("### ADR-0999\n", pack)
+        self.assertIn("(ADR-0999 is cited but no docs/adr file has that"
+                      " number)", pack)
+
     def test_a_row_with_no_adr_citation_bundles_no_adr(self):
         with tempfile.TemporaryDirectory() as tmp:
             tree = FixtureTree(tmp).orientation()
