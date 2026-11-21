@@ -197,6 +197,20 @@ def in_month(entry, month):
     return isinstance(value, str) and value.startswith(month + "-")
 
 
+def future_problems(entries, today):
+    """A problem per row dated in a month after `today`'s ("YYYY-MM-DD",
+    UTC). `at` is the UTC date the row was appended, so a later month
+    cannot be true — and such a row falls outside the month the breaker
+    windows, moving its spend out of sight. (A later day of the current
+    month still counts toward it, so it hides nothing.) The breaker
+    inputs fail closed on it."""
+    return [f"ledger: a row dated {entry['at']} is in a month after today"
+            f" ({today}) — its spend falls outside the month being checked"
+            for entry in entries
+            if isinstance(entry, dict) and isinstance(entry.get("at"), str)
+            and entry["at"][:7] > today[:7]]
+
+
 def gate_wait(entry):
     """The record's (gate, waited_seconds) when it is a gate-latency row,
     else None — the one predicate for callers that treat gate rows apart

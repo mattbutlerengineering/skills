@@ -1168,3 +1168,15 @@ class TestIsolatedRun(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFutureRows(unittest.TestCase):
+    """A row dated in a later month drops out of the breaker's window."""
+
+    def test_a_row_in_a_later_month_is_a_problem(self):
+        self.assertEqual(cost_ledger.future_problems(
+            [{"at": "2026-12-05"}, {"at": "2026-11-30"}, {"at": "2026-10-01"},
+             {"no": "at"}], "2026-11-20"), [
+            "ledger: a row dated 2026-12-05 is in a month after today"
+            " (2026-11-20) — its spend falls outside the month being"
+            " checked"])

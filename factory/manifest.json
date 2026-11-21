@@ -37,8 +37,8 @@
     "templates/tools/factory/conductor_plan.py": "fa1488a6dd97f5469236327131ef4bbf9b0d828b802427216b183bf64b7914d6",
     "templates/tools/factory/conductor_run.py": "ed542ac4fec0cce348d1989f0d66088e18aa827295bddb6117f38fdb4f8490c0",
     "templates/tools/factory/conductor_spend.py": "7c457b14802338c9192c4d847603a1099b440d37f26d1d22303927a8a129e3d7",
-    "templates/tools/factory/cost_ledger.py": "6dcb5e158ce149e34711df57659dd4cac3679a59a9658ff6ec7a302658342ead",
-    "templates/tools/factory/cost_report.py": "509980ffc0bf00e669e148cb135aac8803f7b7367ed911c2a0d8fb05b90e191a",
+    "templates/tools/factory/cost_ledger.py": "f7958ead279be9b62bdce8905e4e539ca8019a278c647edf17747bb6e06002d5",
+    "templates/tools/factory/cost_report.py": "08f5164ec4cdcfb8ad765161e4c2b1ac59b31d7f85f24e478ba659f682a05535",
     "templates/tools/factory/factory_config.py": "c951ef3ce45da38e959ac6d511d96259ba6ad4686fdc3919a72d1b3ddd5d5364",
     "templates/tools/factory/gate_digest.py": "0cf2ed21b4798e180a1d2409b79790cad3a8315a2aa0e5e043dab2cd187e8e47",
     "templates/tools/factory/gates.py": "836fb027d8bd7e8c0de63e2afefa88d6ce6da8633a29ef6390df9754aea28d1a",
@@ -53,6 +53,6 @@
     "templates/tools/factory/standards_index.py": "4e87aa54b00a52959cbde4ffa460fe4cee637ba7e3f84ad5a53dd894af561f8b",
     "templates/tools/factory/trace.py": "1401bb987098cd075272125bbc790743a1dc272fcb92087d7a97f6293007da2d",
     "templates/tools/factory/validator.py": "c467ae8f28caa7cd2a9b7ee65f5795cf3c859e7b828c880893215c9539300856",
-    "templates/tools/factory/work_queue.py": "a444feda7711b05f4a75d2e9241ab2c3d4c13c4f2f7fec5272d36d6e7387d389"
+    "templates/tools/factory/work_queue.py": "5efbb29f9217eed0c30669b454d99c82627b822fa52bcc29586e7c6ddd784af5"
   }
 }
