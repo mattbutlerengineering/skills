@@ -49,7 +49,7 @@ import factory_config
 import handoff
 from cli import CLI_FAILURES as GIT_FAILURES
 from cli import detail as _git_detail
-from cli import read_execution, report, runner
+from cli import finite, read_execution, report, runner
 from knowledge_plane import repo_root
 
 # one-owner: cost_report.CONTINUE (ADR-0061) — one word, two verdict sets:
@@ -66,7 +66,7 @@ def _validate_spend(spend_usd):
     here and guard fails CLOSED on it (ADR-0034: an unaccountable run is
     treated as out of budget, never waved through)."""
     if isinstance(spend_usd, bool) or not isinstance(spend_usd, (int, float)) \
-            or not math.isfinite(spend_usd) or spend_usd < 0:
+            or not finite(spend_usd) or spend_usd < 0:
         return [f"bg: spend {spend_usd!r} is not a finite, non-negative"
                 " number"]
     return []

@@ -39,7 +39,8 @@ from datetime import datetime, timezone
 import cost_ledger
 from cli import (gh_read, marked_issue, report, upsert_pinned_issue,
                  write_outputs)
-from human_gates import gate_passages, open_queues, read_gate_issues
+from human_gates import (SEARCH_WINDOW, gate_passages, open_queues,
+                         read_gate_issues)
 from knowledge_plane import mirror_map, repo_root
 from cli import gh_runner
 
@@ -115,27 +116,25 @@ def compose_digest(queues, as_of, listing_truncated):
     return "\n".join(lines) + "\n"
 
 
-# How far back the pinned-issue lookup can see. cli.gh_read owns the
-# window — the limit it sends gh and the truncation it reports are the
-# same number, so the two can no longer drift apart. Matches the sibling
-# gh_read callers' LIST_WINDOW (test_sweeps.py pins the set). The gate
-# issue listing no longer reads the whole tracker under it: it went red
-# at 500 and again at 1000 (runs 117, 118), and read_gate_issues now
-# reads only the work-order issues (human_gates.read_work_order_issues).
-LIST_WINDOW = 2000
+# The pinned-issue lookup is a `--search` read, which GitHub caps at
+# 1000 results whatever --limit asks: its window is
+# human_gates.SEARCH_WINDOW, so the truncation check can fire (a 2000
+# window never could, and a missed pinned issue would be re-created —
+# #1892). The gate issue listing reads only the work-order issues
+# (human_gates.read_work_order_issues).
 
 
 def upsert_marked_issue(title, marker, body, label, run):
     """(problems): create-or-update the writer's pinned issue, finding it
-    with its own narrow title search rather than inside the shared
-    LIST_WINDOW listing — an issue older than the window is invisible
+    with its own narrow title search rather than inside a shared
+    whole-tracker listing — an issue older than a window is invisible
     there, and a miss would create and pin a duplicate (#1892). A lookup
     that cannot be read posts nothing: no answer is not "no issue". The
     gate digest and the rejection miner share it."""
     found = gh_read(["issue", "list", "--state", "open", "--search",
                      f'"{title}" in:title', "--json", "number,body"],
                     "gh issue list (find pinned issue)", label, run,
-                    window=LIST_WINDOW)
+                    window=SEARCH_WINDOW)
     if found.value is None:
         return found.problems
     return found.problems + upsert_pinned_issue(

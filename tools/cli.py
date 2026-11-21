@@ -56,10 +56,12 @@ from collections import namedtuple
 from pathlib import Path
 
 # A failed or missing binary raises one of these, as does one that
-# outlives its runner's timeout; callers turn that into a label-prefixed
-# problem string instead of a traceback.
+# outlives its runner's timeout, or whose output is not UTF-8 (runner
+# decodes strictly: a Latin-1 file at a ref, a non-UTF-8 path from
+# `diff -z`); callers turn that into a label-prefixed problem string
+# instead of a traceback.
 CLI_FAILURES = (subprocess.CalledProcessError, subprocess.TimeoutExpired,
-                OSError)
+                OSError, UnicodeDecodeError)
 
 
 def finite(number):
@@ -271,8 +273,12 @@ def write_atomic(path, text):
     PATH's own directory (os.replace cannot cross filesystems), takes
     the target's mode — or, for a new file, the umask default, not the
     0600 NamedTemporaryFile creates — and is removed if anything fails.
-    Raises OSError like write_text; the caller words it."""
-    path = Path(path)
+    Raises OSError like write_text; the caller words it.
+
+    A symlink (or a path through one) is written THROUGH: the rename
+    lands on the real file, so `CLAUDE.md -> AGENTS.md` keeps its link
+    and both names see the new text."""
+    path = Path(os.path.realpath(path))
     temp = None
     try:
         with tempfile.NamedTemporaryFile(
@@ -346,7 +352,10 @@ def read_event(env):
         return None, None
     try:
         event = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as err:
+    except (OSError, ValueError, RecursionError) as err:
+        # ValueError covers JSONDecodeError, UnicodeDecodeError and an
+        # integer past the digit limit; RecursionError deep nesting
+        # (ADR-0075's parse guard).
         return None, f"cannot read {name} {path}: {err}"
     if not isinstance(event, dict):
         return None, f"{name} {path} is not a JSON object"
@@ -542,7 +551,7 @@ def read_execution(path):
         return None, f"execution file {path} is not valid JSON: {err}"
     try:
         log = json.loads(text)
-    except json.JSONDecodeError as err:
+    except (ValueError, RecursionError) as err:  # ADR-0075's parse guard
         return None, f"execution file {path} is not valid JSON: {err}"
     entries = log if isinstance(log, list) else [log]
     results = [entry for entry in entries
@@ -645,7 +654,7 @@ def gh_read(args, operation, label=None, run=gh_runner, expect=list,
                                f" {detail(err)}"], False)
     try:
         value = json.loads(out)
-    except json.JSONDecodeError as err:
+    except (ValueError, RecursionError) as err:  # ADR-0075's parse guard
         return GhResult(None, [f"{prefix}{operation} returned unparseable"
                                f" JSON: {err}"], False)
     if not isinstance(value, expect):
