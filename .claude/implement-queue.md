@@ -119,7 +119,10 @@ rename's old path (the second also stops at 100 files):
 
 Take every `filename` **and** every `previous_filename` and match each
 against `gate_paths`. Without `--paginate`, or if the call fails, fail
-closed. The list's length must equal the PR's `changed_files`:
+closed. The number of file ENTRIES (one per file, a rename one entry —
+`--jq '.[].filename' | wc -l`, never `--jq length`, which prints one
+count per page) must equal the PR's `changed_files`, which counts a
+rename once:
 
     gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files
 

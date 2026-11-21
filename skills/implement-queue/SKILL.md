@@ -58,7 +58,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `reviewers` | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
 | `merge-command` | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>` |
 | `update-branch` | `gh pr update-branch <N>` |
-| `changed-files` | `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`: every `filename` plus every `previous_filename`; its length must equal `gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files`, else fail closed |
+| `changed-files` | `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`: every `filename` plus every `previous_filename`; the number of file entries (a rename is one) must equal `gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files`, else fail closed |
 | `lock` | none: one session at a time is the only lock |
 | `reap` | none: report worker worktrees left behind |
 | `telemetry` | none |
@@ -266,9 +266,9 @@ consent, and a PR that passes every gate step is enqueued with the
 the PR changes, and a rename or move counts as **both** its old path and
 its new one: a gate-path file moved to an ungated path is a change to a
 gate path. With no hook the default in the table above applies: the
-REST file list, whose length is checked against the PR's `changed_files`
-count. A list that reports only a rename's destination, a list whose
-length differs from that count (the endpoint stops at 3000 files and
+REST file list, whose entry count (a rename is one entry) is checked
+against the PR's `changed_files` count. A list that reports only a
+rename's destination, a list whose entry count differs from that count (the endpoint stops at 3000 files and
 flags no truncation), a list the source capped or paged short, a list
 read in part, an empty list for a PR that changes files, and a source
 that failed or is unavailable all fail closed: the PR needs a human
