@@ -224,7 +224,12 @@ alone and reports the path with the failed test. `<branch>` below is
 the porcelain `branch` line without its `refs/heads/` prefix, and
 `<tip>` is the worktree's `HEAD` commit:
 
-1. **Clean.** `git -C <path> status --porcelain --untracked-files=all
+1. **Clean.** No git operation is in flight: `git -C <path> rev-parse
+   --absolute-git-dir` exits 0, and that directory holds none of
+   `rebase-merge`, `rebase-apply`, `MERGE_HEAD`, `CHERRY_PICK_HEAD`,
+   `REVERT_HEAD`, `BISECT_LOG` or `sequencer` (a rebase can leave a
+   clean tree detached on `main`'s tip, which passes every other test).
+   Then `git -C <path> status --porcelain --untracked-files=all
    --ignore-submodules=none` exits 0 and prints nothing on stdout (the
    two flags override a repo's `status.showUntrackedFiles` and
    `diff.ignoreSubmodules`, which would hide untracked files or a dirty
