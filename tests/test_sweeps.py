@@ -939,15 +939,15 @@ class TestReconcileSweep(unittest.TestCase):
         # the same week. Checked against the siblings' live values,
         # not a hand-copied number, so a lone drift fails here too.
         # rejection_mining left the set when its PR read became a search
-        # windowed at human_gates.SEARCH_WINDOW (#2212).
+        # windowed at human_gates.SEARCH_WINDOW (#2212), and gate_digest
+        # when its pinned-issue lookup — a --search read, which GitHub
+        # caps at 1000 — did too.
         import assembler
         import dashboard
-        import gate_digest
         import label_sync
         siblings = {
             "assembler": assembler.LIST_WINDOW,
             "dashboard": dashboard.LIST_WINDOW,
-            "gate_digest": gate_digest.LIST_WINDOW,
             "label_sync": label_sync.LIST_WINDOW,
             "sweeps": sweeps.LIST_WINDOW,
         }

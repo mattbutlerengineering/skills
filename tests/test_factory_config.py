@@ -176,6 +176,12 @@ class TestInfiniteAmountsAreRefused(unittest.TestCase):
         self.assertEqual(problems, [
             "config: factory.json names no positive monthly_cap_usd"])
 
+    def test_an_integer_cap_too_large_for_a_float_is_a_problem(self):
+        # math.isfinite raised OverflowError on it (cli.finite's case).
+        self.assertEqual(factory_config.resolve_cap(
+            {"monthly_cap_usd": 10 ** 400}), (None, [
+                "config: factory.json names no positive monthly_cap_usd"]))
+
     def test_an_infinite_budget_does_not_resolve(self):
         budget, problems = factory_config.resolve_budget(
             "L", {"budgets_usd": {"S": 1, "M": 2, "L": float("inf")}})

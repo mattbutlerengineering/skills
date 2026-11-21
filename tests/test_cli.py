@@ -286,6 +286,37 @@ class TestFailureVocabulary(unittest.TestCase):
         self.assertFalse(issubclass(ValueError, cli.CLI_FAILURES))
 
 
+class TestSeamEdges(unittest.TestCase):
+    """cli.py edges found by the 2026-11-20 seam audit."""
+
+    def test_write_atomic_writes_through_a_symlink(self):
+        # CLAUDE.md -> AGENTS.md lost its link: os.replace swapped the
+        # link for a regular file and the twins split.
+        with tempfile.TemporaryDirectory() as tmp:
+            real = Path(tmp) / "AGENTS.md"
+            real.write_text("old\n", encoding="utf-8")
+            link = Path(tmp) / "CLAUDE.md"
+            link.symlink_to("AGENTS.md")
+            cli.write_atomic(link, "new\n")
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(real.read_text(encoding="utf-8"), "new\n")
+
+    def test_a_non_utf8_output_is_a_cli_failure(self):
+        err = UnicodeDecodeError("utf-8", b"\xe9", 0, 1, "invalid byte")
+        self.assertIsInstance(err, cli.CLI_FAILURES)
+
+    def test_gh_read_refuses_an_overlong_integer(self):
+        # Deep nesting raises RecursionError on interpreters whose JSON
+        # decoder recurses; the overlong integer raises ValueError on all.
+        for out in ("[" + "9" * 5000 + "]",):
+            with self.subTest(out=out[:5]):
+                read = cli.gh_read([], "gh op", "L", run=lambda a, o=out: o)
+                self.assertIsNone(read.value)
+                self.assertTrue(read.problems
+                                and read.problems[0].startswith("L: "),
+                                read.problems)
+
+
 class TestGhRead(unittest.TestCase):
     """The whole windowed gh read as one call: run gh, catch the binary's
     failure vocabulary, parse and shape-check the JSON, own the window

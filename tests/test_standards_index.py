@@ -440,6 +440,19 @@ class TestUpdate(unittest.TestCase):
                 " 'CLAUDE.md#x' reuses ADR-derived slug"
                 " 'adr0032-one-way-mirror'"])
 
+    def test_two_hand_curated_entries_sharing_a_slug_refuse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / standards_index.STANDARDS_PATH
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps([
+                {"slug": "dup", "statement": "x", "level": "MUST",
+                 "source": "CLAUDE.md#a"},
+                {"slug": "dup", "statement": "y", "level": "MUST",
+                 "source": "CLAUDE.md#b"}]), encoding="utf-8")
+            self.assertEqual(standards_index.update(tmp), [
+                "standards-index: docs/standards.json: hand-curated entry"
+                " 'CLAUDE.md#b' reuses slug 'dup'"])
+
     def test_regen_replaces_the_previous_adr_derived_subset(self):
         # A second update, after an ADR-derived statement's text changed,
         # must not leave the STALE entry sitting beside the fresh one.

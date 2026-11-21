@@ -29,7 +29,6 @@ mutations, so they stay in the YAML, never here.
         or unresolvable cap decides PAUSE and still exits nonzero, so a
         broken config can never silently wave spend through unpaused).
 """
-import math
 import os
 import sys
 from collections import namedtuple
@@ -37,7 +36,7 @@ from datetime import datetime, timezone
 
 import cost_ledger
 import factory_config
-from cli import report, write_outputs
+from cli import finite, report, write_outputs
 from knowledge_plane import repo_root
 
 PAUSE = "PAUSE"
@@ -95,7 +94,7 @@ def decide(total_cost, cap):
     _validate_spend discipline on this twin's boundary."""
     if isinstance(total_cost, bool) \
             or not isinstance(total_cost, (int, float)) \
-            or not math.isfinite(total_cost) or total_cost < 0:
+            or not finite(total_cost) or total_cost < 0:
         return PAUSE, (f"cr: spend {total_cost!r} is not a finite,"
                        " non-negative number — failing closed")
     if total_cost >= cap:

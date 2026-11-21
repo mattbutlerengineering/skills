@@ -21,12 +21,11 @@ Conventions match gates.py: functions return (value, problems) with
 config:-prefixed problem strings; a field the config does not cover is a
 problem, never a silent default.
 """
-import math
 import re
 import shlex
 from pathlib import Path
 
-from cli import read_file
+from cli import finite, read_file
 
 # The routing-band vocabulary (ADR-0034): the exact key set factory.json's
 # routing table must map. One home (ADR-0048) — gates' detector F and the
@@ -130,7 +129,7 @@ def _positive_number(value):
     has two sides. NaN needs no clause — `nan > 0` is already false."""
     return (not isinstance(value, bool)
             and isinstance(value, (int, float))
-            and math.isfinite(value) and value > 0)
+            and finite(value) and value > 0)
 
 
 def resolve_budget(size, config):

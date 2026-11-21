@@ -399,6 +399,18 @@ class TestRunDaily(unittest.TestCase):
             self.assertEqual(outputs["changed"], "false")
             self.assertEqual(run.called("issue", "create"), [])
 
+    def test_the_pinned_issue_search_is_windowed_at_the_search_cap(self):
+        # GitHub caps a --search read at 1000 whatever --limit asks, so a
+        # 2000 window could never flag a truncated lookup (#1892's hazard).
+        with tempfile.TemporaryDirectory() as tmp:
+            run = gh(issues=[])
+            run.answers[("issue", "list", "--state", "open", "--search")] = "[]"
+            gate_digest.run_daily(tree(tmp).root, run=run, clock=clock)
+            (search,) = run.called("issue", "list", "--state", "open",
+                                   "--search")
+            self.assertEqual(search[search.index("--limit") + 1],
+                             str(human_gates.SEARCH_WINDOW))
+
     def test_a_full_issue_window_is_reported_and_the_digest_still_posts(self):
         with tempfile.TemporaryDirectory() as tmp:
             run = gh(issues=[

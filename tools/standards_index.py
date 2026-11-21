@@ -298,6 +298,15 @@ def update(root):
     problems += [f"{STANDARDS_PATH}: hand-curated entry {entry['source']!r}"
                  f" reuses ADR-derived slug {entry['slug']!r}"
                  for entry in foreign if entry["slug"] in derived]
+    # "A slug must resolve to one statement" holds among the hand-curated
+    # entries too, not only against the derived ones.
+    seen = set()
+    for entry in foreign:
+        if entry["slug"] in seen:
+            problems.append(f"{STANDARDS_PATH}: hand-curated entry"
+                            f" {entry['source']!r} reuses slug"
+                            f" {entry['slug']!r}")
+        seen.add(entry["slug"])
     if problems:
         return [f"standards-index: {p}" for p in problems]
     merged = sorted(entries + foreign, key=lambda entry: entry["slug"])
