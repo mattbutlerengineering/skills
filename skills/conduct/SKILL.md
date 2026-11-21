@@ -353,10 +353,12 @@ In a session with no Owner present, print the two readings and stop.
   consumer repo, and that does not reproduce in the plugin's repo, is
   filed on the plugin's repo as a plain issue labelled `type:defect`
   and `found:consumer`, never a work order. The second label makes the
-  class countable per period: `gh issue list --label found:consumer`,
-  or in a cloud session (Claude Code Remote), where the GraphQL-backed
+  class countable per period: `gh issue list --label found:consumer
+  --state all --limit 1000` (the default lists 30 open ones), or in a
+  cloud session (Claude Code Remote), where the GraphQL-backed
   `gh issue list` returns HTTP 403 while `gh api` REST calls succeed,
-  `gh api 'repos/{owner}/{repo}/issues?labels=found:consumer'`.
+  `gh api --paginate
+  'repos/{owner}/{repo}/issues?labels=found:consumer&state=all&per_page=100'`.
 - Report Worker spend from the ledger the tool wrote, never from an
   estimate. The Conductor's own session is unmetered, and the scorecard
   says so.
