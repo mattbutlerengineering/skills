@@ -101,6 +101,53 @@ class TestGather(unittest.TestCase):
             self.assertEqual(young_states.count("current"), 1)
 
 
+class TestBoardEdges(unittest.TestCase):
+    """Found by the 2026-11-20 board audit."""
+
+    def test_a_feature_run_holding_defect_md_is_kind_maintenance(self):
+        # It walks the maintenance ladder; a renderer keyed on kind would
+        # map its 8 rungs onto the feature columns.
+        with tempfile.TemporaryDirectory() as tmp:
+            write(Path(tmp) / "docs" / "features" / "f" / "defect.md",
+                  frontmatter(stage="capture", **{"re-entry": "implement"})
+                  + "- [ ] a\n")
+            model, _ = board.gather(tmp)
+            (run,) = model["runs"]
+            self.assertEqual((run["ref"], run["kind"], run["ladder"][0]),
+                             ("feature:f", "maintenance",
+                              {"stage": "capture", "state": "done"}))
+
+    def gather_unreadable(self, tmp, path):
+        path.chmod(0)
+        try:
+            return board.gather(tmp)
+        finally:
+            path.chmod(0o755)
+
+    def test_an_unreadable_run_directory_is_in_attention(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "docs" / "features" / "locked"
+            write(run / "idea.md", "x")
+            model, problems = self.gather_unreadable(tmp, run)
+            self.assertEqual(problems, [])
+            self.assertEqual([a["dir"] for a in model["attention"]],
+                             ["docs/features/locked"])
+
+    def test_an_unreadable_features_directory_does_not_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            features = Path(tmp) / "docs" / "features"
+            write(features / "f" / "idea.md", "x")
+            model, problems = self.gather_unreadable(tmp, features)
+            self.assertEqual(problems, [])
+            (entry,) = model["attention"]
+            self.assertIn("features", entry["reason"])
+
+    def test_a_long_reason_is_cut_to_one_row(self):
+        text = board.reason(OSError("x" * 500))
+        self.assertEqual(len(text), board.REASON_MAX)
+        self.assertTrue(text.endswith("…"))
+
+
 class TestMain(unittest.TestCase):
     def test_success_prints_the_model_as_json(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -32,11 +32,17 @@ document body names a hex directly.
 | `--raised` (solid node fill) | `#ffffff` | `#161b22` |
 | `--ink` (names, primary strokes) | `#262a33` | `#e6edf3` |
 | `--muted` (sublabels, connectors) | `#5b6472` | `#8b949e` |
-| `--soft` (eyebrows, edge labels, legend) | `#878e9c` | `#6e7681` |
+| `--soft` (eyebrows, edge labels, legend) | `#666e7b` | `#8b949e` |
 | `--rule` (hairlines, zone strokes) | `rgba(38,42,51,0.12)` | `rgba(230,237,243,0.12)` |
 | `--accent` (focal — 1–2 elements max) | `#d9622b` | `#f0925e` |
+| `--accent-text` (accent-coloured small text) | `#b84f1c` | `#f0925e` |
 | `--accent-tint` (focal fill) | `rgba(217,98,43,0.08)` | `rgba(240,146,94,0.10)` |
-| `--assumed` (assumed markers) | `#9a6700` | `#d29922` |
+| `--assumed` (assumed markers) | `#8a5c00` | `#d29922` |
+
+Every text token clears 4.5:1 against `--paper` in its theme (the
+board's text is 8–10px, so the small-text ratio applies): light
+`--soft` 4.72, `--accent-text` 4.61, `--assumed` 5.33; dark `--soft`
+6.15. `--accent` itself (3.36 on light paper) is for glyph fills only.
 
 **Inversion rule:** any `rgba(38,42,51, X)` in light becomes
 `rgba(230,237,243, X)` in dark — same opacity, ink flipped. The accent
