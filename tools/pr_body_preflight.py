@@ -40,6 +40,8 @@ import sys
 from pathlib import Path
 
 NOTE = "pr-body-preflight: not checked — {}"
+# Past this, tokenising an inline body could outlast the hook's timeout.
+MAX_COMMAND = 256 * 1024
 POINTER = ("pr-body-preflight: the body contract is "
            "docs/kb/pr-body-contract.md")
 NOT_SEEN = 'saw "gh pr create" but found no such command'
@@ -443,12 +445,26 @@ def _create_args(words):
     index = 0
     while index < len(words) and ASSIGNMENT.match(words[index]):
         index += 1
-    head = words[index:index + 3]
-    if len(head) < 3 or head[1:] != ["pr", "create"]:
+    if index + 1 >= len(words) or words[index + 1] != "pr":
         return None
-    if head[0] != "gh" and not head[0].endswith("/gh"):
+    if words[index] != "gh" and not words[index].endswith("/gh"):
         return None
-    return words[index + 3:]
+    # `--repo` is a persistent flag on `gh pr`, so gh accepts it before
+    # the subcommand (`gh pr -R o/r create`); carried after it, it is
+    # judged like any other -R. `new` is gh's alias for `create`.
+    rest, carried = index + 2, []
+    while rest < len(words) and (words[rest] in ("-R", "--repo")
+                                 or words[rest].startswith(("--repo=", "-R"))
+                                 and words[rest] not in ("create", "new")):
+        if words[rest] in ("-R", "--repo"):
+            carried += words[rest:rest + 2]
+            rest += 2
+        else:
+            carried.append(words[rest])
+            rest += 1
+    if rest >= len(words) or words[rest] not in ("create", "new"):
+        return None
+    return words[rest + 1:] + carried
 
 
 def _flag_value(args, index, long_flag, short_flag):
@@ -507,6 +523,8 @@ def _body_sources(args):
             break
         if _deferring(arg):
             raise _Unreadable(f"{_deferring(arg)} leaves the body to gh")
+        if arg == "--dry-run":
+            raise _Unreadable("--dry-run prints the PR and opens none")
         cluster = _cluster(arg)
         if cluster and cluster[0]:
             raise _Unreadable(f"{arg} hides a body flag in a cluster")
@@ -1093,8 +1111,13 @@ def preflight(payload_text, environ=None):
                if isinstance(tool_input, dict) else None)
     if not isinstance(command, str):
         return 0, []
-    if not all(part in command for part in ("gh", "pr", "create")):
+    if not ("gh" in command and "pr" in command
+            and ("create" in command or " new" in command)):
         return 0, []
+    if len(command) > MAX_COMMAND:
+        # shlex tokenises in time quadratic in a quoted body's length; a
+        # hook past its timeout does not block, so say so instead.
+        return 0, [NOTE.format(f"the command is over {MAX_COMMAND} bytes")]
     try:
         failed, lines = _verdicts(command, data.get("cwd"), environ or {})
     except Exception as exc:  # fail open: a crash must never block Bash
@@ -1114,6 +1137,13 @@ def main(argv, stdin=None):
         print(NOTE.format(f"{type(exc).__name__}: {exc}"), file=sys.stderr)
         return 0
     code, lines = preflight(text, os.environ)
+    if code == 0 and lines:
+        # Claude never sees stderr from a hook that exits 0: a "not
+        # checked" note goes back as additional context, or it is silent.
+        print(json.dumps({"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "additionalContext": "\n".join(lines)}}))
+        return 0
     for line in lines:
         print(line, file=sys.stderr)
     return code
