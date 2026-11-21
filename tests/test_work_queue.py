@@ -50,7 +50,7 @@ def labeled_by(login):
 
 
 def listing(*numbers, in_flight=(), labelers=None, owner=OWNER,
-            variables=()):
+            variables=(), labels=None):
     """A gh whose ready listing answers with these issue numbers.
 
     work_queue's reads, each keyed on its own argv prefix: the ready
@@ -69,7 +69,9 @@ def listing(*numbers, in_flight=(), labelers=None, owner=OWNER,
 
     return FakeGh(answers={
         tuple(work_queue.LIST_ARGS[:4]):
-            json.dumps([{"number": n} for n in numbers]),
+            json.dumps([{"number": n, "labels": [
+                {"name": name} for name in (labels or {}).get(n, ())]}
+                for n in numbers]),
         tuple(work_queue.IN_FLIGHT_ARGS[:4]):
             json.dumps([{"number": n} for n in in_flight]),
         ("variable", "list"): json.dumps(list(variables)),
@@ -637,6 +639,45 @@ class TestMain(cli_contract.ReportContract, unittest.TestCase):
         self.assertNotIn("WO-0001  size:S", out)
         self.assertIn("refusing to plan a batch it cannot price", out)
         self.assertEqual(out.splitlines()[-1], "wq: 2 problem(s)")
+
+    ROW7 = ("- [ ] **WO-0002** ready — size:M, blocked by: —"
+            " (PRD-0001 §S) (tracker: #7)\n")
+
+    def test_a_budget_exhausted_or_double_labelled_issue_is_held(self):
+        # ADR-0034: the dispatcher refuses a budget-exhausted order until
+        # the owner clears it; the claim would strip wo:failed.
+        for extra, why in ((["wo:failed", "budget-exhausted"],
+                            "carries budget-exhausted"),
+                           (["wo:needs-review"],
+                            "also carries wo:needs-review")):
+            with self.subTest(extra=extra), \
+                    tempfile.TemporaryDirectory() as tmp:
+                tree = self.config_tree(tmp, self.ROW7)
+                code, out = self.planned(
+                    ["plan"], run=listing(7, labels={7: extra}),
+                    root=tree.root)
+                self.assertNotIn("WO-0002  size:M", out)
+                self.assertIn(f"WO-0002: issue #7 {why}", out)
+
+    def test_an_unreadable_breakdown_plans_nothing_and_says_so(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(tmp, self.ROW7)
+            path = Path(tree.root) / "docs/features/other/breakdown.md"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"- [ ] **WO-0003** \xff\xfe (tracker: #8)\n")
+            code, out = self.planned(["plan"], run=listing(7, 8),
+                                     root=tree.root)
+        self.assertEqual(code, 1)
+        self.assertIn("refusing to plan over rows it cannot see", out)
+        self.assertNotIn("0 work order(s) ready", out)
+
+    def test_a_ready_issue_no_row_mirrors_is_named(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = self.config_tree(tmp, self.ROW7)
+            code, out = self.planned(["plan"], run=listing(7, 99),
+                                     root=tree.root)
+        self.assertIn("issue #99 carries wo:ready-for-agent, but no"
+                      " breakdown row mirrors it", out)
 
     def test_an_unreadable_ledger_plans_no_batch(self):
         # Issue #1893: spend summed over the parsed rows was understated,

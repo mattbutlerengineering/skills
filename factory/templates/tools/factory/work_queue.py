@@ -37,7 +37,7 @@ from datetime import datetime, timezone
 import assembler
 import cost_ledger
 import factory_config
-from cli import gh_read, gh_runner, report
+from cli import gh_read, gh_runner, label_names, report
 from human_gates import read_labelers
 from knowledge_plane import repo_root, work_orders
 from validator import CLAIM_LABEL
@@ -45,7 +45,7 @@ from validator import CLAIM_LABEL
 # The ready label is assembler's (it is the one detector J reads), so the
 # listing cannot ask for a label the dispatch plane does not apply.
 LIST_ARGS = ["issue", "list", "--label", assembler.READY_LABEL,
-             "--state", "open", "--json", "number"]
+             "--state", "open", "--json", "number,labels"]
 # The claim label is validator's (the dispatch legs write it, ADR-0045):
 # an order on it is in flight, holding a wip slot and budgeted money the
 # ledger has not recorded yet.
@@ -81,12 +81,22 @@ def rows(root):
     first — and carries the same `clashes` it refuses on. Nothing
     downstream re-reads or re-parses a row.
     """
+    return rows_and_problems(root)[0]
+
+
+def rows_and_problems(root):
+    """(rows, read problems): rows() plus every breakdown that could not
+    be read — "nothing is ready" and "I could not read the plan" must not
+    look the same. Clashes are not here: each rides its row's deferral."""
     fields = ("wo", "done", "size", "issue", "blockers", "unreadable",
               "clashes")
-    index, _ = work_orders(root)
-    return {wo: {**{field: row[field] for field in fields},
-                 "where": f"{row['path'].relative_to(root)}:{row['lineno']}"}
-            for wo, row in index["wo"].items()}
+    index, problems = work_orders(root)
+    found = {wo: {**{field: row[field] for field in fields},
+                  "where": f"{row['path'].relative_to(root)}"
+                           f":{row['lineno']}"}
+             for wo, row in index["wo"].items()}
+    return found, [f"wq: {p}" for p in problems
+                   if p.startswith("cannot read")]
 
 
 def eligible(found, ready_issues, held=None, in_flight=frozenset()):
@@ -268,7 +278,44 @@ def ready_issue_numbers(run=None):
     # neither remedy exists at runtime. The remedy is real, it is just a
     # code edit in the tool's own source, not something this message
     # should imply is one flag away.
-    return _open_numbers(LIST_ARGS, "ready", "LIST_ARGS", run)
+    numbers, _, problems = ready_issues(run)
+    return numbers, problems
+
+
+def ready_issues(run=None):
+    """(ready issue numbers, {number: why its ready label does not
+    count}, problems) — ready_issue_numbers plus the holds the listing's
+    own labels prove. The claim strips wo:failed and the other lifecycle
+    labels, so planning a budget-exhausted order (ADR-0034: "the
+    dispatcher refuses a budget-exhausted order until the owner clears
+    the label") or one already on another lifecycle label would pay an
+    agent and erase the state that said not to. assembler.run_resolve
+    refuses the first already."""
+    entries, problems = _open_entries(LIST_ARGS, "ready", "LIST_ARGS", run)
+    if entries is None:
+        return None, {}, problems
+    numbers, holds = set(), {}
+    for item in entries:
+        if not (isinstance(item, dict) and isinstance(item.get("number"),
+                                                      int)):
+            continue
+        numbers.add(item["number"])
+        names = label_names(item)
+        if assembler.EXHAUSTED_LABEL in names:
+            holds[item["number"]] = (
+                f"carries {assembler.EXHAUSTED_LABEL} — the owner clears"
+                " it before the order may run again (ADR-0034)")
+            continue
+        # wo:failed is the terminal state an owner re-arms from: the
+        # claim stripping it is the retry, so only a live lifecycle label
+        # beside the ready one holds an order back.
+        others = sorted(name for name in names if name.startswith("wo:")
+                        and name not in (assembler.READY_LABEL, "wo:failed"))
+        if others:
+            holds[item["number"]] = (
+                f"also carries {', '.join(others)} — one lifecycle label"
+                " at a time, and the claim would strip it (ADR-0032)")
+    return numbers, holds, []
 
 
 def in_flight_issue_numbers(run=None):
@@ -281,6 +328,14 @@ def in_flight_issue_numbers(run=None):
 
 
 def _open_numbers(args, noun, args_name, run):
+    entries, problems = _open_entries(args, noun, args_name, run)
+    if entries is None:
+        return None, problems
+    return {item["number"] for item in entries if isinstance(item, dict)
+            and isinstance(item.get("number"), int)}, []
+
+
+def _open_entries(args, noun, args_name, run):
     read = gh_read(list(args), "gh issue list", label="wq",
                    run=run or gh_runner, window=LIST_WINDOW,
                    full_note=(
@@ -291,8 +346,7 @@ def _open_numbers(args, noun, args_name, run):
                        f" (or narrowing {args_name}) and redeploying"))
     if read.value is None or read.truncated:
         return None, read.problems
-    return {item["number"] for item in read.value if isinstance(item, dict)
-            and isinstance(item.get("number"), int)}, []
+    return read.value, []
 
 
 def owner_override(run):
@@ -418,7 +472,7 @@ def main(argv, run=None, clock=None):
     config, problems = factory_config.load(root)
     if problems:
         return report("wq", problems)
-    ready, problems = ready_issue_numbers(run)
+    ready, label_held, problems = ready_issues(run)
     held = in_flight = None
     if ready is not None:
         # Each read below is only asked once the one before it is
@@ -427,10 +481,17 @@ def main(argv, run=None, clock=None):
         held, holds_problems = owner_holds(ready, run)
         problems += holds_problems
     if held is not None:
+        held = {**held, **label_held}
+    if held is not None:
         in_flight, flight_problems = in_flight_issue_numbers(run)
         problems += flight_problems
     if in_flight is None:
         ready = None
+    found, read_problems = rows_and_problems(root)
+    problems += read_problems
+    if read_problems:
+        problems.append("wq: a breakdown is unreadable — refusing to plan"
+                        " over rows it cannot see")
     spent, ledger_problems = month_to_date(root, (clock or _utcnow)())
     problems += ledger_problems
     if ledger_problems:
@@ -439,7 +500,7 @@ def main(argv, run=None, clock=None):
         # fail closed like cost_report.guard and budget_guard.
         problems.append("wq: month-to-date spend is unreadable — refusing"
                         " to plan a batch it cannot price")
-    trusted = ready is not None and not ledger_problems
+    trusted = ready is not None and not ledger_problems and not read_problems
     if not trusted:
         # An untrusted listing plans nothing and explains nothing: every
         # per-row deferral would be a claim about a listing that does not
@@ -447,8 +508,16 @@ def main(argv, run=None, clock=None):
         batch, deferred = [], []
     else:
         batch, deferred, plan_problems = plan_batch(
-            rows(root), ready, config, spent, held, in_flight)
+            found, ready, config, spent, held, in_flight)
         problems += plan_problems
+        # A ready label no row mirrors: the mirror ran ahead of the
+        # breakdown, which ADR-0032 forbids — name it, never just omit it.
+        mirrored = {row["issue"] for row in found.values()}
+        deferred = sorted(deferred + [
+            f"issue #{number} carries {assembler.READY_LABEL}, but no"
+            " breakdown row mirrors it — the mirror ran ahead of the"
+            " breakdown (ADR-0032)"
+            for number in sorted(ready - mirrored)])
     if "--json" in argv:
         # The one leg cli.report does not fit: the problems already ride
         # inside the payload, so printing them again would both duplicate

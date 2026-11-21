@@ -53,6 +53,6 @@
     "templates/tools/factory/standards_index.py": "4e87aa54b00a52959cbde4ffa460fe4cee637ba7e3f84ad5a53dd894af561f8b",
     "templates/tools/factory/trace.py": "1401bb987098cd075272125bbc790743a1dc272fcb92087d7a97f6293007da2d",
     "templates/tools/factory/validator.py": "c467ae8f28caa7cd2a9b7ee65f5795cf3c859e7b828c880893215c9539300856",
-    "templates/tools/factory/work_queue.py": "5efbb29f9217eed0c30669b454d99c82627b822fa52bcc29586e7c6ddd784af5"
+    "templates/tools/factory/work_queue.py": "baa56d37a4e237b1777091a049f945b1c043ad855b7d3c10b55f76f1a73b1dd9"
   }
 }
