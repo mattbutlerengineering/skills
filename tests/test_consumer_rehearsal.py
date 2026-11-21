@@ -88,6 +88,8 @@ class AutoMergingGh(FakeGh):
         self.origin = origin
         super().__init__({
             ("repo", "view"): json.dumps(OWNER),
+            # A personal repo: no FACTORY_OWNER_LOGIN override (#2105).
+            ("variable", "list"): "[]",
             ("issue", "view"): lambda args: json.dumps(
                 dict(issues[int(args[2])], title=f"Issue {args[2]}",
                      body="Make it so.")),

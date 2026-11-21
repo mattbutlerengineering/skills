@@ -42,6 +42,7 @@ def issues_gh(issues, owner=OWNER, fail=None):
     names an issue number whose read gh rejects with HTTP 502."""
     return FakeGh(
         answers={("repo", "view"): json.dumps(owner),
+                 ("variable", "list"): "[]",
                  ("issue", "view"):
                      lambda args: json.dumps(issues.get(int(args[2])))},
         failing=None if fail is None else ["issue", "view", str(fail)],
@@ -247,6 +248,12 @@ class TestReadIssues(unittest.TestCase):
         self.assertEqual(conductor_plan.read_issues([12],
                                                     issues_gh(partial)), (
             None, ["cd: gh issue view #12 returned an incomplete issue"]))
+
+    def test_an_org_repo_names_its_owner_in_the_repository_variable(self):
+        run = issues_gh({}, owner={"login": "an-org"})
+        run.answers[("variable", "list")] = json.dumps(
+            [{"name": "FACTORY_OWNER_LOGIN", "value": "matt"}])
+        self.assertEqual(conductor_plan.repo_owner(run), ("matt", []))
 
     def test_the_owner_is_read_and_fails_closed(self):
         self.assertEqual(conductor_plan.repo_owner(issues_gh({})),
