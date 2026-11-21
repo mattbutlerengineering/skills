@@ -65,19 +65,22 @@ class TestKeepExisting(KeepCase):
 
     def test_with_nothing_in_the_way_nothing_is_kept(self):
         self.assertEqual(self.keep(), ([], []))
-        self.assertEqual(factory_init.stamp(self.source, Path(
-            self.tmp.name) / "plain"), [])
+        plain = Path(self.tmp.name) / "plain"
+        plain.mkdir()
+        self.assertEqual(factory_init.stamp(self.source, plain), [])
 
     def test_an_executable_collision_is_still_refused_and_nothing_lands(
             self):
+        # factory/manifest.json is left out: a target holding one is
+        # already stamped and gets the one-line refusal instead.
         executable = ("Makefile", "tools/factory/gates.py",
                       ".github/workflows/validator.yml",
-                      "factory/manifest.json")
+                      "factory/templates/Makefile")
         self.have(".github/CODEOWNERS", *executable)
         self.assertEqual(self.keep(), ([], [
             f"factory-init: target already has {rel}"
-            for rel in ("factory/manifest.json",
-                        ".github/workflows/validator.yml", "Makefile",
+            for rel in (".github/workflows/validator.yml",
+                        "factory/templates/Makefile", "Makefile",
                         "tools/factory/gates.py")]))
         self.assertEqual(all_files(self.target),
                          sorted((".github/CODEOWNERS",) + executable))
@@ -110,10 +113,16 @@ class TestKeepableIsDerived(unittest.TestCase):
 
 NEXT_TESTS = ("factory-init: next: add tests/ holding at least one"
               " test_*.py — make check runs `python3 -m unittest discover"
-              " -q tests`, which fails on a missing or empty tests/")
+              " -q tests`, which fails on a missing or empty tests/ — or,"
+              " if the repo's tests are not Python, replace that line of"
+              " the Makefile's check target with your own test command")
 NEXT_OWNERS = ("factory-init: next: replace every @<owner> in"
-               " .github/CODEOWNERS with a GitHub handle or team that has"
-               " write access")
+               " .github/CODEOWNERS, including the `*` fallback, with a"
+               " handle or team with write access (a collaborator)")
+NEXT_GATE = ("factory-init: next: .github/factory.json"
+             " conductor.gate_command is \"make check\" but a tools-only"
+             " stamp has no Makefile — set it to your repo's one-command"
+             " gate")
 
 
 class TestNextSteps(unittest.TestCase):
@@ -143,12 +152,33 @@ class TestNextSteps(unittest.TestCase):
             self.assertEqual(
                 [line for line in out if "next:" in line], [])
 
-    def test_a_tools_only_stamp_names_none(self):
+    def test_a_tools_only_stamp_names_only_the_gate_command(self):
+        # The stamped factory.json says `make check`, which a tools-only
+        # stamp has no Makefile for: the Worker gate failed after spend
+        # approval. Tests and CODEOWNERS are not a tools-only stamp's.
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "product"
             target.mkdir()
             self.assertEqual(self.stamp(target, "--tools-only"),
-                             ["factory-init: 0 problem(s)"])
+                             [NEXT_GATE, "factory-init: 0 problem(s)"])
+
+    def test_the_gate_command_step_goes_once_it_is_not_owed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "product"
+            target.mkdir()
+            self.stamp(target, "--tools-only")
+            self.assertEqual(factory_init.next_steps(target, True),
+                             [NEXT_GATE[len("factory-init: next: "):]])
+            (target / "Makefile").write_text("check:\n", encoding="utf-8")
+            self.assertEqual(factory_init.next_steps(target, True), [])
+            (target / "Makefile").unlink()
+            config = target / ".github" / "factory.json"
+            data = json.loads(config.read_text(encoding="utf-8"))
+            data["conductor"]["gate_command"] = "npm test"
+            config.write_text(json.dumps(data), encoding="utf-8")
+            self.assertEqual(factory_init.next_steps(target, True), [])
+            config.write_text("not json", encoding="utf-8")
+            self.assertEqual(factory_init.next_steps(target, True), [])
 
 
 class TestKeepCli(unittest.TestCase):
