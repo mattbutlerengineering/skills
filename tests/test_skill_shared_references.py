@@ -22,7 +22,7 @@ SHARED = [
       "skills/automate/SKILL.md": "../audit/references/recon.md"},
      ["dropping every entry that carries a `pull_request` key",
       "is a duplicate of work in flight",
-      "gh issue list --state open --limit 50"]),
+      "gh issue list --state open --limit 1000"]),
     ("routing ladder",
      "skills/audit/references/routing.md",
      {"skills/audit/SKILL.md": "references/routing.md",

@@ -17,13 +17,17 @@ up describing a different repo than the one it names.
 
 Before judging or recommending anything:
 
-    gh pr list --state open
-    gh issue list --state open --limit 50
+    gh pr list --state open --limit 1000
+    gh issue list --state open --limit 1000
 
-In a cloud session (Claude Code Remote), where the GraphQL-backed
-`gh pr list` and `gh issue list` return HTTP 403 while `gh api` REST
-calls succeed: `gh api 'repos/{owner}/{repo}/pulls?state=open'` and
-`gh api 'repos/{owner}/{repo}/issues?state=open&per_page=50'`, dropping
+`gh`'s default stops at 30, and a repo can hold more open pull requests
+than that; a count equal to the limit means the list may be cut short —
+say so rather than reading it as complete. In a cloud session (Claude
+Code Remote), where the GraphQL-backed `gh pr list` and `gh issue list`
+return HTTP 403 while `gh api` REST calls succeed:
+`gh api --paginate 'repos/{owner}/{repo}/pulls?state=open&per_page=100'`
+and `gh api --paginate 'repos/{owner}/{repo}/issues?state=open&per_page=100'`
+(REST also pages at 30 by default), dropping
 every entry that carries a `pull_request` key — the REST issues
 endpoint lists pull requests too.
 
