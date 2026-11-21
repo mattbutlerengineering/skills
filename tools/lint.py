@@ -1126,6 +1126,66 @@ def check_ledger_links(root):
     )
 
 
+# A LEDGER table row whose last cell is "P/T — [label](link)".
+LEDGER_COUNT_ROW = re.compile(
+    r"^\|\s*(?P<slug>[a-z0-9-]+)\s*\|.*\|\s*(?P<passed>\d+)/(?P<total>\d+)"
+    r"\s*—\s*\[[^\]]*\]\((?P<link>[^)\s]+)\)\s*\|\s*$")
+
+
+def _trigger_counts(named, slug):
+    """(passed, total) of SLUG's routing cases in one trigger record, or
+    None when the record cannot be read (check_ledger_links and the
+    eval checks report that)."""
+    try:
+        data = json.loads(named.read_text(encoding="utf-8"))
+        rows = [r for r in data["results"] if r.get("expected") == slug]
+    except (OSError, ValueError, RecursionError, KeyError, TypeError,
+            AttributeError):
+        return None
+    return sum(1 for r in rows if r.get("pass") is True), len(rows)
+
+
+def check_ledger_counts(root):
+    """A row's "P/T — [..](link)" cell says what the linked run recorded
+    for that skill ("Counts are routing cases passed, from the linked
+    recorded run"): P never exceeds T; a trigger link's counts are the
+    row skill's cases in that file; an output link names the row's own
+    skill. Links that miss or break the grammar are check_ledger_links'."""
+    path = root / "LEDGER.md"
+    if not path.is_file():
+        return []
+    problems = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = LEDGER_COUNT_ROW.match(line)
+        if not match:
+            continue
+        slug, link = match["slug"], match["link"]
+        passed, total = int(match["passed"]), int(match["total"])
+        if passed > total:
+            problems.append(f"LEDGER.md row {slug!r} claims {passed}/{total}"
+                            " — more passed than run")
+            continue
+        named = resolve_link(root, path, link)
+        if named is None or not Path(named).is_file():
+            continue
+        named = Path(named)
+        if named.name == "grading.json":
+            parsed = eval_schema.parse_results_stem(named.parent.name)
+            if parsed and parsed[4] != slug:
+                problems.append(f"LEDGER.md row {slug!r} cites"
+                                f" {parsed[4]!r}'s output grading {link!r}")
+            continue
+        parsed = eval_schema.parse_results_stem(named.stem)
+        if not parsed or parsed[0] != "trigger":
+            continue
+        counts = _trigger_counts(named, slug)
+        if counts is not None and counts != (passed, total):
+            problems.append(f"LEDGER.md row {slug!r} claims {passed}/{total}"
+                            f" but {link!r} records {counts[0]}/{counts[1]}"
+                            f" for it")
+    return problems
+
+
 CHECKERS = (check_manifest, check_plugin_skills,
             check_pi_package, check_grok_marketplace, check_skills,
             check_skill_authors, check_skill_recitals, check_skill_assets, check_templates,
@@ -1134,7 +1194,7 @@ CHECKERS = (check_manifest, check_plugin_skills,
             check_readme_figure, check_protocol,
             check_protocol_tables, check_backlog, check_evals,
             check_output_evals, check_ledger, check_ledger_no_orphans,
-            check_ledger_links)
+            check_ledger_links, check_ledger_counts)
 
 
 # The markdown the checkers parse. They read it bare, so a non-UTF-8

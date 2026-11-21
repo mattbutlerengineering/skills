@@ -2045,6 +2045,52 @@ class TestLedgerNoOrphans(CheckerTreeTest):
         self.assertEqual(lint.check_ledger_no_orphans(self.root), [])
 
 
+class TestLedgerCounts(CheckerTreeTest):
+    """"Counts are routing cases passed, from the linked recorded run":
+    the cell must say what the linked file records for that skill."""
+
+    def row(self, cell):
+        ledger = self.root / "LEDGER.md"
+        ledger.write_text(ledger.read_text(encoding="utf-8")
+                          + f"| idea | draft | — | {cell} |\n",
+                          encoding="utf-8")
+
+    def record(self, name, results):
+        path = self.root / "evals" / "results" / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"results": results}), encoding="utf-8")
+
+    def test_counts_matching_the_record_pass(self):
+        self.record("trigger-2026-02-02.json", [
+            {"expected": "idea", "pass": True},
+            {"expected": "idea", "pass": False},
+            {"expected": "prd", "pass": True}])
+        self.row("1/2 — [x](evals/results/trigger-2026-02-02.json)")
+        self.assertEqual(lint.check_ledger_counts(self.root), [])
+
+    def test_counts_the_record_does_not_hold_are_reported(self):
+        self.record("trigger-2026-02-02.json",
+                    [{"expected": "prd", "pass": True}])
+        self.row("9/9 — [x](evals/results/trigger-2026-02-02.json)")
+        self.assertEqual(lint.check_ledger_counts(self.root), [
+            "LEDGER.md row 'idea' claims 9/9 but"
+            " 'evals/results/trigger-2026-02-02.json' records 0/0 for it"])
+
+    def test_more_passed_than_run_is_reported(self):
+        self.row("99/2 — [x](evals/results/trigger-2026-02-02.json)")
+        self.assertEqual(lint.check_ledger_counts(self.root), [
+            "LEDGER.md row 'idea' claims 99/2 — more passed than run"])
+
+    def test_another_skills_output_grading_is_reported(self):
+        link = "evals/results/output/decompose-2026-07-01/grading.json"
+        (self.root / link).parent.mkdir(parents=True)
+        (self.root / link).write_text("{}", encoding="utf-8")
+        self.row(f"1/1 — [x]({link})")
+        self.assertEqual(lint.check_ledger_counts(self.root), [
+            f"LEDGER.md row 'idea' cites 'decompose''s output grading"
+            f" {link!r}"])
+
+
 class TestLedgerLinks(CheckerTreeTest):
     def test_unresolved_eval_link(self):
         ledger = self.root / "LEDGER.md"
