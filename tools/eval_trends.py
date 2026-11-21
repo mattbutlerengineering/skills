@@ -22,7 +22,7 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-from cli import read_file, report
+from cli import finite, read_file, report
 from eval_schema import HARNESSES, parse_results_stem
 
 LABEL = "eval-trends"
@@ -86,11 +86,20 @@ def cost_per_pass(rows):
     return round(sum(r["cost"] for r in rows) / passed, 4)
 
 
+def _case_key(case):
+    """A sort key that cannot raise: ids may mix ints and strings
+    (eval_schema.valid_id allows both), and comparing them raised
+    TypeError. All-string tuples keep their plain order."""
+    return tuple((isinstance(x, int), x if isinstance(x, str) else repr(x))
+                 for x in case)
+
+
 def case_set_hex(case_set):
     """The first 8 hex of a sha256 of the sorted case tuples: a label for
     printing, never the identity groups rely on (they key on the tuples)."""
     return hashlib.sha256(
-        repr(tuple(sorted(case_set))).encode("utf-8")).hexdigest()[:8]
+        repr(tuple(sorted(case_set, key=_case_key))).encode("utf-8")
+    ).hexdigest()[:8]
 
 
 _ORDER = re.compile(r"\d{4}-\d{2}-\d{2}(?:-(\d+))?(?:\.json)?$")
@@ -162,7 +171,8 @@ def _need(data, key, kind):
     """data[key] when present and an instance of kind, else RecordError."""
     if key not in data:
         raise RecordError(f"missing field {key}")
-    if not isinstance(data[key], kind):
+    if not isinstance(data[key], kind) or (
+            isinstance(data[key], bool) and kind is int):
         raise RecordError(f"malformed field {key}")
     return data[key]
 
@@ -212,14 +222,16 @@ def _trigger_row(rel, data):
     day = _named_day(_need(data, "date", str), "date", parsed[2])
     results = _entries(data, "results", ("id", "expected", "query", "pass"))
     summary = _need(data, "summary", dict)
+    if not all(isinstance(r["pass"], bool) for r in results):
+        raise RecordError("malformed field results")
     hits = sum(1 for r in results if r["pass"])
     if summary.get("total") != len(results) \
             or summary.get("passed") != hits:
         raise RecordError("summary disagrees with its results")
     if summary.get("errors", 0):
         raise RecordError(f"records {summary['errors']} error(s)")
-    case_set = tuple(sorted((r["id"], r["expected"], r["query"])
-                            for r in results))
+    case_set = tuple(sorted(((r["id"], r["expected"], r["query"])
+                             for r in results), key=_case_key))
     suite = (harness, data.get("model"), data.get("runs_per_query"),
              data.get("threshold"))
     return {"surface": "trigger", "file": rel.name, "day": day,
@@ -244,7 +256,8 @@ def _charter_row(rel, data):
     suite = (arm, data.get("model"), tuple(sorted(charters.items())))
     return {"surface": "charter", "file": rel.name, "day": day,
             "suite": suite,
-            "case_set": tuple(sorted((r["id"], r["role"]) for r in results)),
+            "case_set": tuple(sorted(((r["id"], r["role"]) for r in results),
+                                     key=_case_key)),
             "n": len(results),
             "hits": sum(1 for r in results
                         if (r["verdict"] == "sensitive" if "arm" in data
@@ -260,6 +273,8 @@ def _output_row(rel, data):
         raise RecordError("name fits no results grammar")
     expectations = _entries(data, "expectations", ("text", "passed"))
     summary = _need(data, "summary", dict)
+    if not all(isinstance(e["passed"], bool) for e in expectations):
+        raise RecordError("malformed field expectations")
     hits = sum(1 for e in expectations if e["passed"])
     if summary.get("total") != len(expectations) \
             or summary.get("passed") != hits:
@@ -301,7 +316,9 @@ def _plugin_row(rel, data):
     if n != len(cases) or not 0 <= hits <= n:
         raise RecordError("aggregates disagree with its cases")
     cost = data.get("costUsd")
-    if cost is not None and not isinstance(cost, (int, float)):
+    if cost is not None and (isinstance(cost, bool)
+                             or not isinstance(cost, (int, float))
+                             or not finite(cost) or cost < 0):
         raise RecordError("malformed field costUsd")
     return {"surface": "plugin", "file": rel.name, "day": day,
             "suite": (tuple(sorted(tags)), suite.get("ablation"),

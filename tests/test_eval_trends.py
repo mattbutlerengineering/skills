@@ -228,6 +228,24 @@ class TestLoadTrigger(TempRoot):
                          ("c", "idea", "qc")),
             "n": 3, "hits": 2, "cost": None}])
 
+    def test_ids_mixing_ints_and_strings_load(self):
+        # eval_schema.valid_id allows both; sorting them raised TypeError
+        cases = [(1, "idea", "qa", True), ("n-2", "prd", "qb", False)]
+        fx.write_json(self.root, "evals/results/trigger-2026-07-05.json",
+                      fx.trigger_record("2026-07-05", cases))
+        rows, problems = self.load()
+        self.assertEqual((len(rows), problems), (1, []))
+
+    def test_a_non_bool_pass_is_a_problem(self):
+        cases = [("a", "idea", "qa", "false"), ("b", "prd", "qb", True)]
+        data = fx.trigger_record("2026-07-05", cases)
+        data["summary"]["passed"] = 2
+        fx.write_json(self.root, "evals/results/trigger-2026-07-05.json",
+                      data)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: evals/results/trigger-2026-07-05.json malformed"
+            " field results"]))
+
     def test_the_harness_comes_from_the_name_and_a_null_model_stays_null(self):
         fx.write_json(self.root, "evals/results/trigger-omp-2026-07-05.json",
                       fx.trigger_record("2026-07-05", fx.numbered_cases(2, 1),
@@ -404,6 +422,26 @@ class TestLoadPlugin(TempRoot):
                                        [("a", "p", [])], partial=True))
         self.assertEqual(self.load(), ([], [
             "eval-trends: plugin-evals/records/2026-10-10.json is partial"]))
+
+    def test_a_nan_negative_or_bool_cost_is_a_problem(self):
+        for cost in (float("nan"), -5, True):
+            with self.subTest(cost=cost):
+                data = fx.plugin_record("2026-10-10T01:00:00Z",
+                                        [("a", "p", [])])
+                data["costUsd"] = cost
+                fx.write_json(self.root,
+                              "plugin-evals/records/2026-10-10.json", data)
+                self.assertEqual(self.load(), ([], [
+                    "eval-trends: plugin-evals/records/2026-10-10.json"
+                    " malformed field costUsd"]))
+
+    def test_a_bool_aggregate_is_a_problem(self):
+        data = fx.plugin_record("2026-10-10T01:00:00Z", [("a", "p", [])])
+        data["aggregates"]["casesTotal"] = True
+        fx.write_json(self.root, "plugin-evals/records/2026-10-10.json", data)
+        self.assertEqual(self.load(), ([], [
+            "eval-trends: plugin-evals/records/2026-10-10.json malformed"
+            " field casesTotal"]))
 
     def test_a_record_without_a_cost_has_cost_none(self):
         data = fx.plugin_record("2026-10-10T01:00:00Z", [("a", "p", [])])
