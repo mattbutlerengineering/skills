@@ -143,7 +143,17 @@ def ids_in_use(git):
 
 
 def repo_owner(run):
-    """(the repo owner's login, problems), failing closed."""
+    """(the repo owner's login, problems), failing closed. An org-owned
+    repo names its Owner in the FACTORY_OWNER_LOGIN repository variable
+    (#2105, ADR-0134), read as work_queue and assembler.yml read it —
+    without it the org's login authored no issue, and every item was
+    deferred as not the Owner's."""
+    override, problems = work_queue.owner_override(run)
+    if problems:
+        return None, [problem.replace("wq:", "cd:", 1)
+                      for problem in problems]
+    if override is not None:
+        return override, []
     result = gh_read(["repo", "view", "--json", "owner"], "gh repo view",
                      "cd", run=run, expect=dict)
     if result.problems:
