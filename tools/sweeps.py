@@ -60,7 +60,7 @@ from pathlib import Path
 import label_sync
 from cli import CLI_FAILURES as GH_FAILURES
 from cli import detail as gh_detail
-from cli import gh_read, report
+from cli import gh_read, label_names, report
 from human_gates import read_work_order_issues
 from knowledge_plane import (WO_TOKEN, breakdown_files, breakdown_rows,
                              repo_root, sanitize)
@@ -91,6 +91,9 @@ TRIAGE_LABELS = tuple(sorted({label for labels in TRIAGE.values()
 # ensure-labels is a bootstrap, not a sweep: it owns no source:*/type:* pair,
 # files no issue, and is never routed to as one.
 COMMANDS = tuple(TRIAGE) + ("ensure-labels",)
+# The source:* label of every sweep kind: the one label every intake
+# issue carries, whichever sweep filed it.
+SOURCE_LABELS = frozenset(labels[0] for labels in TRIAGE.values())
 
 # Fields copied out of a Sentry issue object. An allowlist, not a dump:
 # unknown keys never reach the issue body (ADR-0030, copy vs reference).
@@ -391,7 +394,8 @@ def known_keys(run=gh_runner):
     # view and their intake is re-filed as a duplicate — so it travels
     # as full_note rather than being written after the fact.
     read = gh_read(["issue", "list", "--state", "all", "--json",
-                    "number,state,body"], "gh issue list", label="sweeps",
+                    "number,state,body,labels"], "gh issue list",
+                   label="sweeps",
                    run=run, window=LIST_WINDOW,
                    full_note=(f"returned a full {LIST_WINDOW}-issue window;"
                               " intake keys older than it are invisible and"
@@ -401,6 +405,13 @@ def known_keys(run=gh_runner):
     issues, problems = read.value, list(read.problems)
     keys = set()
     for issue in issues:
+        # Only an intake issue's marker — one carrying a sweep's source:*
+        # label, which every sweep stamps — accounts for a key: any other
+        # issue quoting an `intake-key:` line (a discussion of the marker,
+        # a copied body) would otherwise mute that sweep for as long as it
+        # stays open — and a sentry key for good.
+        if not SOURCE_LABELS & set(label_names(issue)):
+            continue
         closed = issue.get("state") == "CLOSED"
         for line in (issue.get("body") or "").splitlines():
             if not line.startswith(MARKER):

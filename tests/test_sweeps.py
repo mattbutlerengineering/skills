@@ -39,7 +39,8 @@ LABEL_NAMES = {label["name"] for label in TAXONOMY}
 # --state all, not open: an intake a maintainer triaged and CLOSED must not be
 # re-filed next Monday (that is the churn the sweep exists to remove, inverted).
 LIST_CALL = ["issue", "list", "--state", "all", "--json",
-             "number,state,body", "--limit", str(sweeps.LIST_WINDOW)]
+             "number,state,body,labels", "--limit",
+             str(sweeps.LIST_WINDOW)]
 
 # A Sentry issues payload entry, shaped like the real API response.
 SENTRY_ENTRY = {
@@ -53,6 +54,11 @@ SENTRY_ENTRY = {
     "permalink": "https://sentry.io/organizations/acme/issues/1/",
     "ignored-key": "never copied into the body",
 }
+
+
+# A source:* label, which every sweep-filed issue carries: only such an
+# issue's marker counts.
+INTAKE_LABELS = [{"name": "source:sweep"}]
 
 
 def gh(issues=(), labels=None, **kwargs):
@@ -477,7 +483,7 @@ class TestFileIssues(unittest.TestCase):
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
             runner = gh(issues=[
-                {"number": 3, "body": "intake-key: sentry:PROJ-7K\n"}])
+                {"number": 3, "labels": INTAKE_LABELS, "body": "intake-key: sentry:PROJ-7K\n"}])
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual((filed, problems), ([], []))
@@ -493,7 +499,7 @@ class TestFileIssues(unittest.TestCase):
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
             runner = gh(issues=[
                 {"number": 3, "state": "CLOSED",
-                 "body": "intake-key: sentry:PROJ-7K\n"}])
+                 "labels": INTAKE_LABELS, "body": "intake-key: sentry:PROJ-7K\n"}])
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
             self.assertEqual((filed, problems), ([], []))
@@ -517,7 +523,7 @@ class TestFileIssues(unittest.TestCase):
             tree = taxonomy_tree(tmp)
             intakes, _ = sweeps.sentry_intakes([SENTRY_ENTRY])
             runner = gh(issues=[
-                {"number": n, "body": f"intake-key: old:{n}\n"}
+                {"number": n, "labels": INTAKE_LABELS, "body": f"intake-key: old:{n}\n"}
                 for n in range(sweeps.LIST_WINDOW)])
             filed, problems = sweeps.file_issues(tree.root, intakes,
                                                  run=runner)
@@ -536,9 +542,17 @@ class TestFileIssues(unittest.TestCase):
         a closed issue is not an answer — it is an issue someone closed."""
         keys, problems = sweeps.known_keys(run=gh(issues=[
             {"number": 173, "state": "CLOSED",
-             "body": "intake-key: sweep:label-drift\n"}]))
+             "labels": INTAKE_LABELS, "body": "intake-key: sweep:label-drift\n"}]))
         self.assertEqual(problems, [])
         self.assertEqual(keys, set())
+
+    def test_a_marker_in_a_non_intake_issue_suppresses_nothing(self):
+        # An open discussion quoting the marker muted the sweep for as
+        # long as it stayed open (2026-11-20 audit).
+        keys, problems = sweeps.known_keys(run=gh(issues=[
+            {"number": 338, "state": "OPEN", "labels": [{"name": "type:docs"}],
+             "body": "intake-key: sweep:reconcile\n"}]))
+        self.assertEqual((keys, problems), (set(), []))
 
     def test_an_open_detector_intake_still_suppresses(self):
         """Re-filing while the issue is open would put two identical
@@ -546,7 +560,7 @@ class TestFileIssues(unittest.TestCase):
         remove."""
         keys, problems = sweeps.known_keys(run=gh(issues=[
             {"number": 173, "state": "OPEN",
-             "body": "intake-key: sweep:label-drift\n"}]))
+             "labels": INTAKE_LABELS, "body": "intake-key: sweep:label-drift\n"}]))
         self.assertEqual(problems, [])
         self.assertEqual(keys, {"sweep:label-drift"})
 
@@ -556,7 +570,7 @@ class TestFileIssues(unittest.TestCase):
         the error unresolved next week."""
         keys, problems = sweeps.known_keys(run=gh(issues=[
             {"number": 12, "state": "CLOSED",
-             "body": "intake-key: sentry:PROJ-7K\n"}]))
+             "labels": INTAKE_LABELS, "body": "intake-key: sentry:PROJ-7K\n"}]))
         self.assertEqual(problems, [])
         self.assertEqual(keys, {"sentry:PROJ-7K"})
 
@@ -571,9 +585,9 @@ class TestFileIssues(unittest.TestCase):
         `break` on the first match, cannot quietly let the closed issue
         decide."""
         closed = {"number": 173, "state": "CLOSED",
-                  "body": "intake-key: sweep:label-drift\n"}
+                  "labels": INTAKE_LABELS, "body": "intake-key: sweep:label-drift\n"}
         opened = {"number": 400, "state": "OPEN",
-                  "body": "intake-key: sweep:label-drift\n"}
+                  "labels": INTAKE_LABELS, "body": "intake-key: sweep:label-drift\n"}
         for order in ([closed, opened], [opened, closed]):
             with self.subTest(first=order[0]["state"]):
                 keys, problems = sweeps.known_keys(run=gh(issues=order))
@@ -590,7 +604,7 @@ class TestFileIssues(unittest.TestCase):
                       {"state": "MERGED"}, {"state": 7}):
             with self.subTest(state=state):
                 issue = dict({"number": 173,
-                              "body": "intake-key: sweep:label-drift\n"},
+                              "labels": INTAKE_LABELS, "body": "intake-key: sweep:label-drift\n"},
                              **state)
                 keys, problems = sweeps.known_keys(run=gh(issues=[issue]))
                 self.assertEqual(problems, [])
@@ -644,7 +658,7 @@ class TestFileIssues(unittest.TestCase):
             payload = [dict(SENTRY_ENTRY, shortId=f"PROJ-{n}")
                        for n in range(sweeps.MAX_INTAKE + 5)]
             intakes, _ = sweeps.sentry_intakes(payload)
-            already = [{"number": n, "body": f"intake-key: sentry:PROJ-{n}\n"}
+            already = [{"number": n, "labels": INTAKE_LABELS, "body": f"intake-key: sentry:PROJ-{n}\n"}
                        for n in range(sweeps.MAX_INTAKE)]
             runner = gh(issues=already)
             filed, problems = sweeps.file_issues(tree.root, intakes,
