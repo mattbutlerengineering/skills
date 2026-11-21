@@ -735,3 +735,19 @@ class TestAcceptanceScenario(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestFutureMonthRowFailsClosed(unittest.TestCase):
+    def test_a_later_month_row_pauses_the_report(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "docs" / "factory" / "costs.jsonl"
+            path.parent.mkdir(parents=True)
+            path.write_text(json.dumps({
+                "wo": "WO-0001", "run_id": "r1", "model": "m", "tokens": 1,
+                "cost": 500, "outcome": "merged", "at": "2026-12-05"}) + "\n",
+                encoding="utf-8")
+            result = cost_report.guard(tmp, config={"monthly_cap_usd": 100},
+                                       month="2026-11", today="2026-11-20")
+        self.assertEqual(result.verdict, cost_report.PAUSE)
+        self.assertTrue(any("in a month after today" in p
+                            for p in result.problems), result.problems)

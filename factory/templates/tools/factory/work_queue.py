@@ -383,6 +383,8 @@ def month_to_date(root, now):
     The breaker's input and the report's figure therefore cannot drift
     apart."""
     entries, problems = cost_ledger.read(root)
+    problems = problems + cost_ledger.future_problems(
+        entries, now.strftime("%Y-%m-%d"))
     month = now.strftime("%Y-%m")
     total = sum(entry["cost"] for entry
                 in cost_ledger.dispatched(entries, month))

@@ -105,7 +105,7 @@ def decide(total_cost, cap):
                       f" ${cap:.2f} monthly cap")
 
 
-def guard(root, config=None, ledger_path=None, month=None):
+def guard(root, config=None, ledger_path=None, month=None, today=None):
     """GuardResult: recompute spend from the ledger and decide against
     factory.json's monthly cap. The verdict decides on `month_totals` —
     the aggregate windowed to `month` ("YYYY-MM", the report month),
@@ -118,6 +118,8 @@ def guard(root, config=None, ledger_path=None, month=None):
     rollup of what WAS readable, even on a failing path, so a human
     reading the report still sees something."""
     entries, problems = cost_ledger.read(root, ledger_path=ledger_path)
+    if today is not None:
+        problems = problems + cost_ledger.future_problems(entries, today)
     totals = aggregate(entries)
     month_totals = aggregate(entries, month)
     if problems:
@@ -187,7 +189,7 @@ def run_report(root, clock=None, ledger_path=None):
     clock = clock or _utcnow
     as_of = clock().date().isoformat()
     month = as_of[:7]
-    result = guard(root, ledger_path=ledger_path, month=month)
+    result = guard(root, ledger_path=ledger_path, month=month, today=as_of)
     outputs = {
         "pause": "true" if result.verdict == PAUSE else "false",
         "title": report_title(as_of),
