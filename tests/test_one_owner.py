@@ -726,6 +726,14 @@ class TestMarkers(unittest.TestCase):
                          ["one-owner: a.py:1 is a one-owner marker above no"
                           " definition"])
 
+    def test_a_marker_above_a_def_stating_no_fact_says_so(self):
+        found, problems = markers(
+            "a.py", f"{MARK}\ndef helper(d):\n    return d.get('x')\n")
+        self.assertEqual(found, [])
+        self.assertEqual(problems,
+                         ["one-owner: a.py:1 marks helper, which states no"
+                          " fact this pass reads"])
+
     def test_an_unreadable_marker_is_a_problem_never_a_permission(self):
         for text in ("# one-owner: dashboard.git_runner — no citation",
                      "# one-owner: (ADR-0037) — no counterpart",

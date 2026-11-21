@@ -373,6 +373,10 @@ _FINDING = re.compile(
     r"|F\d+\b|Finding\s+\d+\b|\d+\.)", re.IGNORECASE)
 
 
+# A heading that is only a severity word is a section, not a finding.
+_SEVERITIES = ("critical", "major", "minor", "low", "medium", "high")
+
+
 def _finding_level(line):
     """The heading level when `line` is a finding heading, else None."""
     heading = _HEADING.match(line)
@@ -406,6 +410,10 @@ def review_findings(review_text, breakdown_lines):
             continue
         end = next((n for n, heading, other in headings[at + 1:]
                     if other or len(heading.group(1)) <= level), len(lines))
+        title = re.sub(r"[*_:\s]", "", headings[at][1].group(2)).lower()
+        body = re.sub(r"[*_\s.]", "", "\n".join(lines[start + 1:end]))
+        if title in _SEVERITIES and body.lower() in ("", "none"):
+            continue  # `### Critical` then "None." reports no finding
         found += 1
         named += _names("\n".join(lines[start:end]), keys)
     if not found:

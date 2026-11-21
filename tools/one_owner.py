@@ -328,6 +328,39 @@ def _standalone_comments(source):
     return found
 
 
+def _definitions_below(source, comments):
+    """{comment line: name} for comment lines in the block directly
+    above a def, class or single-name assignment, decorators included —
+    whether or not it states a fact."""
+    try:
+        tree = ast.parse(source)
+    except (SyntaxError, ValueError):
+        return {}
+    named = {}
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef,
+                             ast.ClassDef)):
+            name = node.name
+        elif (isinstance(node, (ast.Assign, ast.AnnAssign))
+              and len(getattr(node, "targets", [node.target]
+                              if hasattr(node, "target") else [])) == 1):
+            target = (node.targets[0] if isinstance(node, ast.Assign)
+                      else node.target)
+            if not isinstance(target, ast.Name):
+                continue
+            name = target.id
+        else:
+            continue
+        starts = {node.lineno} | {d.lineno for d in
+                                  getattr(node, "decorator_list", [])}
+        for start in starts:
+            lineno = start - 1
+            while lineno in comments:
+                named.setdefault(lineno, name)
+                lineno -= 1
+    return named
+
+
 def markers(path, source):
     """([Marker, ...], problems) for one module: the deliberate second
     owners it records, read at the definitions they excuse.
@@ -362,6 +395,7 @@ def markers(path, source):
                 owner_of[lineno] = site
                 lineno -= 1
     found, problems = [], []
+    named = _definitions_below(source, comments)
     for lineno in sorted(comments):
         text = comments[lineno]
         if not _LEAD.match(text):
@@ -373,6 +407,14 @@ def markers(path, source):
                             f" `{MARKER_GRAMMAR}`)")
             continue
         site = owner_of.get(lineno)
+        if site is None and lineno in named:
+            # Above a real definition this pass reads no fact from — say
+            # so, as defined_names does for the counterpart side, rather
+            # than claim there is no definition at all.
+            problems.append(f"one-owner: {path}:{lineno} marks"
+                            f" {named[lineno]}, which states no fact this"
+                            " pass reads")
+            continue
         if site is None:
             problems.append(f"one-owner: {path}:{lineno} is a one-owner"
                             " marker above no definition")

@@ -308,6 +308,37 @@ class TestSmallestText(unittest.TestCase):
                 self.assertAlmostEqual(r.smallest_px, 4.0)
                 self.assertIsNone(r.note)
 
+    def test_the_font_shorthand_sets_the_size(self):
+        # A `font:` rule was ignored, so a 14px tag rule was reported for
+        # the 6px text it overrides, silently (scale 1: embed = width).
+        r = reading('<style>text{font-size:14px} .tiny{font:400 6px/1.2'
+                    ' sans-serif}</style><text class="tiny">x</text>'
+                    '<text>y</text>', embed=400.0)
+        self.assertAlmostEqual(r.smallest_px, 6.0)
+        r = reading('<text font-size="14" style="font: 5px sans-serif">'
+                    'x</text>', embed=400.0)
+        self.assertAlmostEqual(r.smallest_px, 5.0)
+
+    def test_a_shorthand_with_no_readable_size_is_unread(self):
+        r = reading('<g font-size="14"><text style="font: inherit">x</text>'
+                    '</g>', embed=400.0)
+        self.assertEqual((r.unread, r.note), (1, "no text size resolved"))
+
+    def test_an_important_rule_beats_a_normal_inline_style(self):
+        r = reading('<style>.t{font-size:4px !important}</style>'
+                    '<text class="t" style="font-size:20px">x</text>',
+                    embed=400.0)
+        self.assertAlmostEqual(r.smallest_px, 4.0)
+
+    def test_deep_nesting_is_not_quadratic(self):
+        depth = 20000
+        body = ('<text font-size="9">' + "<a>" * depth + "x"
+                + "</a>" * depth + "</text>")
+        started = __import__("time").monotonic()
+        r = reading(body, embed=400.0)
+        self.assertLess(__import__("time").monotonic() - started, 5.0)
+        self.assertAlmostEqual(r.smallest_px, 9.0)
+
     def test_embed_width_option_scales_in_proportion(self):
         # 440 / 500 = 0.88; 5 x 0.88 = 4.4
         path = str(FIX / "clean.svg")
