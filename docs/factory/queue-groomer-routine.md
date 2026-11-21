@@ -67,7 +67,9 @@ Check in order; the first hit sets the run mode.
    `<!-- queue-groomer-state last-scan=... -->` marker. First run → no
    prior state; survey everything.
 3. Every open issue carrying a `wo:*` label (`gh issue list --label
-   ...`, one call per lifecycle label), with label-event history for
+   ... --limit 1000`, one call per lifecycle label; the default stops at
+   30, and a count equal to the limit is truncated — fail closed), with
+   label-event history for
    the age of its current label.
 4. The breakdown rows those issues mirror (`docs/**/breakdown.md`) —
    read only, to know whether a row is checked and what blocks it.
