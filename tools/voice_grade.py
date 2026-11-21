@@ -118,12 +118,16 @@ def slop(text):
 def _read_all(paths):
     """([(path, text)], problem): each path read through cli.read_file; the
     first failure wins and nothing is graded."""
+    from pathlib import Path
+
     from cli import read_file
     texts = []
     for path in paths:
         text, problem = read_file(path, path, str)
         if problem is None and text is None:
-            problem = f"cannot read {path}: no such file"
+            problem = (f"cannot read {path}: is a directory, not a file"
+                       if Path(path).is_dir() else
+                       f"cannot read {path}: no such file")
         if problem:
             return None, f"{LABEL}: {problem}"
         texts.append((path, text))

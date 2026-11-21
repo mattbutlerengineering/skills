@@ -966,8 +966,8 @@ def mirror_problems(root, expected):
         elif actual[rel] != digest:
             problems.append(
                 f"E: factory/{rel} does not match its manifest checksum"
-                " (re-run `python3 factory_init.py update-manifest` in the"
-                " skills repo, never hand-edit)")
+                " (re-run `python3 tools/factory_init.py update-manifest`"
+                " in the skills repo, never hand-edit)")
     return problems + [f"E: factory/{rel} is not in the manifest"
                        for rel in sorted(actual) if rel not in expected]
 
@@ -2108,13 +2108,14 @@ def run_all(root, env=None):
 
 def main(argv):
     if argv in (["-h"], ["--help"]):
-        print("usage: gates.py [--selftest]")
+        print("usage: python3 tools/gates.py [--selftest]")
         return 0
     if argv not in ([], ["--selftest"]):
         # A mistyped flag must not fall through to the real gates and
         # exit 0: the check the caller asked for would silently not run.
         print(f"gates: unknown argument(s): {' '.join(argv)} "
-              "(usage: gates.py [--selftest])", file=sys.stderr)
+              "(usage: python3 tools/gates.py [--selftest])",
+              file=sys.stderr)
         return 2
     if argv:
         # The planted-defect fixtures and selftest() live in their own

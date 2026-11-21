@@ -272,7 +272,7 @@ class TestToolsOnlyMarkerNeedsNoMirror(unittest.TestCase):
             path.write_text("check: tampered\n", encoding="utf-8")
             self.assertEqual(gates.check_scaffold_sync(root), [
                 "E: factory/templates/Makefile does not match its manifest"
-                " checksum (re-run `python3 factory_init.py"
+                " checksum (re-run `python3 tools/factory_init.py"
                 " update-manifest` in the skills repo, never hand-edit)"])
 
 

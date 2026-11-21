@@ -96,7 +96,7 @@ def changed_paths(git, base, head):
         out = git(args).stdout
     except cli.CLI_FAILURES as err:
         return None, (f"fast-path: git {' '.join(args)} failed:"
-                      f" {cli.detail(err)}")
+                      f" {cli.detail(err, every_line=True)}")
     return [path for path in out.split("\0") if path], None
 
 

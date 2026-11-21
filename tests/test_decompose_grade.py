@@ -665,6 +665,11 @@ class TestFrontDoor(unittest.TestCase):
         self.assertEqual(self.run_main(missing, self.arch), (
             2, [f"decompose-grade: cannot read {missing}: no such file"]))
 
+    def test_a_directory_is_named_as_one(self):
+        self.assertEqual(self.run_main(str(self.dir), self.arch), (
+            2, [f"decompose-grade: cannot read {self.dir}: is a directory,"
+                " not a file"]))
+
     def test_an_unreadable_file_exits_two_with_the_guarded_read_message(self):
         bad = self.dir / "bad.md"
         bad.write_bytes(b"\xff\xfe")

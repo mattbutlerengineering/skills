@@ -286,6 +286,12 @@ class TestFrontDoor(unittest.TestCase):
             f"voice-grade: cannot read {missing}: no such file",
         ]))
 
+    def test_a_directory_is_named_as_one(self):
+        self.assertEqual(self.run_main(str(self.dir)), (2, [
+            f"voice-grade: cannot read {self.dir}: is a directory, not a"
+            " file",
+        ]))
+
     def test_a_non_utf8_file_exits_two(self):
         path = self.write("bad.md", b"\xff\xfe")
         self.assertEqual(self.run_main(path), (2, [

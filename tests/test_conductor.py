@@ -721,7 +721,7 @@ class TestItemView(unittest.TestCase):
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
-    usage_fragment = "python3 conductor.py"
+    usage_fragment = "python3 tools/conductor.py"
     summary_line = "cd: 0 problem(s)"
 
     def setUp(self):

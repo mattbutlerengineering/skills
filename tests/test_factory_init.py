@@ -122,8 +122,8 @@ TOOLS_ONLY_RELS = {rel for rel in EXPECTED_RELS
 
 TAMPER_PROBLEM = (
     "E: factory/templates/Makefile does not match its manifest checksum"
-    " (re-run `python3 factory_init.py update-manifest` in the skills"
-    " repo, never hand-edit)")
+    " (re-run `python3 tools/factory_init.py update-manifest` in the"
+    " skills repo, never hand-edit)")
 
 
 def make_factory_repo(root):
@@ -248,7 +248,7 @@ class TestUpdateManifest(unittest.TestCase):
 
 class TestRealTreeMirrors(unittest.TestCase):
     """Detector E diffs the manifest against the PAYLOAD only, so a root
-    tool edited without `python3 factory_init.py update-manifest` leaves
+    tool edited without `python3 tools/factory_init.py update-manifest` leaves
     a stale payload self-consistent with its stale checksum: build green,
     stamped repos run old code. This pins payload <-> ROOT in this
     checkout, closing that direction in CI."""
@@ -263,7 +263,7 @@ class TestRealTreeMirrors(unittest.TestCase):
                     (self.REPO / "factory" / "templates" / rel).read_text(
                         encoding="utf-8"),
                     f"{name} differs from factory/templates/{rel} — run"
-                    " python3 factory_init.py update-manifest")
+                    " python3 tools/factory_init.py update-manifest")
 
 
 class TestPayloadToolsImport(unittest.TestCase):
@@ -895,8 +895,22 @@ class TestStamp(unittest.TestCase):
             target.write_text("x\n", encoding="utf-8")
             self.assertEqual(
                 factory_init.stamp(source, target),
-                [f"factory-init: target {target} does not exist"
+                [f"factory-init: target {target} is not a directory"
                  " — pass the path of an existing repo checkout"])
+
+    def test_update_refuses_a_target_that_is_missing_or_a_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            afile = Path(tmp) / "afile"
+            afile.write_text("x\n", encoding="utf-8")
+            for target, why in ((Path(tmp) / "typo", "does not exist"),
+                                (afile, "is not a directory")):
+                with self.subTest(target=target):
+                    self.assertEqual(
+                        factory_init.update(source, target),
+                        ([], [], [f"factory-init: target {target} {why}"
+                                  " — pass the path of an existing repo"
+                                  " checkout"]))
 
     def test_an_already_stamped_target_gets_one_line_not_a_flood(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -937,6 +951,15 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                 f"factory-init: target {target} does not exist — pass the"
                 " path of an existing repo checkout",
                 "factory-init: 1 problem(s)"])
+
+    def test_a_refused_update_prints_no_refreshed_line(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "missing"
+            code, out = self.run_cli(["update", str(target)])
+            self.assertEqual((code, out.splitlines()), (1, [
+                f"factory-init: target {target} does not exist — pass the"
+                " path of an existing repo checkout",
+                "factory-init: 1 problem(s)"]))
 
     def test_tools_only_stamp_then_update_through_the_cli(self):
         # #941: the flag on both commands, against the real payload.

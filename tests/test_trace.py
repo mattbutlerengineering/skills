@@ -437,6 +437,16 @@ class TestCli(Repo):
         self.assertEqual(result.returncode, 1)
         self.assertTrue(result.stdout.endswith("trace: 1 problem(s)\n"))
 
+    def test_a_root_that_is_not_a_directory_is_named_not_the_key(self):
+        missing = self.root / "nope"
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = trace_view.main(["feature:demo", "--root", str(missing)],
+                              run=lambda args: "", environ={})
+        self.assertEqual((code, out.getvalue().splitlines()), (1, [
+            f"trace: --root '{missing}' is not a directory",
+            "trace: 1 problem(s)"]))
+
 
 if __name__ == "__main__":
     unittest.main()

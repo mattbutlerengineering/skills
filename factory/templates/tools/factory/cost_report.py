@@ -21,7 +21,7 @@ workflow's `if:`, the same vars.* convention sweeps.yml's Sentry job and
 validator.yml's FACTORY_REVIEW_LOGIN already use) — both real gh
 mutations, so they stay in the YAML, never here.
 
-  python3 cost_report.py report
+  python3 tools/cost_report.py report
         Recompute spend from docs/factory/costs.jsonl, decide against
         factory.json's monthly_cap_usd, and write title/body/pause/reason
         to $GITHUB_OUTPUT for the workflow's gh steps. Exits nonzero only

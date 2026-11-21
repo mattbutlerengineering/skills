@@ -14,16 +14,16 @@ precondition and the merge turn), conductor_close (the scorecard and
 closing a batch), conductor_calibrate (calibrate) and conductor_consent
 (standing consent, and the ask and answer argv).
 
-  python3 conductor.py plan [--agents DIR] <#N>...
+  python3 tools/conductor.py plan [--agents DIR] <#N>...
         Price and order a batch of issues and show each item's reserved
         number block. Writes nothing. --agents names the charter stub
         directory (default factory/agents/, which a consumer repo lacks).
-  python3 conductor.py open <batch> [--agents DIR] <#N>...
+  python3 tools/conductor.py open <batch> [--agents DIR] <#N>...
         Plan, check what every `run` will need (factory.json, the cost
         ledger on origin/main, no push gap), then create the
         conductor/<batch> branch and worktree from origin/main, write the
         plan and reserve rows, and queue the spend ask.
-  python3 conductor.py next <batch>
+  python3 tools/conductor.py next <batch>
         Record any new stall, gate and clarify asks (a runner found dead
         gets its run row and a spend row at its full ceiling on its
         item branch; a finished run whose spend commit, push or PR
@@ -35,12 +35,12 @@ closing a batch), conductor_calibrate (calibrate) and conductor_consent
         `merge` step once an answer covers a shipped item), the ids of
         the asks just recorded, and the shipped items waiting for a
         merge ask ({"ask", "ready", "recorded", "merge_due"}).
-  python3 conductor.py run <batch> <#N> <step>
+  python3 tools/conductor.py run <batch> <#N> <step>
         One metered headless Worker run of the item's step in its own
         worktree (conductor/<batch>-<n>): launch row, brief, harness, spend
         row, push, PR, run row; any failure queues a stall ask, and a
         launch refusal no retry fixes pauses dispatch behind an ask.
-  python3 conductor.py merge <batch> <#N>
+  python3 tools/conductor.py merge <batch> <#N>
         One merge turn, refused unless the item is reviewed with a pass
         from a distinct reviewer and an answer covers it: merge
         origin/main in, resolve only the manifest (a conflict in
@@ -50,22 +50,22 @@ closing a batch), conductor_calibrate (calibrate) and conductor_consent
         the gate command, push (never forced), wait
         for the head's checks, then squash-merge or enqueue. Any other
         outcome queues a stall ask.
-  python3 conductor.py scorecard <batch>
+  python3 tools/conductor.py scorecard <batch>
         Print the batch's scorecard row as JSON, computed from its ledger
         and the cost ledger (the aggregate plus each per-run file);
         appends nothing. A malformed
         ledger line, a run with no spend row or a missing plan row fails
         with a problem and no number.
-  python3 conductor.py calibrate
+  python3 tools/conductor.py calibrate
         Join every closed batch's ledger with docs/factory/costs.jsonl
         into one actuals row per run, and print as JSON the suggested
         step weights and size budgets with their sample sizes; below
         the floor it suggests nothing but warns (#940). Writes nothing.
-  python3 conductor.py scorecards [N]
+  python3 tools/conductor.py scorecards [N]
         Print each metric of the last N (default 5) scorecards in
         docs/factory/scorecards.jsonl, oldest first, with its change
         from the batch before; appends nothing.
-  python3 conductor.py close <batch>
+  python3 tools/conductor.py close <batch>
         Once every item is merged or blocked: merge origin/main into
         conductor/<batch>, carry blocked items' spend rows over, append
         the scorecard to docs/factory/scorecards.jsonl only when it
@@ -73,20 +73,20 @@ closing a batch), conductor_calibrate (calibrate) and conductor_consent
         push (never forced), open the closing PR, and label each blocked
         item's issue needs-human with its reason, creating the label
         when the repo lacks it.
-  python3 conductor.py close <batch> --merge
+  python3 tools/conductor.py close <batch> --merge
         Once the Owner answered the closing ask `merge`: commit and push
         the answer row to conductor/<batch>, so the merged ledger holds
         it, wait for that head's checks, then squash-merge or enqueue
         the closing PR.
-  python3 conductor.py ask <batch> --kind K --question Q --option O
-                           [--option O ...] --recommended O --why W
-                           [--item #N] [--covers #N ...]
+  python3 tools/conductor.py ask <batch> --kind K --question Q --option O
+                                 [--option O ...] --recommended O --why W
+                                 [--item #N] [--covers #N ...]
         Append an ask row with a fresh id and print the id.
-  python3 conductor.py answer <batch> <ask-id> <choice> [--note TEXT]
+  python3 tools/conductor.py answer <batch> <ask-id> <choice> [--note TEXT]
         Append the Owner's answer row. Written only straight after the
         Owner picks that option in this session; refused for any call
         with CONDUCTOR_WORKER set.
-  python3 conductor.py --version
+  python3 tools/conductor.py --version
         Print the payload these tools were stamped from — the plugin
         name and version factory/manifest.json records — or that they
         are unversioned (copied by hand, no manifest). `plan` and `open`

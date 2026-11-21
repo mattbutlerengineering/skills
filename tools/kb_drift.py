@@ -420,9 +420,19 @@ def drift(root):
             + _surface_problems(root, texts))
 
 
+USAGE = "usage: python3 tools/kb.py drift [root]"
+
+
 def main(argv):
-    """`kb.py drift [root]`."""
-    if len(argv) > 1:
-        print("usage: kb.py drift [root]")
+    """`kb.py drift [root]`: -h/--help is usage, exit 0; any other flag or
+    a second argument is usage, exit 2 — never read as the root."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
+    if len(argv) > 1 or (argv and argv[0].startswith("-")):
+        print(USAGE)
         return 2
-    return cli.report(LABEL, drift(argv[0] if argv else "."))
+    root = argv[0] if argv else "."
+    if not Path(root).is_dir():
+        return cli.report(LABEL, [f"{LABEL}: {root} is not a directory"])
+    return cli.report(LABEL, drift(root))

@@ -12,7 +12,7 @@ The gap is easy to miss because something *does* go red when a grant is
 deleted -- the payload mirror stops matching its root file. That failure
 is about lockstep, not about permissions, and it disappears the moment
 the edit follows this repo's documented procedure and runs
-`python3 factory_init.py update-manifest`, which syncs the payload copy.
+`python3 tools/factory_init.py update-manifest`, which syncs the payload copy.
 With the mirror synced, dropping `issues: write` from cost-report.yml,
 gate-digest.yml, assembler.yml and validator.yml leaves the entire
 battery green.

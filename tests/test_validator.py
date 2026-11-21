@@ -1238,7 +1238,7 @@ class TestParseLifecycle(unittest.TestCase):
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
-    usage_fragment = "python3 validator.py review"
+    usage_fragment = "python3 tools/validator.py review"
     summary_line = "validator: 0 problem(s)"
 
     def run_cli(self, argv):

@@ -6,8 +6,8 @@ implement-queue's work-order planner under `source: work-orders`
 labels, never merges — the skill runs the agents, and a human merges the
 PRs (ADR-0033 gate 3). Same compute/mutate split as cost_report.py.
 
-  python3 work_queue.py plan            the batch, as a report
-  python3 work_queue.py plan --json     the same batch, machine-readable
+  python3 tools/work_queue.py plan         the batch, as a report
+  python3 tools/work_queue.py plan --json  the same batch, machine-readable
 
 A work order is eligible only when BOTH planes agree (ADR-0032: the
 dispatch plane never runs ahead of the knowledge plane):

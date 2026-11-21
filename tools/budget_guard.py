@@ -15,15 +15,15 @@ RESILIENTLY, so a WIP-push failure (the normal no-upstream case) still
 leaves the handoff and ledger behind. See
 docs/adr/0034-work-order-budgets-and-routing.md.
 
-  python3 budget_guard.py check <size> <spend_usd>
+  python3 tools/budget_guard.py check <size> <spend_usd>
         Resolve <size>'s dollar budget from factory.json and print CONTINUE
         or HARD-STOP against <spend_usd>. Exits nonzero only on a genuine
         misconfiguration (fails CLOSED: an unresolvable budget prints
         HARD-STOP and still exits nonzero, so a broken config can never
         silently wave a run through).
 
-  python3 budget_guard.py record <wo> <run_id> <model> <tokens> <cost>
-                                 [outcome]
+  python3 tools/budget_guard.py record <wo> <run_id> <model> <tokens>
+                                       <cost> [outcome]
         Append ONE completed run's line to the ledger (outcome defaults to
         "completed"). The success-path counterpart to hard_stop: until this
         existed, hard_stop was the only in-repo writer of a dispatched-run
@@ -32,8 +32,8 @@ docs/adr/0034-work-order-budgets-and-routing.md.
         $0.00 (issue #222). Refuses BEFORE writing on a malformed row or a
         (wo, run_id) already recorded.
 
-  python3 budget_guard.py record-run <wo> <run_id> <model>
-                                     <execution_file> [outcome]
+  python3 tools/budget_guard.py record-run <wo> <run_id> <model>
+                                           <execution_file> [outcome]
         record, with tokens and cost read from the claude-code-action
         execution file the dispatched run left behind (cli.read_execution)
         — the assembler workflow's caller (issue #222), so the figures are

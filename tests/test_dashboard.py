@@ -1743,6 +1743,20 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         self.assertEqual(code, 1)
         self.assertIn("dashboard: --port 'x' is not a number", out)
 
+    def test_serve_with_a_config_that_is_not_a_file_refuses_to_bind(self):
+        class NeverBind:
+            def __init__(self, *_args):
+                raise AssertionError("bound despite a bad --config")
+        with tempfile.TemporaryDirectory() as tmp:
+            for config, why in ((f"{tmp}/none.json", "does not exist"),
+                                (tmp, "is not a file")):
+                with self.subTest(config=config), mock.patch.object(
+                        dashboard, "ThreadingHTTPServer", NeverBind):
+                    self.assertEqual(
+                        self.run_cli(["serve", "--config", config]),
+                        (1, f"dashboard: --config {config} {why}\n"
+                            "dashboard: 1 problem(s)\n"))
+
 
 class _FakeConn:
     """One HTTP conversation over BytesIO instead of a socket.

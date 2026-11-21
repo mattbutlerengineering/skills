@@ -25,7 +25,7 @@ mutation — committing the appended ledger rows — signalled through the
 Conventions match validator.py: functions return gd:-prefixed problem
 strings; the CLI prints them and exits nonzero.
 
-  python3 gate_digest.py daily
+  python3 tools/gate_digest.py daily
         Read the gate queues, append new gate-latency rows to the cost
         ledger, and create-or-update the pinned digest issue. Writes
         `changed` ('true'/'false': did the ledger gain rows?) to

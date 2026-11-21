@@ -1501,7 +1501,7 @@ class TestScaffoldSync(unittest.TestCase):
             tree.write("factory/templates/extra.txt", "orphan\n")
             self.assertEqual(gates.check_scaffold_sync(tree.root), [
                 "E: factory/templates/Makefile does not match its manifest"
-                " checksum (re-run `python3 factory_init.py"
+                " checksum (re-run `python3 tools/factory_init.py"
                 " update-manifest` in the skills repo, never hand-edit)",
                 "E: factory/templates/extra.txt is not in the manifest"])
 
@@ -4191,7 +4191,8 @@ class TestSelftest(unittest.TestCase):
                     [sys.executable, str(repo / "tools" / "gates.py"), flag],
                     cwd=repo, capture_output=True, text=True)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertIn("usage: gates.py [--selftest]", result.stdout)
+                self.assertIn("usage: python3 tools/gates.py [--selftest]",
+                              result.stdout)
                 self.assertNotIn("problem(s)", result.stdout)
 
     def test_selftest_passes(self):

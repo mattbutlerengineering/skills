@@ -672,7 +672,7 @@ class TestMain(Tree):
     def test_usage(self):
         code, out = run_main(["frobnicate"])
         self.assertEqual(code, 2)
-        self.assertIn("usage: kb.py", out)
+        self.assertIn("usage: python3 tools/kb.py", out)
 
 
 if __name__ == "__main__":
