@@ -486,6 +486,9 @@ class InFlightOperation(Case):
         # A rebase can leave HEAD detached on main's tip with a clean
         # tree: every other test passes, and a branchless worktree skips
         # the open-PR test, so --apply would discard the rebase.
+        # Guard the loop: an emptied tuple would pass with no iteration.
+        self.assertLessEqual({"rebase-merge", "rebase-apply", "MERGE_HEAD"},
+                             set(reap_worktrees.IN_PROGRESS))
         for name in reap_worktrees.IN_PROGRESS:
             with self.subTest(name=name), \
                     tempfile.TemporaryDirectory() as git_dir:

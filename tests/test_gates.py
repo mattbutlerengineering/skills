@@ -36,6 +36,8 @@ from make_parse import make_recipe, make_targets, phony_targets  # noqa: E402
 from test_work_orders import (  # noqa: E402
     DUP_ISSUE, DUP_WO, NEWER, OLDER, Tree as WorkOrderTree)
 import workflow_parse  # noqa: E402
+from test_assembler import workflow_jobs  # noqa: E402
+from test_validator_workflow import job_if  # noqa: E402
 
 
 def parsed_run(runs=(), adr_files=(), adr_readme=None, scannable=(),
@@ -3705,11 +3707,13 @@ class TestLockstep(unittest.TestCase):
         # the passage). synchronize is deliberately absent — pushes to an
         # open PR must not re-flip an order a human already moved along.
         text = self.WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("needs-review-label:", text)
+        # Inside the job's own if: — the review job carries the same
+        # same-repo clause, so a whole-file assertIn never fails.
+        gate = job_if(workflow_jobs(text)["needs-review-label"])
         self.assertIn("(github.event.action == 'opened'"
-                      " || github.event.action == 'reopened')", text)
+                      " || github.event.action == 'reopened')", gate)
         self.assertIn("github.event.pull_request.head.repo.full_name"
-                      " == github.repository", text)
+                      " == github.repository", gate)
 
     def test_a_body_edit_retriggers_the_check(self):
         # Detector B reads the PR body, so the body is an input to the
@@ -3888,10 +3892,13 @@ class TestLockstep(unittest.TestCase):
         or a subscription OAuth token (claude setup-token; the operator's
         Max plan mints no API key), and the action receives both inputs."""
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
-        self.assertIn("github.event.label.name == 'wo:ready-for-agent'", text)
+        # On the dispatch job's own if:, not the whole file — the label
+        # clause also sits in the concurrency group, which gates nothing.
+        gate = job_if(workflow_jobs(text)["dispatch"])
+        self.assertIn("github.event.label.name == 'wo:ready-for-agent'", gate)
         self.assertIn(
             "github.event.sender.login =="
-            " (vars.FACTORY_OWNER_LOGIN || github.repository_owner)", text)
+            " (vars.FACTORY_OWNER_LOGIN || github.repository_owner)", gate)
         self.assertIn(
             "(env.ANTHROPIC_API_KEY != '' ||"
             " env.CLAUDE_CODE_OAUTH_TOKEN != '')", text)
