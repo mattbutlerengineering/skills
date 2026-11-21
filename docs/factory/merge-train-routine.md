@@ -69,7 +69,9 @@ Check in order; the first hit sets the run mode.
 2. This routine's journal (§6): its latest comment's
    `<!-- merge-train-state last-run=... -->` marker. First run → no
    prior state.
-3. Every open PR (`gh pr list --state open`), with its checks rollup,
+3. Every open PR (`gh pr list --state open --limit 1000`; `gh`'s default
+   stops at 30, and a count equal to the limit is truncated — fail
+   closed), with its checks rollup,
    labels, changed paths against `main` (the profile's `changed-files`
    hook, never another source: a rename's old path counts, a partial
    list fails closed), review state, and whether its branch is behind

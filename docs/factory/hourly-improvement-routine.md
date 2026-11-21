@@ -85,10 +85,13 @@ Check in order; the first hit sets the run mode.
    last seven days of comments, which name what this routine already
    tried. No marker → the scan window is 24 hours back.
 3. `git log --oneline origin/main` since last-scan.
-4. Open PRs (`gh pr list`), with age, author, and every issue a body
+4. Open PRs (`gh pr list --state open --limit 1000`; the default stops
+   at 30, and a count equal to the limit is truncated — fail closed),
+   with age, author, and every issue a body
    `Closes`: those issues are covered and never picked.
 5. The latest `check` runs on `main`.
-6. The issue queue, `gh issue list --state open` (ADR-0083).
+6. The issue queue, `gh issue list --state open --limit 1000` (ADR-0083;
+   a count equal to the limit is truncated — fail closed).
 7. `docs/backlog.md`, the advisory seed inbox (ADR-0029).
 8. `python3 tools/one_owner.py` — read-only intel. Its findings are report
    material only: ADR-0061 makes each one a question for a human, so

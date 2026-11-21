@@ -44,7 +44,7 @@ skill's Rules section.
 | `reviewers`      | One universal reviewer, no specialists.                                                                   |
 | `merge-command`  | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>`, `<sha>` the gated head. Needs `gh` and a session that may merge. |
 | `update-branch`  | `gh pr update-branch <N>`.                                                                                |
-| `changed-files`  | The REST file list with `filename` and `previous_filename`, its length checked against the PR's `changed_files`. With no `gh` the default cannot run, so every PR needs a human merge unless the profile names another source that lists both paths of a rename. |
+| `changed-files`  | The REST file list with `filename` and `previous_filename`, its entry count (a rename is one entry) checked against the PR's `changed_files`. With no `gh` the default cannot run, so every PR needs a human merge unless the profile names another source that lists both paths of a rename. |
 | `lock`           | None: one session at a time is the only lock.                                                             |
 | `reap`           | None: worker worktrees left behind are reported, not removed.                                             |
 | `telemetry`      | None: no usage is recorded.                                                                               |
