@@ -191,6 +191,28 @@ class TestTextsOnUndecodableMain(unittest.TestCase):
                       caught.exception.reason)
 
 
+class TestTextsOnBinaryMain(unittest.TestCase):
+    def test_a_binary_file_on_main_is_read_not_stalled(self):
+        # #2269 stalled every merge turn whose item edited an existing
+        # PNG: the strict runner cannot decode it, but it is not "new".
+        with tempfile.TemporaryDirectory() as tmp:
+            wt = Path(tmp)
+            def git(args):
+                return subprocess.run(["git", "-C", str(wt), *args],
+                                      capture_output=True, check=True,
+                                      text=True, encoding="utf-8")
+            git_repo.init(wt)
+            (wt / "a.png").write_bytes(b"\x89PNG\xff\xfe\n")
+            for args in (["add", "a.png"],
+                         ["-c", "user.name=t", "-c", "user.email=t@t",
+                          "commit", "-qm", "x"],
+                         ["update-ref", "refs/remotes/origin/main", "HEAD"]):
+                subprocess.run(["git", "-C", str(wt), *args], check=True)
+            (wt / "a.png").write_bytes(b"\x89PNG\xff\xfe\nmore\n")
+            main_lines, head_lines = merge._texts(git, wt, "a.png")
+        self.assertEqual((len(main_lines), len(head_lines)), (1, 2))
+
+
 class TestMergeDue(unittest.TestCase):
     """`next` tells the Conductor which shipped items wait for a merge
     ask it must word, and reports a covered item as ready to merge."""

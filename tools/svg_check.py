@@ -119,6 +119,9 @@ def _px(value):
     return float(m.group(1)) if m and float(m.group(1)) > 0 else None
 
 
+CSS_WIDE = ("inherit", "initial", "unset", "revert", "revert-layer")
+
+
 def _size_decls(text):
     """[(value, important)] for every size a declaration block sets, in
     order. A shorthand whose size cannot be read yields "unparsed",
@@ -128,6 +131,8 @@ def _size_decls(text):
     for prop, value in FONT_DECL_RE.findall(text):
         important = "!important" in value
         value = value.replace("!important", "").strip()
+        if prop == "font" and value.lower() in CSS_WIDE:
+            continue  # `font: inherit` sets no size of its own
         if prop == "font":
             heads = (token.split("/")[0] for token in value.split())
             value = next((head for head in heads
