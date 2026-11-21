@@ -57,7 +57,10 @@ interviews — it does not draft.
    list the intake-marked issues and let them pick. Copy into the brief
    the issue title as the working title, the filed date, and the body's
    observed-behavior and reproduction content — verbatim quotes are
-   fine — as raw material for the interview below; intake seeds the
+   fine, inside a fenced block, because with `re-entry: implement` every
+   unfenced checkbox anywhere in `defect.md` is a work item, and an
+   issue's pasted task list would hold Implement open forever — as raw
+   material for the interview below; intake seeds the
    interview, it does not replace it. Record the issue in frontmatter as
    `intake: #123` (duplicates of the same defect join
    `intake-duplicates:`), then never read it again — the brief is the

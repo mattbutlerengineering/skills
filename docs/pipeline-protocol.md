@@ -215,7 +215,10 @@ for a maintenance run is:
 inline in `defect.md` as checkboxes — no separate `breakdown.md`. With
 `re-entry: architect`, the run uses the normal `architecture.md` +
 `breakdown.md` chain, and checkboxes live in `breakdown.md`. There is no
-third option.
+third option. Depth can still change after capture: an Implement that
+finds the fix touches design rewrites `defect.md` to
+`re-entry: architect` and carries its open items into the new chain, so
+the router reads one breakdown, never two.
 
 ### The Operate population
 
@@ -365,12 +368,17 @@ in doubt, ask the user how big this really is.
 
 ## Artifact frontmatter
 
-Every artifact starts with YAML frontmatter:
+Every artifact starts with frontmatter in the protocol's plain
+`key: value` subset of YAML — not YAML itself: a `#` is part of a value
+(`intake: #123`), so a comment goes on its own line, never after a value
+(`ux: not-applicable   # CLI only` reads as that whole string, and the
+run routes to UX):
 
 ```yaml
 ---
 stage: prd
-run: feature:dark-mode   # or: product, or maintenance:<slug>
+# run: product, feature:<slug> or maintenance:<slug>
+run: feature:dark-mode
 date: 2026-07-01
 # stage-specific fields, e.g. ux: required | not-applicable
 #                          or re-entry: implement | architect (defect.md, at capture time)

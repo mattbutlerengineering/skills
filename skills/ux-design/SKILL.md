@@ -20,7 +20,9 @@ Interview-driven: taste and intent live with the user.
    gating. If `prd.md` says `ux: not-applicable`, stop and say so — this
    stage doesn't apply; route to Architect. If, mid-interview, it turns out
    there is genuinely no UI surface, correct `prd.md` frontmatter to
-   `ux: not-applicable` and stop without producing an artifact.
+   `ux: not-applicable`, with the one-line `ux-reason:` the protocol
+   requires beside it (Architect echoes it), and stop without producing
+   an artifact.
 
 3. **Scenario walkthroughs first.** Before any flow is designed, pick
    the hardest scenarios in `idea.md` and `prd.md` (the edge cases, the
