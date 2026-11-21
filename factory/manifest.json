@@ -4,7 +4,7 @@
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
     "templates/.github/labels.json": "324ca3fa9b9bc12479433e602816946ea39a992d176acc7f79a0f07933db315e",
-    "templates/.github/workflows/assembler.yml": "32a7f4fbbd8d3ecb3d126990cd0e7298486d3cee1f3de574bdfce3d4b4145b09",
+    "templates/.github/workflows/assembler.yml": "50e6bb782d15d0fc72f63fcc7c198771316e3ab2cb23091e7c85a397294fa239",
     "templates/.github/workflows/cost-report.yml": "9b36b2abd903e860a3938e45fe1d4976c5603fb561811eafcd035e804ce62832",
     "templates/.github/workflows/design.yml": "dfa731390f6631b9ee5ac202fb21f0eb5efc758c9ee26f21cee4566e0b6e35d7",
     "templates/.github/workflows/gate-digest.yml": "3a013af7dfef7b6bfdb22fcc64e8bc32864b84ae1339c0f2d7c7a3a69eeaf06c",
