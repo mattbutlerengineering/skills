@@ -1137,7 +1137,10 @@ def main(argv, stdin=None):
         print(NOTE.format(f"{type(exc).__name__}: {exc}"), file=sys.stderr)
         return 0
     code, lines = preflight(text, os.environ)
-    if code == 0 and lines:
+    if code == 0 and lines and lines != [NOTE.format(NOT_SEEN)]:
+        # "found no such command" fires on any command that merely
+        # mentions the words (`gh pr list --search create`); it stays on
+        # stderr, so it is not injected into every such Bash call.
         # Claude never sees stderr from a hook that exits 0: a "not
         # checked" note goes back as additional context, or it is silent.
         print(json.dumps({"hookSpecificOutput": {

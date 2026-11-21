@@ -366,6 +366,12 @@ def _texts(git, worktree, path):
     lines. surrogateescape round-trips any bytes the rewrite keeps."""
     try:
         main = git(["show", f"origin/main:{path}"]).stdout
+    except UnicodeDecodeError:
+        # Not "absent": read as new, every line on main would count as
+        # added and a renumber could rewrite them (CLI_FAILURES carries
+        # decode errors since #2254, so this must come first).
+        raise Stall(f"{path} on origin/main is not UTF-8; renumber it"
+                    " by hand") from None
     except CLI_FAILURES:
         main = ""
     head = worktree / path

@@ -178,6 +178,19 @@ class TestMergePrecondition(unittest.TestCase):
                          ["cd: #99 is not an item of this batch's plan"])
 
 
+class TestTextsOnUndecodableMain(unittest.TestCase):
+    def test_a_non_utf8_file_on_main_stalls_rather_than_reading_as_new(self):
+        # Read as new, every line on main would count as added and the
+        # renumber could rewrite main's own lines (#2254's regression).
+        def git(args):
+            raise UnicodeDecodeError("utf-8", b"\xe9", 0, 1, "invalid")
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(merge.Stall) as caught:
+                merge._texts(git, Path(tmp), "notes.txt")
+        self.assertIn("notes.txt on origin/main is not UTF-8",
+                      caught.exception.reason)
+
+
 class TestMergeDue(unittest.TestCase):
     """`next` tells the Conductor which shipped items wait for a merge
     ask it must word, and reports a covered item as ready to merge."""
