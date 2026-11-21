@@ -17,7 +17,7 @@ verdict.
    frontmatter conventions.
 
 2. **Soft gate.** Predecessor: the run's breakdown with all items checked
-   (`breakdown.md`, or `defect.md`'s `## Work items` with
+   (`breakdown.md`, or every unfenced checkbox in `defect.md` with
    `re-entry: implement`). If
    items are open, say which and offer to route back to Implement (or
    verify the completed subset, noting the gap).

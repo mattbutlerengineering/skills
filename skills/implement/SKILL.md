@@ -8,8 +8,9 @@ metadata:
 # Implement
 
 Work through the run's breakdown item by item, test-first — `breakdown.md`,
-or in a maintenance run with `re-entry: implement` the `## Work items`
-checkboxes in `defect.md` (the protocol's "Where the breakdown lives"). This stage produces no
+or in a maintenance run with `re-entry: implement` every unfenced
+checkbox in `defect.md`, whatever section holds it (the protocol's
+"Where the breakdown lives"). This stage produces no
 document — the code is the artifact, and progress is the checkboxes.
 
 ## Process
@@ -41,8 +42,8 @@ document — the code is the artifact, and progress is the checkboxes.
    - Write the minimum implementation that passes, matching the
      architecture's contracts and the codebase's existing style.
    - Refactor with the tests green.
-   - Check the item off where it lives (`breakdown.md`, or `defect.md`'s
-     `## Work items`).
+   - Check the item off where it lives (`breakdown.md`, or its checkbox
+     in `defect.md`).
    - If the item carries a `(tracker: #NNN)` reference, close the mirrored
      issue via the harness's issue tooling when you check it off. Items
      with no tracker reference close nothing — a run without a tracker
@@ -50,7 +51,11 @@ document — the code is the artifact, and progress is the checkboxes.
 
 5. **Log deviations.** When reality disagrees with the breakdown — an item splits,
    a contract needs adjusting — log it dated under `breakdown.md`'s Notes. A
-   design-level disagreement routes back to Architect, not around it. A
+   design-level disagreement routes back to Architect, not around it — in
+   a `re-entry: implement` maintenance run that means rewriting
+   `defect.md` to `re-entry: architect` and carrying its open items into
+   the new `breakdown.md`, or the router keeps reading `defect.md`'s
+   boxes and never sees the new chain. A
    deviation from `architecture.md` that passes the protocol's "When to
    write an ADR" test gets an ADR (superseding or amending one it
    contradicts), cited from the Notes entry — never a silent divergence.
