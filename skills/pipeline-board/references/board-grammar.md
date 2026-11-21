@@ -50,13 +50,21 @@ Top level: `generated`, `repo`, `runs` (pre-sorted furthest-along
 first; never re-sort), `attention` (`{dir, reason}` rows). A nonzero
 exit means no board: surface the tool's problem output and stop.
 
+Verbatim means the text, not the bytes: XML-escape `&`, `<` and `>` in
+every model string written into the SVG (`slug`, `ref`, `dir`,
+`reason`, `repo`, and the `<title>`/`<desc>`), and quotes too inside an
+attribute. A directory may be named `a&b`; pasted raw, it makes the file
+unparseable.
+
 ## Empty and edge states
 
 - **No active runs**: header and legend render as normal; the lane area
   carries one centered `.subtitle` line — `No active runs`.
 - **Attention entries**: one mono row each — `dir — reason` — under the
   `NEEDS ATTENTION` heading in `--assumed`. Runs in the strip never get
-  a lane.
+  a lane. A row longer than about 130 mono-10 characters is cut with a
+  trailing `…` (board.py already bounds `reason`); the full text belongs
+  in the `<desc>`.
 - **Long slugs**: truncate to fit the label column with a trailing `…`;
   the full ref belongs in the `<desc>`.
 

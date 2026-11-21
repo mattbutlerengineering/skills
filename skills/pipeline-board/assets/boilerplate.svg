@@ -14,11 +14,12 @@ at implement, pipeline-board at prd; one run needs attention.</desc>
     --raised: #ffffff;
     --ink: #262a33;
     --muted: #5b6472;
-    --soft: #878e9c;
+    --soft: #666e7b;
     --rule: rgba(38,42,51,0.12);
     --accent: #d9622b;
+    --accent-text: #b84f1c;
     --accent-tint: rgba(217,98,43,0.08);
-    --assumed: #9a6700;
+    --assumed: #8a5c00;
     --ahead: rgba(38,42,51,0.25);
     --skip: rgba(38,42,51,0.30);
     --chip: rgba(38,42,51,0.03);
@@ -29,9 +30,10 @@ at implement, pipeline-board at prd; one run needs attention.</desc>
       --raised: #161b22;
       --ink: #e6edf3;
       --muted: #8b949e;
-      --soft: #6e7681;
+      --soft: #8b949e;
       --rule: rgba(230,237,243,0.12);
       --accent: #f0925e;
+      --accent-text: #f0925e;
       --accent-tint: rgba(240,146,94,0.10);
       --assumed: #d29922;
       --ahead: rgba(230,237,243,0.25);
@@ -48,7 +50,7 @@ at implement, pipeline-board at prd; one run needs attention.</desc>
   .slug    { font: 600 13px system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; fill: var(--ink); }
   .kind    { font: 400 10px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; fill: var(--muted); }
   .count   { font: 400 9px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-             fill: var(--accent); text-anchor: middle; }
+             fill: var(--accent-text); text-anchor: middle; }
   .chiplbl { font: 500 8px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
              letter-spacing: 0.10em; text-transform: uppercase; fill: var(--muted); text-anchor: middle; }
   .warnhead{ font: 500 8px ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
@@ -171,6 +173,6 @@ at implement, pipeline-board at prd; one run needs attention.</desc>
   <text class="legend" x="266" y="3">ahead</text>
   <line class="skipline" x1="318" y1="0" x2="328" y2="0"/>
   <text class="legend" x="336" y="3">skipped</text>
-  <text class="legend" x="700" y="3">sorted furthest-along first</text>
+  <text class="legend" x="832" y="3" text-anchor="end">sorted furthest-along first</text>
 </g>
 </svg>

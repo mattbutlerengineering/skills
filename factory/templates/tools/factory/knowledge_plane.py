@@ -538,11 +538,22 @@ def active_runs(root):
     error, so a reader reports it instead of aborting on it. board and
     dashboard share it (two walks until the 2026-10-25 consolidation;
     the dashboard's had no per-run guard)."""
+    try:
+        candidates = run_dirs(Path(root))
+    except OSError as err:
+        # docs/features or docs/fixes cannot be listed: the walk cannot
+        # see the runs inside, so it says so rather than raising out of
+        # every reader (the error names the directory).
+        return [(Path(root) / "docs", None, err)]
     found = []
-    for run_dir in run_dirs(Path(root)):
+    for run_dir in candidates:
         try:
             # Inside the guard: before 3.14, is_file() raises on a
-            # directory the walk cannot enter rather than answering False.
+            # directory the walk cannot enter; from 3.14 it answers
+            # False, which would drop the run silently — so list the
+            # directory first, which raises on either version.
+            with os.scandir(run_dir):
+                pass
             if not any((run_dir / artifact).is_file()
                        for artifact in RUN_ARTIFACTS):
                 continue
