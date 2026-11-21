@@ -35,20 +35,27 @@ stamp — because it needs nothing but the installed plugin.
 
 From a clone of this repo (`git clone
 https://github.com/mattbutlerengineering/skills`), or from the installed
-plugin's own directory, which holds the same `tools/`:
+plugin's cache directory,
+`~/.claude/plugins/cache/<marketplace>/idea-to-prod/<version>/`, which holds
+the same `tools/`. Pick the highest `<version>` there: an older cache's stamp
+may lack the `factory-init: next:` lines described below.
 
 ```
 python3 tools/factory_init.py stamp <path-to-target-repo>
 ```
 
 A clean stamp ends with `factory-init: next:` lines naming what step 4
-still needs from you (tests, CODEOWNERS), only while they are owed.
+still needs from you (tests, CODEOWNERS), only while they are owed. A
+tools-only stamp names the one it owes instead: `conductor.gate_command`.
 
 All-or-nothing. It refuses a drifted source payload, a malformed manifest key,
 a destination resolving outside the target, and **any existing file** in the
 target — one problem line per refusal, no partial stamps. That last refusal is
 strict: a repo that already has `docs/adr/README.md` cannot be stamped without
-moving the conflict out of the way first.
+moving the conflict out of the way first. Two refusals come as a single line
+instead: a target that is not an existing directory (the stamp never creates
+one), and a target that is already stamped (it has `factory/manifest.json`),
+which names the `update` command that refreshes it.
 
 A repo with curated files of its own can opt in instead (#701):
 
@@ -97,9 +104,10 @@ pristine mirror it was stamped from. `factory/manifest.json` is the authority.
       like a broken tool and isn't.
 - [ ] `make check` exits clean
 - [ ] **`.github/CODEOWNERS` owner substituted.** The template ships a
-      placeholder handle on four paths. If it is not a collaborator on the
-      target, GitHub silently ignores the entry and the code-owner gate goes
-      inert.
+      placeholder handle on every entry, including the `*` fallback.
+      Replace each with a handle or team with write access (a
+      collaborator). If it is not a collaborator on the target, GitHub
+      silently ignores the entry and the code-owner gate goes inert.
 - [ ] `.github/factory.json` budgets and caps reviewed for this repo
 - [ ] **Organization-owned repo: `FACTORY_OWNER_LOGIN` set.** Only the repo
       owner's `wo:ready-for-agent` label dispatches (ADR-0032). The
@@ -114,8 +122,9 @@ pristine mirror it was stamped from. `factory/manifest.json` is the authority.
       (`work_queue.py plan`) reads it with `gh variable list`, which sees
       repository variables only. A personal repo leaves it unset.
 
-Substituting the owner and tuning the budgets are *expected* edits — the gates
-do not compare them against the payload. The executable half (`tools/factory/`
+Substituting the owner, tuning the budgets and replacing the test line of the
+`Makefile`'s `check` target when the repo's tests are not Python are
+*expected* edits — the gates do not compare them against the payload. The executable half (`tools/factory/`
 and `.github/workflows/`) is the opposite: never hand-edit it, and detector E
 fails the build if you do. Change the template at the source and re-stamp.
 
@@ -336,8 +345,10 @@ It lands `.github/factory.json`, `tools/factory/` and a manifest marked
 tools-only, so detector E checks only those keys. A tools tree copied by
 hand is adopted with `update --tools-only <target>`.
 
-- Without a `Makefile`, set `conductor.gate_command`. It must be one command
-  with no shell operators, because the Worker's tool allowlist permits that
+- The stamp writes `conductor.gate_command` as `make check`, and a tools-only
+  stamp has no `Makefile`, so replace it with your repo's gate (the stamp's
+  `factory-init: next:` line says so while it is still `make check`). It must
+  be one command with no shell operators, because the Worker's tool allowlist permits that
   exact command and, beyond `python3` and a few `git` commands, nothing
   else. A fresh item worktree has no
   `node_modules` or equivalent. So when the gate needs a dependency install

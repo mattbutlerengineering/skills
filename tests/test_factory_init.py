@@ -872,6 +872,47 @@ class TestStamp(unittest.TestCase):
                 encoding="utf-8"), "pre-existing\n")
             self.assertEqual(all_files(target), ["Makefile"])
 
+    def test_refuses_a_target_that_does_not_exist_and_creates_nothing(self):
+        # A typo'd path used to be created and stamped as a non-repo, and
+        # one under a missing root crashed with an OSError traceback.
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            for target in (Path(tmp) / "typo",
+                           Path(tmp) / "missing" / "deeper"):
+                with self.subTest(target=target):
+                    self.assertEqual(
+                        factory_init.stamp(source, target),
+                        [f"factory-init: target {target} does not exist"
+                         " — pass the path of an existing repo checkout"])
+                    self.assertFalse(target.exists())
+            self.assertEqual(sorted(p.name for p in Path(tmp).iterdir()),
+                             ["source"])
+
+    def test_refuses_a_target_that_is_a_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "afile"
+            target.write_text("x\n", encoding="utf-8")
+            self.assertEqual(
+                factory_init.stamp(source, target),
+                [f"factory-init: target {target} does not exist"
+                 " — pass the path of an existing repo checkout"])
+
+    def test_an_already_stamped_target_gets_one_line_not_a_flood(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source = self.manifested_source(tmp)
+            target = Path(tmp) / "target"
+            target.mkdir()
+            self.assertEqual(factory_init.stamp(source, target), [])
+            before = all_files(target)
+            already = [f"factory-init: {target} is already stamped — refresh"
+                       " it with: python3 tools/factory_init.py update"
+                       f" {target}"]
+            self.assertEqual(factory_init.stamp(source, target), already)
+            self.assertEqual(factory_init.stamp_keeping(source, target),
+                             ([], already))
+            self.assertEqual(all_files(target), before)
+
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
@@ -885,7 +926,17 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
         # Stamping the real payload into an empty target is the
         # problem-free run (live-tree, like the acceptance test below).
         with tempfile.TemporaryDirectory() as tmp:
-            return self.run_cli(["stamp", str(Path(tmp) / "product")])
+            return self.run_cli(["stamp", tmp])
+
+    def test_a_missing_target_exits_nonzero_without_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "missing" / "deeper"
+            code, out = self.run_cli(["stamp", str(target)])
+            self.assertEqual(code, 1, out)
+            self.assertEqual(out.splitlines(), [
+                f"factory-init: target {target} does not exist — pass the"
+                " path of an existing repo checkout",
+                "factory-init: 1 problem(s)"])
 
     def test_tools_only_stamp_then_update_through_the_cli(self):
         # #941: the flag on both commands, against the real payload.
@@ -895,6 +946,7 @@ class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                  if rel.startswith("templates/tools/factory/")]
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "product"
+            target.mkdir()
             code, out = self.run_cli(["stamp", "--tools-only", str(target)])
             self.assertEqual((code, out.splitlines()[-1]),
                              (0, self.summary_line), out)

@@ -538,6 +538,16 @@ def _stamp(source, target, keepable, tools_only=False):
     An existing destination is kept when keepable(dest) says so and is a
     clash otherwise; any clash refuses the whole stamp before a write."""
     source, target = Path(source), Path(target)
+    if not target.is_dir():
+        # A typo'd path was created and stamped as a non-repo, and one
+        # under a missing root crashed in mkdir with a traceback.
+        return [], [f"factory-init: target {target} does not exist — pass"
+                    " the path of an existing repo checkout"]
+    if (target / "factory" / "manifest.json").exists():
+        # One line, not a clash per payload file (105 of them).
+        return [], [f"factory-init: {target} is already stamped — refresh"
+                    " it with: python3 tools/factory_init.py update"
+                    f" {target}"]
     copies, problems = payload_copies(source, target, tools_only)
     if problems:
         return [], problems
@@ -856,36 +866,58 @@ def main(argv):
     else:
         print(__doc__.strip())
         return 2
-    target = keeping or (stamping[0] if stamping and not stamping[1]
-                         else None)
+    target = keeping or (stamping[0] if stamping else None)
     if target is not None and not problems:
-        for step in next_steps(target):
+        for step in next_steps(target, bool(stamping and stamping[1])):
             print(f"factory-init: next: {step}")
     return report("factory-init", problems)
 
 
-def next_steps(target):
-    """What a full stamp still leaves the user to do before `make check`
-    passes: the two follow-ups docs/setup.md section 4 lists, named only
-    while they are still owed. A bare stamp otherwise says '0 problem(s)'
-    and the next make check fails on an unimportable tests/ — which
-    reads like a broken tool."""
+def next_steps(target, tools_only=False):
+    """What a stamp still leaves the user to do before its gate passes:
+    for a full stamp, the two follow-ups docs/setup.md section 4 lists;
+    for a tools-only one, the gate command. Each is named only while it
+    is still owed. A bare stamp otherwise says '0 problem(s)' and the next
+    make check fails on an unimportable tests/ — which reads like a
+    broken tool."""
+    if tools_only:
+        return _tools_only_steps(Path(target))
     steps = []
     tests = Path(target) / "tests"
     if not any(tests.glob("test*.py")):
         steps.append("add tests/ holding at least one test_*.py — make"
                      " check runs `python3 -m unittest discover -q tests`,"
-                     " which fails on a missing or empty tests/")
+                     " which fails on a missing or empty tests/ — or, if"
+                     " the repo's tests are not Python, replace that line"
+                     " of the Makefile's check target with your own test"
+                     " command")
     owners = Path(target) / ".github" / "CODEOWNERS"
     try:
         placeholder = "@<owner>" in owners.read_text(encoding="utf-8")
     except (OSError, ValueError):
         placeholder = False
     if placeholder:
-        steps.append("replace every @<owner> in .github/CODEOWNERS with a"
-                     " GitHub handle or team that has write access")
+        steps.append("replace every @<owner> in .github/CODEOWNERS,"
+                     " including the `*` fallback, with a handle or team"
+                     " with write access (a collaborator)")
     return steps
 
+
+def _tools_only_steps(target):
+    """A tools-only stamp lands factory.json's `make check` gate command
+    and no Makefile, so the Worker gate fails after spend approval unless
+    the repo names its own gate."""
+    rel = factory_config.ARTIFACT_HOMES["factory.json"][0]
+    config, problem = read_file(target / rel, rel, dict)
+    if problem or config is None or (target / "Makefile").exists():
+        return []
+    conductor = config.get("conductor")
+    if not (isinstance(conductor, dict)
+            and conductor.get("gate_command") == "make check"):
+        return []
+    return [f'{rel} conductor.gate_command is "make check" but a'
+            " tools-only stamp has no Makefile — set it to your repo's"
+            " one-command gate"]
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv[1:]))
