@@ -1949,6 +1949,14 @@ class TestOtherRepository(unittest.TestCase):
             "additionalContext": note(
                 "the PR targets other/repo, not this repository")}})
 
+    def test_a_command_that_only_mentions_the_words_injects_nothing(self):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = pr_body_preflight.main([], stdin=io.StringIO(
+                payload("gh pr list --search create", self.cwd)))
+        self.assertEqual((code, out.getvalue()), (0, ""))
+        self.assertEqual(err.getvalue().splitlines(), [NOT_SEEN])
+
     def test_the_new_alias_and_a_repo_flag_before_the_verb_are_judged(self):
         for command in ('gh pr new --body "x"',
                         'gh pr -R me/this create --body "x"',
