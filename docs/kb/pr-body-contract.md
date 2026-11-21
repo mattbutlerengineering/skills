@@ -32,8 +32,11 @@ then `gh pr create -F F`) is not modelled, so a stale passing file is
 judged. It fails open: a body it
 cannot read (`--fill`,
 `--web`, a shell expansion, another repository, a binding it cannot
-establish) gets a "not checked" note and passes. A PR opened any other
-way, or edited later, is judged by CI's B alone.
+establish, a `--dry-run`, a command over 256 KB) gets a "not checked"
+note and passes; since #2262 the note reaches the agent as the hook's
+additional context (a hook's stderr on exit 0 is invisible). `gh pr new`
+and `gh pr -R o/r create` are judged like `gh pr create`. A PR opened any
+other way, or edited later, is judged by CI's B alone.
 
 The body must carry both, judged after HTML comments are stripped
 (`gates.HTML_COMMENT`, #1907): the PR template's own comment is never the

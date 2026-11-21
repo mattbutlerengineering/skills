@@ -13,7 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stderr
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -1936,14 +1936,35 @@ class TestOtherRepository(unittest.TestCase):
             (0, [reason]))
 
     def test_main_reads_gh_repo_from_its_environment(self):
-        err = io.StringIO()
+        # A note on exit 0 goes to stdout as additional context: Claude
+        # never sees stderr from a hook that exits 0.
+        out, err = io.StringIO(), io.StringIO()
         with mock.patch.dict(os.environ, {"GH_REPO": "other/repo"}), \
-                redirect_stderr(err):
+                redirect_stdout(out), redirect_stderr(err):
             code = pr_body_preflight.main([], stdin=io.StringIO(
                 payload('gh pr create --body "x"', self.cwd)))
-        self.assertEqual(
-            (code, err.getvalue().splitlines()),
-            (0, [note("the PR targets other/repo, not this repository")]))
+        self.assertEqual((code, err.getvalue()), (0, ""))
+        self.assertEqual(json.loads(out.getvalue()), {"hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "additionalContext": note(
+                "the PR targets other/repo, not this repository")}})
+
+    def test_the_new_alias_and_a_repo_flag_before_the_verb_are_judged(self):
+        for command in ('gh pr new --body "x"',
+                        'gh pr -R me/this create --body "x"',
+                        'gh pr --repo me/this new --body "x"'):
+            with self.subTest(command=command):
+                self.assertEqual(self.run_here(command), refused("x"))
+
+    def test_a_dry_run_opens_no_pr_and_is_not_blocked(self):
+        self.assertEqual(self.run_here('gh pr create --dry-run --body "x"'),
+                         (0, [note("--dry-run prints the PR and opens none")]))
+
+    def test_an_oversized_command_fails_open_with_a_note(self):
+        body = "x" * (pr_body_preflight.MAX_COMMAND + 1)
+        self.assertEqual(self.run_here(f'gh pr create --body "{body}"'), (
+            0, [note(f"the command is over"
+                     f" {pr_body_preflight.MAX_COMMAND} bytes")]))
 
     def test_naming_this_repository_is_still_judged(self):
         for command in ('gh pr create -R me/this --body "x"',
