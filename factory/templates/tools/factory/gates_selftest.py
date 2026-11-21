@@ -162,6 +162,23 @@ def capture_completeness_defect_fixture(root, date=None):
         encoding="utf-8")
 
 
+def capture_completeness_autolink_fixture(root):
+    """A fresh defect.md with every required section filled, one of them
+    by a bare autolink — real content, which CAPTURE_AUTOLINK tells
+    apart from TEMPLATE.md's bracketed filler."""
+    path = root / "docs" / "fixes" / "demo" / "defect.md"
+    path.parent.mkdir(parents=True)
+    body = "".join(
+        f"## {name}\n\n"
+        + ("<https://example.com/issues/1>" if name.startswith("Repro")
+           else "Real content.") + "\n\n"
+        for name in gates.CAPTURE_REQUIRED_SECTIONS)
+    path.write_text(
+        "---\nstage: capture\nrun: maintenance:demo\n"
+        f"date: {gates.CAPTURE_ADOPTED}\nre-entry: implement\n---\n\n"
+        "# Defect: demo\n\n" + body, encoding="utf-8")
+
+
 def capture_completeness_grandfathered_fixture(root):
     """A defect.md dated well before CAPTURE_ADOPTED, missing every
     required section — M must stay silent: the brief predates the
@@ -188,6 +205,23 @@ def scaffold_sync_fixture(root, rel="Makefile", payload="check:\n"):
         json.dumps({"files": {f"templates/{rel}": digest}}),
         encoding="utf-8")
     return path
+
+
+def tools_only_fixture(root):
+    """A tools-only stamp (#941): one stamped tool, a manifest listing it
+    under the tools-only marker, and no factory/templates/ at all — E's
+    mirror half must stand down."""
+    tool = root / "tools" / "factory" / "gates.py"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("# payload\n", encoding="utf-8")
+    (root / "factory").mkdir()
+    (root / "factory" / "manifest.json").write_text(json.dumps(
+        # the spelling a real tools-only manifest carries, written out so
+        # a gates.TOOLS_ONLY that stopped matching it turns this row red
+        {"install": "tools-only",
+         "files": {"templates/tools/factory/gates.py":
+                   hashlib.sha256(tool.read_bytes()).hexdigest()}}),
+        encoding="utf-8")
 
 
 # The correctly curated state's Makefile: one lifecycle target in the
@@ -313,6 +347,28 @@ def evidence_honesty_defect_fixture(root):
     # over a criterion that disclosed NOT RUN: unknown never rolls up.
     evidence_rollup_defect_fixture(root, "rolledup", "2026-10-17",
                                    "All criteria pass.")
+
+
+def evidence_placeholder_defect_fixture(root):
+    """A criterion whose only fence holds TEMPLATE filler, not output:
+    PLACEHOLDER_LINE must keep it from counting as evidence."""
+    run = root / "docs" / "features" / "placeholder"
+    run.mkdir(parents=True)
+    (run / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n### Suite is green\n\n"
+        "- Evidence:\n  ```\n  <paste output here>\n  ```\n"
+        "- Result: PASS\n", encoding="utf-8")
+
+
+def evidence_prose_disclosure_fixture(root):
+    """An artifact that asserts no verdict and shows no output, but
+    discloses in prose that its check was NOT RUN: honest, so the
+    backstop must stay silent — NOT_RUN_TOKEN is what reads it."""
+    run = root / "docs" / "features" / "prose"
+    run.mkdir(parents=True)
+    (run / "verification.md").write_text(
+        "---\nstage: verify\n---\n# Verification\n\n### Live dispatch\n\n"
+        "NOT RUN — needs a second GitHub account.\n", encoding="utf-8")
 
 
 def evidence_rollup_defect_fixture(root, slug, date, summary):
@@ -548,6 +604,12 @@ def selftest():
         capture_completeness_grandfathered_fixture(root)
         expect_clean("M grandfathered", gates.check_capture_completeness(root))
 
+    # M: an autolink is a section's real content, not filler.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        capture_completeness_autolink_fixture(root)
+        expect_clean("M autolink", gates.check_capture_completeness(root))
+
     # M: no defect.md at all is out of scope entirely.
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
@@ -592,6 +654,12 @@ def selftest():
         expect("E partial", gates.check_scaffold_sync(root),
                "tools/factory/cli.py is in the payload but missing here",
                "partial stamp")
+
+    # E: a tools-only stamp has no mirror by design (#941).
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        tools_only_fixture(root)
+        expect_clean("E tools-only", gates.check_scaffold_sync(root))
 
     # J: the taxonomy is the repo's to curate, so a pruned label must be
     # caught here — the alternative is finding out when CI flips it.
@@ -681,6 +749,18 @@ def selftest():
         root = Path(tmp)
         evidence_honesty_clean_fixture(root)
         expect_clean("H honest", gates.check_evidence_honesty(root))
+
+    # H: filler in a fence is not evidence, and a prose NOT RUN is a
+    # disclosure — each in its own tree.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_placeholder_defect_fixture(root)
+        expect("H placeholder", gates.check_evidence_honesty(root),
+               'criterion "Suite is green" asserts PASS with neither')
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        evidence_prose_disclosure_fixture(root)
+        expect_clean("H prose disclosure", gates.check_evidence_honesty(root))
 
     # N: a live marker in each gated artifact fires; the quoted one in a
     # code span (prd.md:3) does not.

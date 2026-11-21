@@ -96,7 +96,8 @@ def resolve_model(band, config):
     if not isinstance(routing, dict):
         return None, ["config: factory.json has no routing table"]
     model = routing.get(band)
-    if not isinstance(model, str) or not model:
+    # whitespace names no model: dispatch could not pass it to --model
+    if not isinstance(model, str) or not model.strip():
         return None, [
             f"config: factory.json routes no model to the {band} band"]
     return model, []
@@ -442,7 +443,7 @@ def config_problems(config):
     if isinstance(routing, dict):
         problems += [f"routing.{route} must name a model id"
                      for route, model in routing.items()
-                     if not isinstance(model, str) or not model]
+                     if not isinstance(model, str) or not model.strip()]
     wip = config.get("wip_cap")
     if isinstance(wip, bool) or not isinstance(wip, int) or wip < 1:
         problems.append("wip_cap must be a positive integer")

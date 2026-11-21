@@ -49,9 +49,11 @@ ai-tooling suite where the rule is the same idea):
   I STALENESS      — no knowledge-plane doc links to a path that no longer
                      exists on disk
   K STANDARDS-DRIFT — docs/standards.json's ADR-derived entries match a
-                     fresh standards_index.build_index regen, and
-                     every `enforced`-status entry's source ADR is
-                     in force (ADR-0073, ADR-0089)
+                     fresh standards_index.build_index regen,
+                     every entry is an object whose status is in
+                     standards_index.STATUSES, and every
+                     `enforced`-status entry's source ADR is in force
+                     (ADR-0073, ADR-0089)
   M CAPTURE-COMPLETENESS — every docs/fixes/<slug>/defect.md that exists
                      carries skills/capture/TEMPLATE.md's required
                      sections, each with real (non-placeholder) content
@@ -119,6 +121,13 @@ from protocol import frontmatter_end, parse_frontmatter
 # literal text, so it hides nothing.
 HTML_COMMENT = re.compile(r"<!--.*?-->|^ {0,3}<!--.*\Z",
                           re.DOTALL | re.MULTILINE)
+# H, M and O read an artifact's VISIBLE text, so a comment is blanked line
+# by line before their section split (_blank_html_comments): one closed on
+# its own line, or a block one opened at a line start (up to three spaces
+# in) and running to the line holding `-->` (or to the end, unclosed).
+# Read outside fences only — a `<!--` quoted in fenced evidence is output.
+LINE_COMMENT = re.compile(r"<!--.*?-->")
+BLOCK_COMMENT_OPEN = re.compile(r"^ {0,3}<!--")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
@@ -184,14 +193,23 @@ NOT_A_SETEXT_TITLE = re.compile(r"^\s{0,3}(?:[-*+>]|\d+[.)])\s")
 # (#1900): an optional plural (`Results:`), up to two qualifier words
 # (`Overall result:`, `Final verdict:`), `*` or `_` emphasis around it
 # (`__Result:__`, `_Result_:`), a task-list box (`- [x] Result: PASS`) and
-# an HTML bold tag (`<b>Result:</b> PASS`, `<strong>`) all assert.
+# an HTML bold tag (`<b>Result:</b> PASS`, `<strong>`) all assert. So
+# do a leading emoji or other symbol (`✅ Result: PASS` — any character
+# that is neither a word, a space nor one of the markers above, one per
+# repetition so no two alternatives can split the same run), a qualifier
+# that starts with a digit (`Test 2 result:`), and a short `for`/`of`
+# clause or parenthetical before the colon (`Result for AC1:`, `Verdict
+# (AC1):`), each bounded so the match stays linear; a clause holding
+# sentence punctuation is prose ("a finding for Review (below). Next
+# stage: Review."), not a label.
 RESULT_LINE = re.compile(
     r"^\s*(?:(?:[-*+>]|\d+[.)]|\||<summary[^>]*>|<(?:b|strong)>"
-    r"|\[[ xX]\])\s*)*"
-    r"[*_]*\s*(?:[A-Za-z][\w'-]*\s+){0,2}"
+    r"|\[[ xX]\]|[^\w\s\-*+>|<\[])\s*)*"
+    r"[*_]*\s*(?:[A-Za-z0-9][\w'-]*\s+){0,2}"
     r"(?:result|verdict|outcome|status"
     r"|conclusion|assessment|finding|determination|evaluation|judge?ment"
-    r"|disposition|decision|ruling|appraisal)s?[*_]*"
+    r"|disposition|decision|ruling|appraisal)s?"
+    r"(?:\s+(?:for|of)\s+[^:.;!?\n]{1,40}?|\s*\([^():\n]{1,40}\))?[*_]*"
     r"\s*:\s*(?:</(?:b|strong)>|[*_]+)?\s*(\S.*?)\s*"
     r"(?:\|\s*|</summary>\s*)?$",
     re.IGNORECASE)
@@ -958,7 +976,8 @@ def check_scaffold_sync(root):
     """E: the template payload must match its checksum manifest exactly, and
     a stamped repo's executable payload must match what it was stamped
     from. A tools-only stamp (INSTALL_KEY) has no payload mirror by
-    design, so only the second half runs there."""
+    design, so only the second half runs there — unless a
+    factory/templates/ exists after all, which is then checked."""
     manifest, problem = read_file(root / "factory" / "manifest.json",
                                   "factory/manifest.json", dict)
     if problem:
@@ -968,8 +987,11 @@ def check_scaffold_sync(root):
     files = manifest.get("files")
     if not isinstance(files, dict) or not files:
         return ["E: factory/manifest.json has no files map"]
-    mirror = ([] if manifest.get(INSTALL_KEY) == TOOLS_ONLY
-              else mirror_problems(root, files))
+    # the marker stands the mirror half down only where there is no
+    # mirror: a payload that IS there is checked whatever the manifest says
+    tools_only = (manifest.get(INSTALL_KEY) == TOOLS_ONLY
+                  and not (root / "factory" / "templates").is_dir())
+    mirror = [] if tools_only else mirror_problems(root, files)
     return mirror + stamped_destination_problems(root, files)
 
 
@@ -1153,6 +1175,13 @@ def check_config_shape(root):
                 or sorted(routing) != sorted(factory_config.BANDS):
             expected = ", ".join(factory_config.BANDS)
             problems.append(f"F: {rel} routing must map exactly {expected}")
+        # effort is optional, but a table that is there is read per band at
+        # plan time (factory_config.resolve_effort), so it owes every band
+        efforts = config.get("effort")
+        if isinstance(efforts, dict) \
+                and sorted(efforts) != sorted(factory_config.BANDS):
+            expected = ", ".join(factory_config.BANDS)
+            problems.append(f"F: {rel} effort must map exactly {expected}")
         problems += [f"F: {rel} {problem}"
                      for problem in factory_config.config_problems(config)]
     return problems
@@ -1196,6 +1225,55 @@ def _skip_frontmatter(lines):
     capture_sections for M) so frontmatter skipping has one home."""
     end = frontmatter_end(lines)
     return 0 if end is None else end + 1
+
+
+def _opens_fence(line):
+    """Does LINE open a fence? knowledge_plane.fenced's own answer: a lone
+    opener is reported as its unclosed event."""
+    return any(text is None for _, text, _ in fenced([line]))
+
+
+def _closes_fence(opener, line):
+    """Does LINE close the fence OPENER opened? fenced yields nothing for
+    an opener and its closer."""
+    return not any(True for _ in fenced([opener, line]))
+
+
+def _blank_html_comments(lines):
+    """LINES with every HTML comment outside a fence blanked, one output
+    line per input line so line numbers survive. GitHub hides a comment,
+    so its content — a fence, a heading, a verdict, a "not run" — is not
+    what a reader sees and must not count for H, M or O (fail-open
+    otherwise). A block comment (BLOCK_COMMENT_OPEN) runs to the line
+    holding `-->`, whose remainder is read on; a mid-line `<!--` with no
+    `-->` on its line is literal text, the HTML_COMMENT rule."""
+    out = []
+    opener = None  # the line that opened the fence we are in
+    in_comment = False
+    for line in lines:
+        if opener is not None:
+            if _closes_fence(opener, line):
+                opener = None
+            out.append(line)
+            continue
+        if in_comment:
+            end = line.find("-->")
+            if end < 0:
+                out.append("")
+                continue
+            in_comment = False
+            line = line[end + 3:]
+        elif _opens_fence(line):
+            opener = line
+            out.append(line)
+            continue
+        line = LINE_COMMENT.sub("", line)
+        block = BLOCK_COMMENT_OPEN.match(line)
+        if block:
+            in_comment = True
+            line = ""
+        out.append(line)
+    return out
 
 
 def _walk_sections(lines, body_start):
@@ -1290,6 +1368,7 @@ def verification_sections(text):
 
     lines = text.splitlines()
     body = _skip_frontmatter(lines)
+    lines = lines[:body] + _blank_html_comments(lines[body:])
     sections = []
     current = blank("(untitled)", body + 1)
     unclosed = None
@@ -1513,18 +1592,21 @@ def check_needs_clarification(root, parsed=None):
 
 
 def _prd_sections(lines):
-    """(lineno, title, waived) per `##` section of a PRD, fences and the
-    frontmatter skipped; an ATX `## Title` or a Setext `Title` over `---`
-    counts. `waived`: the first non-blank line under the heading is a
-    reasoned coverage waiver."""
+    """(lineno, title, waived) per `##` section of a PRD, fences, HTML
+    comments and the frontmatter skipped; an ATX `## Title` or a Setext
+    `Title` over `---` counts. `waived`: the first non-blank line under
+    the heading is a reasoned coverage waiver — itself a comment, so it is
+    read from the line as written; any other comment is invisible and
+    skipped."""
     start = (frontmatter_end(lines) or -1) + 1
-    body = [(lineno, line) for lineno, line in unfenced(lines)
-            if lineno > start]
-    texts = [line for _, line in body]
+    visible = lines[:start] + _blank_html_comments(lines[start:])
+    body = [(lineno, line, lines[lineno - 1])
+            for lineno, line in unfenced(visible) if lineno > start]
+    texts = [line for _, line, _ in body]
     sections = []
     pending = None  # the section still looking for its first body line
     skip = False  # the line is a Setext underline already consumed
-    for idx, (lineno, line) in enumerate(body):
+    for idx, (lineno, line, written) in enumerate(body):
         if skip:
             skip = False
             continue
@@ -1537,19 +1619,43 @@ def _prd_sections(lines):
             pending = [lineno, line.strip(), False]
             sections.append(pending)
             skip = True
+        elif pending is not None and COVERAGE_WAIVER.match(written):
+            pending[2] = True
+            pending = None
         elif pending is not None and line.strip():
-            pending[2] = bool(COVERAGE_WAIVER.match(line))
             pending = None
     return [tuple(section) for section in sections]
 
 
-def _cites(texts, title):
-    """Does any row text carry `§<title>` as a whole title? The known
-    title is matched as a literal, so one holding `,`, `;` or `)` counts
-    (issue #1904); a longer word starting with it does not."""
-    cited = re.compile(r"§\s*" + re.escape(title.strip())
-                       + r"(?![^\W_])", re.IGNORECASE)
-    return any(cited.search(text) for text in texts)
+def _cited_titles(texts, prd_id, titles):
+    """The TITLES the row TEXTS cite for PRD_ID. Each `§` is attached to
+    the nearest PRD id before it in its row (the row's first id when none
+    precedes it) and credits only the LONGEST title it spells out whole,
+    matched as a literal, case-insensitively — so `§Solution details`
+    covers that section, not `§Solution`, and another PRD's `§Scope` in
+    the same row covers nothing here. A title holding `,`, `;` or `)`
+    counts (issue #1904); a longer word starting with one does not."""
+    by_length = sorted({title.strip() for title in titles},
+                       key=len, reverse=True)
+    cited = set()
+    for text in texts:
+        ids = list(PRD_TOKEN.finditer(text))
+        if not ids:
+            continue
+        for mark in re.finditer(r"§\s*", text):
+            owner = ids[0].group()
+            for match in ids:
+                if match.start() < mark.start():
+                    owner = match.group()
+            if owner != prd_id:
+                continue
+            rest = text[mark.end():]
+            for title in by_length:
+                if (rest[:len(title)].casefold() == title.casefold()
+                        and not re.match(r"[^\W_]", rest[len(title):])):
+                    cited.add(title.casefold())
+                    break
+    return cited
 
 
 def check_prd_coverage(root, parsed=None):
@@ -1578,8 +1684,11 @@ def check_prd_coverage(root, parsed=None):
                      for row in breakdown_rows(entry["breakdown"])
                      if row["wo"] and prd_id in row["prd_ids"]]
         rel = (entry["path"] / "prd.md").relative_to(root)
-        for lineno, title, waived in _prd_sections(entry["prd"]):
-            if not waived and not _cites(citations, title):
+        sections = _prd_sections(entry["prd"])
+        cited = _cited_titles(citations, prd_id,
+                              [title for _, title, _ in sections])
+        for lineno, title, waived in sections:
+            if not waived and title.strip().casefold() not in cited:
                 problems.append(
                     f"O: {rel}:{lineno} {prd_id} §{title} is cited by no"
                     " breakdown row and carries no coverage waiver")
@@ -1620,7 +1729,7 @@ def check_standards_drift(root, parsed=None):
     index, because a reviewer citing a slug trusts it still matches its
     source.
 
-    K fails two independent ways, kept in one detector because both read
+    K fails three independent ways, kept in one detector because all read
     the same committed file:
 
     (1) the committed file's ADR-derived entries (every entry whose
@@ -1635,6 +1744,9 @@ def check_standards_drift(root, parsed=None):
         and adr_status use, not a second status parser) is not one of
         ENFORCEABLE_STANDINGS — accepted, amended, or superseded only in
         part (ADR-0089).
+    (3) a member is not an object, or carries a status outside
+        standards_index.STATUSES: a misspelt `Enforced` would otherwise
+        skip (2) in silence.
 
     An absent docs/standards.json is not a K problem — mirrors detector
     G's "an absent ledger is silent" precedent (check_cost_ledger): the
@@ -1688,6 +1800,17 @@ def check_standards_drift(root, parsed=None):
             f"K: {standards_index.STANDARDS_PATH} has drifted from a"
             " fresh ADR regeneration (run `python3 standards_index.py"
             " update`, the script beside gates.py)")
+
+    statuses = ", ".join(standards_index.STATUSES)
+    for index, entry in enumerate(committed):
+        if not isinstance(entry, dict):
+            problems.append(f"K: {standards_index.STANDARDS_PATH} entry"
+                            f" {index} is not a JSON object")
+        elif entry.get("status") not in standards_index.STATUSES:
+            problems.append(
+                f"K: {standards_index.STANDARDS_PATH} entry"
+                f" {entry.get('slug')!r} has status {entry.get('status')!r},"
+                f" not one of {statuses}")
 
     records = {record["number"]: record for record in
                (adr_record(path, lines)
@@ -1783,6 +1906,7 @@ def capture_sections(text):
     out, the same H-derived convention (evidence_problems)."""
     lines = text.splitlines()
     body = _skip_frontmatter(lines)
+    lines = lines[:body] + _blank_html_comments(lines[body:])
     sections = []
     current = {"title": "(untitled)", "lineno": body + 1, "lines": []}
     for kind, lineno, payload in _walk_sections(lines, body):
