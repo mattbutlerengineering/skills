@@ -117,7 +117,7 @@ regresses. Three answers, worst to best:
 
 Findings table, ranked by leverage:
 
-| # | Finding | Category | Evidence | Reproduction | Impact | Effort | Keeps it fixed |
+| # | Finding | Category | Evidence | Reproduction | Impact | Effort | Risk | Keeps it fixed |
 
 Then, separately and never merged into that table:
 

@@ -28,13 +28,17 @@ Review the generated schema and commit it.
 
 ### Step 2: Create Initial Migration (Without Applying)
 
-Generate the migration SQL without executing it:
+Generate the migration SQL from the schema alone, touching no database:
 
 ```bash
-npx prisma migrate dev --name initial_baseline --create-only
+mkdir -p prisma/migrations/0_initial_baseline
+npx prisma migrate diff --from-empty \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script > prisma/migrations/0_initial_baseline/migration.sql
+# Prisma 7: --to-schema prisma/schema.prisma
 ```
 
-This creates `prisma/migrations/<timestamp>_initial_baseline/migration.sql` containing SQL to create all tables.
+This creates `prisma/migrations/0_initial_baseline/migration.sql` containing SQL to create all tables. Not `migrate dev --create-only`: it connects to `DATABASE_URL`, and against a populated database with no migration history — the exact case being baselined — it detects drift and offers to reset, which deletes the data (troubleshooting.md). Keep "baseline" in the directory name; the CI job below finds it by that word.
 
 ### Step 3: Review the Migration
 
@@ -96,11 +100,15 @@ DATABASE_URL="production_url" npx prisma db pull
 git add prisma/schema.prisma
 git commit -m "chore: sync schema with production database"
 
-# 3. Create baseline migration (locally)
-npx prisma migrate dev --name initial_baseline --create-only
+# 3. Create baseline migration from the schema (no database touched)
+mkdir -p prisma/migrations/0_initial_baseline
+npx prisma migrate diff --from-empty \
+  --to-schema-datamodel prisma/schema.prisma \
+  --script > prisma/migrations/0_initial_baseline/migration.sql
+# Prisma 7: --to-schema prisma/schema.prisma
 
 # 4. Review the generated SQL
-cat prisma/migrations/*_initial_baseline/migration.sql
+cat prisma/migrations/0_initial_baseline/migration.sql
 
 # 5. Commit the migration
 git add prisma/migrations
@@ -234,9 +242,13 @@ jobs:
       - name: Check if baseline needed
         id: check
         run: |
-          # Baseline is needed when the database has no _prisma_migrations table
+          # Baseline only a database that has tables but no migration
+          # history. An EMPTY database has no _prisma_migrations either:
+          # marking the baseline applied there would skip creating every
+          # table — let migrate deploy build it instead.
           HAS_HISTORY=$(psql "$DATABASE_URL" -Atc "select to_regclass('_prisma_migrations')")
-          if [ -z "$HAS_HISTORY" ]; then
+          TABLES=$(psql "$DATABASE_URL" -Atc "select count(*) from information_schema.tables where table_schema = 'public'")
+          if [ -z "$HAS_HISTORY" ] && [ "$TABLES" -gt 0 ]; then
             echo "needs_baseline=true" >> $GITHUB_OUTPUT
           else
             echo "needs_baseline=false" >> $GITHUB_OUTPUT
@@ -266,7 +278,7 @@ The baseline migration acts as your "year zero" - everything before it existed, 
 ## Summary
 
 1. Sync `schema.prisma` with current database (`db pull`)
-2. Create baseline migration (`migrate dev --create-only`)
+2. Create baseline migration (`migrate diff --from-empty ... --script`)
 3. Mark as applied on existing databases (`migrate resolve --applied`)
 4. Apply normally on fresh databases (`migrate dev`)
 5. All future changes use standard migration workflow
