@@ -794,6 +794,10 @@ def run_lines(job_text):
     for line in job_text.splitlines():
         stripped = line.strip()
         current = len(line) - len(line.lstrip())
+        if stripped.startswith("- run:"):
+            # The list form `- run: ...` opens a step too; missing it hid
+            # a whole step from every test reading run lines.
+            stripped, current = stripped[2:], current + 2
         if inside and stripped and current <= indent:
             inside = False
         if inside:
@@ -804,6 +808,13 @@ def run_lines(job_text):
             if rest not in ("|", ">-", ">", ""):
                 lines.append(rest)
     return lines
+
+
+class TestRunLinesSeesEveryStepForm(unittest.TestCase):
+    def test_a_list_form_run_step_is_read(self):
+        job = ("  agent:\n    steps:\n      - run: make check\n"
+               "      - name: x\n        run: |\n          echo a\n")
+        self.assertEqual(run_lines(job), ["make check", "echo a"])
 
 
 def permission_block(job_text):
