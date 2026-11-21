@@ -46,7 +46,14 @@ CLOCK = r"(?:\d+:\d\d(?::\d\d)?(?:\.\d+)?|\d+(?:\.\d+)?(?:h|min|s|ms)?)"
 # so it never matches and is never read as an id.
 TIMING_REF_RE = re.compile(
     r"(\S+?)\.([A-Za-z]\w*(?:\([^)]*\))?)(?:\s*[+-]\s*" + CLOCK + r")?$")
-FONT_SIZE_RE = re.compile(r"(?:^|[;{\s])font-size\s*:\s*([^;}]+)")
+# A font-size declaration or the `font:` shorthand, which sets the size
+# too (`font: 600 13px system-ui`); `font-family:` and kin never match.
+FONT_DECL_RE = re.compile(r"(?:^|[;{\s])(font-size|font)\s*:\s*([^;}]+)")
+# The shorthand's size token: a length or percentage, before any
+# `/line-height`. Unitless numbers there are weights, never sizes.
+SHORTHAND_SIZE_RE = re.compile(
+    r"(\d*\.?\d+)(px|pt|pc|em|rem|ex|ch|%|vw|vh|vmin|vmax|cm|mm|in|q)$",
+    re.I)
 SELECTOR_RE = re.compile(r"([A-Za-z][\w-]*)?(?:\.([\w-]+))?$")
 PX_RE = re.compile(r"\s*(\d+(?:\.\d+)?|\.\d+)\s*(?:px)?\s*$")
 
@@ -110,6 +117,23 @@ def _px(value):
     """A positive px or unitless length as a float, else None."""
     m = PX_RE.match(value or "")
     return float(m.group(1)) if m and float(m.group(1)) > 0 else None
+
+
+def _size_decls(text):
+    """[(value, important)] for every size a declaration block sets, in
+    order. A shorthand whose size cannot be read yields "unparsed",
+    which _px refuses, so the element counts as unread — never as a
+    size inherited from somewhere else."""
+    out = []
+    for prop, value in FONT_DECL_RE.findall(text):
+        important = "!important" in value
+        value = value.replace("!important", "").strip()
+        if prop == "font":
+            heads = (token.split("/")[0] for token in value.split())
+            value = next((head for head in heads
+                          if SHORTHAND_SIZE_RE.match(head)), "unparsed")
+        out.append((value, important))
+    return out
 
 
 def _urls(text):
@@ -201,13 +225,13 @@ def _font_rules(root):
         body, i = css[brace + 1:j - 1], j
         while prelude.startswith("@") and ";" in prelude:
             prelude = prelude.partition(";")[2].strip()  # @import and kin
-        if "font-size" not in body:
+        decls = _size_decls(body)
+        if not decls:
             continue
-        decls = FONT_SIZE_RE.findall(body)
-        if prelude.startswith("@") or not decls:
+        if prelude.startswith("@"):
             skipped += 1
             continue
-        value = decls[-1].replace("!important", "").strip()
+        value, important = decls[-1]
         readable = True
         for sel in prelude.split(","):
             m = SELECTOR_RE.match(sel.strip())
@@ -215,37 +239,44 @@ def _font_rules(root):
                 readable = False
                 continue
             tag, cls = m.groups()
-            rules.append(((cls is not None) * 10 + (tag is not None),
+            rules.append((important,
+                          (cls is not None) * 10 + (tag is not None),
                           len(rules), tag, cls, value))
         skipped += not readable
 
 
 def _declared(node, rules):
     """The font-size declaration that applies to this element itself, in
-    precedence inline style, <style> rule, attribute; None if it has none."""
-    found = FONT_SIZE_RE.findall(node.get("style", ""))
-    if found:
-        return found[-1].replace("!important", "").strip()
+    precedence inline style, <style> rule, attribute — except that an
+    !important rule beats a normal inline style, as CSS has it; None if
+    it has none."""
+    inline = _size_decls(node.get("style", ""))
     classes = (node.get("class") or "").split()
     tag = _local(node.tag)
-    hits = [r for r in rules if r[2] in (None, tag)
-            and r[3] in (None, *classes)]
-    if hits:
-        return max(hits)[4]
+    hits = [r for r in rules if r[3] in (None, tag)
+            and r[4] in (None, *classes)]
+    best = max(hits) if hits else None
+    if inline and (inline[-1][1] or best is None or not best[0]):
+        return inline[-1][0]
+    if best is not None:
+        return best[5]
     value = node.get("font-size")
     return value.strip() if value is not None else None
 
 
-def _font_size(node, parents, rules):
-    """The px size from the nearest declaration walking up the ancestors,
-    or None when that declaration is not px or unitless (em, %, var())
-    or there is none."""
-    while node is not None:
+def _font_sizes(root, rules):
+    """{element: px} from each element's nearest declaration, itself or
+    an ancestor's — None when that declaration is not px or unitless
+    (em, %, var()) or there is none. One top-down walk: re-walking the
+    ancestors per element was quadratic in nesting depth."""
+    sizes, stack = {}, [(root, None)]
+    while stack:
+        node, inherited = stack.pop()
         value = _declared(node, rules)
-        if value is not None:
-            return _px(value)
-        node = parents.get(node)
-    return None
+        size = _px(value) if value is not None else inherited
+        sizes[node] = size
+        stack.extend((child, size) for child in node)
+    return sizes
 
 
 def _has_text(e):
@@ -253,28 +284,29 @@ def _has_text(e):
                 or any((c.tail or "").strip() for c in e))
 
 
-def _text_runs(root, parents):
+def _text_runs(root):
     """The elements whose own text is a run: text and tspan, plus the
-    textPath and a that sit under a text element."""
-    def under_text(e):
-        while e is not None:
-            e = parents.get(e)
-            if e is not None and _local(e.tag) == "text":
-                return True
-        return False
-    return [e for e in root.iter()
-            if (_local(e.tag) in ("text", "tspan")
-                or (_local(e.tag) in ("textPath", "a") and under_text(e)))
-            and _has_text(e)]
+    textPath and a that sit under a text element. One top-down walk
+    carrying an "inside text" flag."""
+    runs, stack = [], [(root, False)]
+    while stack:
+        e, inside = stack.pop()
+        tag = _local(e.tag)
+        if (tag in ("text", "tspan")
+                or (tag in ("textPath", "a") and inside)) and _has_text(e):
+            runs.append(e)
+        stack.extend((child, inside or tag == "text")
+                     for child in reversed(list(e)))
+    return runs
 
 
 def _reading(root, report):
     """Fill the text fields of report: the smallest text size at the embed
     width, or the reason it was not read."""
     rules, report.skipped_rules = _font_rules(root)
-    parents = {c: p for p in root.iter() for c in p}
-    texts = _text_runs(root, parents)
-    sizes = [_font_size(e, parents, rules) for e in texts]
+    texts = _text_runs(root)
+    by_node = _font_sizes(root, rules)
+    sizes = [by_node[e] for e in texts]
     report.unread = sizes.count(None)
     scale, why = _scale(root, report.embed_px)
     if not texts:

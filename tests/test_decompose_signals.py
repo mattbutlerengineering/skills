@@ -787,6 +787,12 @@ class TestReviewFindings(unittest.TestCase):
                      "## Low-risk areas\n\nS2.\n"),
             {"findings": 0, "reason": "no finding heading"})
 
+    def test_an_empty_severity_section_is_no_finding(self):
+        # `### Critical` then "None." reported one finding naming nothing
+        self.assertEqual(findings("### Critical\n\nNone.\n\n### Major\n\n"
+                                  "**None.**\n\n## F1 — real\n"),
+                         {"label": "observed", "findings": 1, "named": 0})
+
     def test_s1_does_not_match_inside_s10(self):
         self.assertEqual(findings("## F1 — S10 and WS1 and S1x\n"),
                          {"label": "observed", "findings": 1, "named": 0})
