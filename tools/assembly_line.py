@@ -84,15 +84,22 @@ def _history(run_dir, ladder, status, fallback_day):
         visited.append(COMPLETED)
     if not visited:
         return []
-    first = _artifact_day(run_dir / table[visited[0]])
-    hops = [[visited[0], first, False]]
-    if first is None:
-        days = [day for day in (_artifact_day(run_dir / name)
-                                for name in RUN_ARTIFACTS) if day]
-        hops[0][1:] = [min(days) if days else fallback_day, True]
+    def day_of(name):
+        # A day after fallback_day (the generation date) is a typo, not
+        # a fact: read as missing, it cannot push last_day past today.
+        day = _artifact_day(run_dir / name)
+        return None if day is None or day > fallback_day else day
+
+    # The run enters on its FIRST artifact's date — the earliest of all,
+    # not the first visited station's own (a feature run holding
+    # defect.md visits capture first, though idea.md came before it).
+    own = day_of(table[visited[0]])
+    days = [day for day in (day_of(name) for name in RUN_ARTIFACTS) if day]
+    start = min(days) if days else fallback_day
+    hops = [[visited[0], start, own != start]]
     for before, station in zip(visited, visited[1:]):
         name = LEAVES_IMPLEMENT if before == IMPLEMENT else table[before]
-        day = _artifact_day(run_dir / name)
+        day = day_of(name)
         previous = hops[-1][1]
         if day is None or day < previous:
             hops.append([station, previous, True])
@@ -170,7 +177,13 @@ def gather(root, clock=None):
                  for entry in placed["attention"]}
     today = placed["generated"][:10]
     runs = []
-    for run_dir in run_dirs(root):
+    try:
+        dirs = run_dirs(root)
+    except OSError:
+        # docs/features or docs/fixes cannot be listed: board.gather
+        # reports that as a `docs` attention entry; render it, not crash.
+        dirs = [root / "docs"]
+    for run_dir in dirs:
         rel = str(run_dir.relative_to(root))
         try:
             if rel in attention:

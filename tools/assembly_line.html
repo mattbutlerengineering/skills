@@ -1646,6 +1646,12 @@ function factory(THREE, model) {
 
   // ------------------------------------------------------------ crates
   const runs = model.runs;
+  // The name a link or the finder carries for a run: its slug, unless
+  // another run shares it (docs/features/login and docs/fixes/login),
+  // then its ref — a shared slug reopened the first match, not this run.
+  const linkName = (run) => run.slug
+    && runs.filter((r) => r.slug === run.slug).length === 1
+    ? run.slug : run.ref;
   const crateOf = new Map();
   const shadowGeo = new THREE.RingGeometry(0.95, 1.05, 24);
   const shadowMat = new THREE.LineDashedMaterial({color: COLORS.line, dashSize: 0.25, gapSize: 0.2});
@@ -2145,7 +2151,7 @@ function factory(THREE, model) {
     const facts = [];
     if (!isToday()) facts.push(`day=${currentDay()}`);
     if (state.pinned) facts.push(state.pinned.run
-      ? `run=${encodeURIComponent(state.pinned.run.slug || state.pinned.run.ref)}`
+      ? `run=${encodeURIComponent(linkName(state.pinned.run))}`
       : `station=${state.pinned.key}`);
     // A hand-framed #view= stays while there is nothing else to name.
     if (!facts.length && location.hash.startsWith("#view=")) return;
@@ -3157,7 +3163,7 @@ function factory(THREE, model) {
     state.t = times.get(run)[0].t;
     layout(); syncTransport();
     // After goToDay, which writes #day: the trace is the shareable fact.
-    history.replaceState(null, "", `#trace=${encodeURIComponent(run.slug || run.ref)}`);
+    history.replaceState(null, "", `#trace=${encodeURIComponent(linkName(run))}`);
     if (!state.playing) play.click();
     // The trace closed the panel its button lived in, which handed focus
     // back to the panel's opener — a chip, so Space opened that chip's
@@ -3205,7 +3211,7 @@ function factory(THREE, model) {
   const find = $("find");
   find.hidden = false;
   runs.slice().sort((a, b) => (a.slug || a.ref).localeCompare(b.slug || b.ref))
-    .forEach((run) => $("find-list").append(el("option", {value: run.slug || run.ref})));
+    .forEach((run) => $("find-list").append(el("option", {value: linkName(run)})));
   find.addEventListener("change", () => {
     const wanted = find.value.trim().toLowerCase();
     if (!wanted) return;
@@ -3214,8 +3220,8 @@ function factory(THREE, model) {
     // first of four in model order, ahead of eval-trends.
     const name = (r) => (r.slug || r.ref).toLowerCase();
     const tiers = [
-      (r) => (r.slug || "").toLowerCase() === wanted,
       (r) => r.ref.toLowerCase() === wanted,
+      (r) => (r.slug || "").toLowerCase() === wanted,
       (r) => name(r).startsWith(wanted),
       (r) => ["-", ":", "/", "_"].some((sep) => name(r).includes(sep + wanted)),
       (r) => name(r).includes(wanted)];
@@ -3445,7 +3451,7 @@ function factory(THREE, model) {
   $("legend-close").addEventListener("click", (event) => setLegend(false, event.detail === 0));
 
   // -------------------------------------------------------------- tour
-  // Thirty guided seconds for a cold room: five beats ending in the
+  // Thirty guided seconds for a cold room: six beats ending in the
   // replay. The script is built at start time from the floor itself,
   // so the bottleneck beat names the real pile-up.
   let tourStep = -1;
@@ -4141,8 +4147,9 @@ function factory(THREE, model) {
       // the floor that day is pinned there; the finder snaps to today
       // ("where is it now"), so the link lost its day on the way back.
       const wanted = run.toLowerCase();
-      const exact = !isToday() && runs.find((r) =>
-        (r.slug || "").toLowerCase() === wanted || r.ref.toLowerCase() === wanted);
+      const exact = !isToday() && (
+        runs.find((r) => r.ref.toLowerCase() === wanted)
+        || runs.find((r) => (r.slug || "").toLowerCase() === wanted));
       find.value = run;
       if (exact && crateOf.get(exact).where) {
         openPanel({kind: "crate", run: exact});
@@ -4167,7 +4174,8 @@ function factory(THREE, model) {
     const trace = hash.get("trace");
     if (trace) {
       const wanted = trace.toLowerCase();
-      const traced = runs.find((r) => (r.slug || r.ref).toLowerCase() === wanted);
+      const traced = runs.find((r) => r.ref.toLowerCase() === wanted)
+        || runs.find((r) => (r.slug || r.ref).toLowerCase() === wanted);
       if (traced && traced.history.length) { startTrace(traced); intro = null; }
     }
     // #view=zoom,panX,panY restores a hand-framed shot (lowest

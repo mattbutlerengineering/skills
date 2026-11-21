@@ -235,6 +235,53 @@ class TestNestedDate(unittest.TestCase):
             self.assertIsNone(assembly_line._artifact_day(path))
 
 
+class TestFloorEdges(unittest.TestCase):
+    """Found by the 2026-11-20 assembly-line audit."""
+
+    TODAY = "2026-11-20"
+
+    def gather(self, root):
+        clock = lambda: __import__("datetime").datetime(2026, 11, 20, 12)
+        return assembly_line.gather(root, clock)
+
+    def test_a_future_date_cannot_push_last_day_past_today(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "docs" / "features" / "a"
+            write(run / "idea.md", artifact("idea", "2026-10-01"))
+            write(run / "prd.md", artifact("prd", "2027-03-01"))
+            model, _ = self.gather(tmp)
+            self.assertEqual(model["timeline"]["last_day"], self.TODAY)
+            (only,) = model["runs"]
+            self.assertTrue(all(hop["day"] <= self.TODAY
+                                for hop in only["history"]))
+
+    def test_a_run_enters_on_its_earliest_artifact(self):
+        # A feature run holding defect.md visits capture first, though
+        # idea.md came a month before it.
+        with tempfile.TemporaryDirectory() as tmp:
+            run = Path(tmp) / "docs" / "features" / "fd"
+            write(run / "idea.md", artifact("idea", "2026-08-01"))
+            write(run / "defect.md", artifact(
+                "capture", "2026-09-01", "- [ ] a\n",
+                **{"re-entry": "implement"}))
+            model, _ = self.gather(tmp)
+            (only,) = model["runs"]
+            self.assertEqual(only["history"][0]["day"], "2026-08-01")
+
+    def test_an_unreadable_features_directory_is_attention_not_a_crash(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            features = Path(tmp) / "docs" / "features"
+            write(features / "f" / "idea.md", "x")
+            features.chmod(0)
+            try:
+                model, problems = self.gather(tmp)
+            finally:
+                features.chmod(0o755)
+            self.assertEqual(problems, [])
+            self.assertEqual([r["status"] for r in model["runs"]],
+                             ["attention"])
+
+
 class TestHistory(unittest.TestCase):
     """Station arrivals, per architecture.md's Data model: a run enters
     its first station on its first artifact's date and reaches each

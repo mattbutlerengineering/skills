@@ -46,8 +46,8 @@ date) — not from your own count. Point at the five things to do on it:
   order with each station's live count, the amber chip and sign mark the
   busiest station, and the "How to read this" key opens on load.
   Clicking a chip flies the camera to its station and pins its list.
-  For a cold room, the Tour button walks the floor in five beats —
-  entry, build, the pile-up, the city — and ends in the replay.
+  For a cold room, the Tour button walks the floor in six beats —
+  the floor, entry, build, the pile-up, the city, then the replay.
 - Find one run: the header's "find a run…" box (every slug offered)
   flies to its crate and pins its row; ◉ trace on any pinned row
   replays that run's journey solo, every other crate hidden until
