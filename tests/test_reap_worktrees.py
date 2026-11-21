@@ -53,6 +53,8 @@ class Fake:
             if "open" in a:
                 return "gh-open"
             return "gh-search" if "--search" in a else "gh-merged"
+        if "--absolute-git-dir" in a:
+            return "git-dir"
         if "status" in a:
             return "status"
         if "ls-files" in a:
@@ -85,6 +87,8 @@ class Fake:
         return {"list": proc(self.listing),
                 "gh-merged": proc(json.dumps(self.merged)),
                 "gh-search": proc("[]"),
+                # a git dir holding no in-flight operation
+                "git-dir": proc("/nonexistent/git-dir\n"),
                 "merge-base-head": proc(rc=1)}.get(k, proc())
 
     def ran(self, key):
@@ -475,6 +479,23 @@ class FailsClosed(Case):
         self.assertEqual(code, 0)
         self.assertEqual(fake.ran("remove"),
                          [["git", "worktree", "remove", second]])
+
+
+class InFlightOperation(Case):
+    def test_a_worktree_mid_rebase_is_kept_and_never_removed(self):
+        # A rebase can leave HEAD detached on main's tip with a clean
+        # tree: every other test passes, and a branchless worktree skips
+        # the open-PR test, so --apply would discard the rebase.
+        for name in reap_worktrees.IN_PROGRESS:
+            with self.subTest(name=name), \
+                    tempfile.TemporaryDirectory() as git_dir:
+                Path(git_dir, name).mkdir()
+                fake = Fake(self.listing(), over={
+                    "git-dir": proc(git_dir + "\n")})
+                code, out = self.go(fake, apply=True)
+                self.assertEqual(code, 0, out)
+                self.assertFalse(fake.ran("remove"))
+                self.assertIn(f"operation in progress ({name})", out)
 
 
 class UpdatedBranch(Case):

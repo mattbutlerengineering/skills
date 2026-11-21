@@ -105,7 +105,26 @@ def _failed(args, proc):
         f": {err[-1]}" if err else "")
 
 
+# A git operation in flight leaves one of these in the worktree's git
+# dir. A rebase can leave HEAD detached on main's tip with a clean tree,
+# which passes every other test (and, branchless, skips the open-PR
+# test) — removing it would discard the rebase's todo and state.
+IN_PROGRESS = ("rebase-merge", "rebase-apply", "MERGE_HEAD",
+               "CHERRY_PICK_HEAD", "REVERT_HEAD", "BISECT_LOG", "sequencer")
+
+
 def test_clean(runner, path):
+    args = ["git", "-C", path, "rev-parse", "--absolute-git-dir"]
+    proc, why = _try(runner, args)
+    if why:
+        return False, why, True
+    if proc.returncode != 0:
+        return False, _failed(args, proc), True
+    git_dir = proc.stdout.strip()
+    busy = [name for name in IN_PROGRESS
+            if os.path.lexists(os.path.join(git_dir, name))]
+    if busy:
+        return False, f"operation in progress ({busy[0]})", False
     # --untracked-files=all and --ignore-submodules=none override a repo's
     # status.showUntrackedFiles / diff.ignoreSubmodules, which would hide
     # untracked files or dirty submodules from a plain `status --porcelain`.

@@ -175,6 +175,9 @@ def orientation_pack(root, wo, row):
     for number in cited_adrs(block):
         path = adr_path(root, number)
         if path is None:
+            parts.append(f"### ADR-{number}\n")
+            parts.append(f"(ADR-{number} is cited but no docs/adr file has"
+                         " that number)")
             continue
         parts.append(f"### ADR-{number}: {path.stem}\n")
         parts.append(_read_or_note(path, f"ADR-{number}"))
