@@ -11,7 +11,7 @@ done/remaining criteria, the same discipline as assembler's
 repo-controlled prompt substrate. compose() is a formatter behind that
 boundary — it enforces nothing itself.
 
-  python3 handoff.py <wo> <reason> <done_csv> <remaining_csv> <resume>
+  python3 tools/handoff.py <wo> <reason> <done_csv> <remaining_csv> <resume>
         Compose and print a handoff for <wo>. <done_csv>/<remaining_csv>
         are comma-separated acceptance criteria (empty string for none), a
         quick hand check outside the agent loop.

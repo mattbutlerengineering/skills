@@ -259,7 +259,7 @@ class TestScorecardsCli(unittest.TestCase):
                          ["scorecards", "1", "2"]):
                 code, out = self.main(tmp, argv)
                 self.assertEqual(code, 2, argv)
-                self.assertIn("python3 conductor.py scorecards [N]", out)
+                self.assertIn("python3 tools/conductor.py scorecards [N]", out)
 
 
 class TestConductClosesWithARetro(unittest.TestCase):

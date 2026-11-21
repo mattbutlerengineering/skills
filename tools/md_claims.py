@@ -40,7 +40,7 @@ import cli
 from knowledge_plane import fenced, local_link_targets, repo_path, resolve_link
 
 LABEL = "md-claims"
-USAGE = "usage: md_claims.py check|extract [root] [path ...]"
+USAGE = "usage: python3 tools/md_claims.py check|extract [root] [path ...]"
 IGNORE = "<!-- md-claims: ignore -->"
 AGENT_FILES = ("CLAUDE.md", "AGENTS.md", "GEMINI.md")
 SNAPSHOT = re.compile(r"^\d{4}-\d{2}-\d{2}-")

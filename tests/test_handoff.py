@@ -60,7 +60,7 @@ class TestCompose(unittest.TestCase):
 
 
 class TestMain(cli_contract.CliContract, unittest.TestCase):
-    usage_fragment = "python3 handoff.py"
+    usage_fragment = "python3 tools/handoff.py"
     bad_argv = ("WO-0006",)  # wrong arity — the tool has no subcommands
 
     def run_cli(self, argv):

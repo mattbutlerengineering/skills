@@ -436,9 +436,9 @@ class TestPageWriter(unittest.TestCase):
         empty.mkdir()
         target = Path(self.tmp.name) / "never.html"
         code, out = self.run_main(empty, "--out", target)
-        _, problems = board.gather(empty)
-        self.assertEqual(code, 1)
-        self.assertEqual(out.splitlines()[0], problems[0])
+        self.assertEqual((code, out.splitlines()), (1, [
+            f"assembly_line: {empty} has no docs/ tree",
+            "assembly_line: 1 problem(s)"]))
         self.assertFalse(target.exists())
 
     def test_unreadable_template_or_vendor_file_exits_1_naming_it(self):

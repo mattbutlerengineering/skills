@@ -799,11 +799,17 @@ class TestMemory(Tree):
             "harvest: 1 problem(s)"])
 
     def test_usage_names_the_flag(self):
-        for argv in (["harvest", "--help"], ["harvest", "--bogus"]):
-            with self.subTest(argv=argv):
-                code, out = self.run_main(argv)
-                self.assertEqual(code, 2)
-                self.assertIn("[--memory]", out)
+        code, out = self.run_main(["harvest", "--bogus"])
+        self.assertEqual(code, 2)
+        self.assertIn("[--memory]", out)
+
+    def test_help_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                self.assertEqual(self.run_main(["harvest", flag]),
+                                 (0, kb_harvest.USAGE + "\n"))
+                self.assertTrue(kb_harvest.USAGE.startswith(
+                    "usage: python3 tools/kb.py harvest [root]"))
 
 
 class TestMain(Tree):

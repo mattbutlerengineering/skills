@@ -672,7 +672,7 @@ class TestAcceptanceScenario(unittest.TestCase):
 
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
-    usage_fragment = "python3 budget_guard.py check"
+    usage_fragment = "python3 tools/budget_guard.py check"
     summary_line = "budget_guard: 0 problem(s)"
 
     def run_cli(self, argv):

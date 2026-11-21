@@ -7,9 +7,9 @@ runs in scheduled sweeps only and its gates.py ROSTER row carries no
 checker (run_all stays offline). Conventions match gates.py/lint.py: functions return
 L:-prefixed problem strings; the CLI prints them and exits nonzero.
 
-  python3 label_sync.py           report drift (gh label list)
-  python3 label_sync.py --apply   also create/update each drifted label
-                                  (gh label create --force)
+  python3 tools/label_sync.py          report drift (gh label list)
+  python3 tools/label_sync.py --apply  also create/update each drifted
+                                       label (gh label create --force)
 
 Drift is one-way: labels outside the taxonomy are ignored (GitHub's
 default labels are not drift), so --apply never deletes anything.

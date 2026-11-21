@@ -248,7 +248,7 @@ def main(argv):
     """`python3 tools/assembly_line.py [root] [--out PATH | --publish DIR]` —
     writes the page (default: a new file in the system temp directory,
     outside the repo's tracked tree) and prints its absolute path."""
-    parser = argparse.ArgumentParser(prog="assembly_line.py")
+    parser = argparse.ArgumentParser(prog="python3 tools/assembly_line.py")
     parser.add_argument("root", nargs="?", default=".")
     where = parser.add_mutually_exclusive_group()
     where.add_argument("--out")
@@ -256,7 +256,11 @@ def main(argv):
     args = parser.parse_args(argv)
     model, problems = gather(args.root)
     if problems:
-        return cli.report("assembly_line", problems)
+        # board's problems carry board's label; this summary counts them,
+        # so they carry this tool's (#2301).
+        return cli.report("assembly_line", [
+            re.sub(r"^board:", "assembly_line:", problem)
+            for problem in problems])
     template, problem = _read(TEMPLATE)
     vendor = {}
     for name, path in ([] if problem else VENDOR.items()):

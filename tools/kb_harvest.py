@@ -587,8 +587,8 @@ def harvest(root, projects=None, days=None, session=None, now=None,
     return result, problems
 
 
-USAGE = ("usage: kb.py harvest [root] [--days N] [--session ID]"
-         " [--projects-dir DIR] [--memory]")
+USAGE = ("usage: python3 tools/kb.py harvest [root] [--days N]"
+         " [--session ID] [--projects-dir DIR] [--memory]")
 
 
 def _options(argv):
@@ -622,6 +622,9 @@ def _options(argv):
 def main(argv, kb_dir=None):
     """`kb.py harvest ...`: candidates as JSON, or problem strings.
     kb_dir is the page directory kb.py owns, for memory pairing."""
+    if argv in (["-h"], ["--help"]):
+        print(USAGE)
+        return 0
     root, options, problems = _options(argv)
     if root is None:
         print(problems[0])

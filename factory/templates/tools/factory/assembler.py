@@ -20,7 +20,7 @@ Two invariants here are security properties, not conveniences (ADR-0032):
      owner-reviewed PR (ADR-0004 knowledge plane). resolve_row reads the row
      and the body never enters assemble_prompt — the prompt-injection boundary.
 
-  python3 assembler.py resolve
+  python3 tools/assembler.py resolve
         Resolve the labeled issue into dispatch outputs (dispatch, wo,
         charter, band, model, prompt) written to $GITHUB_OUTPUT for the
         workflow's claude-code-action step. A non-owner or non-ready label,
@@ -34,7 +34,7 @@ Two invariants here are security properties, not conveniences (ADR-0032):
         band, a band the routing table does not cover — is a problem (exit
         nonzero) so the owner sees it.
 
-  python3 assembler.py find-pr <issue>
+  python3 tools/assembler.py find-pr <issue>
         Locate the open PR whose body Closes the issue (the dispatched
         agent's delivery) and write pr=<number> to $GITHUB_OUTPUT for
         the validator-dispatch step — GitHub suppresses pull_request

@@ -307,6 +307,29 @@ class TestMain(Tree):
             " exist",
             "drift: 1 problem(s)"])
 
+    def run_main(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = kb.main(["drift", *argv])
+        return code, out.getvalue().splitlines()
+
+    def test_help_prints_usage_and_exits_zero(self):
+        for flag in ("-h", "--help"):
+            with self.subTest(flag=flag):
+                self.assertEqual(self.run_main([flag]), (
+                    0, ["usage: python3 tools/kb.py drift [root]"]))
+
+    def test_an_unknown_flag_is_usage_not_a_root(self):
+        self.assertEqual(self.run_main(["--bogus"]), (
+            2, ["usage: python3 tools/kb.py drift [root]"]))
+
+    def test_a_root_that_is_not_a_directory_is_named(self):
+        for root in (self.root / "missing", self.root / "src" / "app.py"):
+            with self.subTest(root=root):
+                self.assertEqual(self.run_main([str(root)]), (1, [
+                    f"drift: {root} is not a directory",
+                    "drift: 1 problem(s)"]))
+
 
 if __name__ == "__main__":
     unittest.main()

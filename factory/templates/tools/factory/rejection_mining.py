@@ -41,7 +41,7 @@ strings; the CLI prints them and exits nonzero. Problems are the miner's
 own faults (a failed gh call or post); a batch ledger it cannot mine is a
 counted gap in the queue body instead.
 
-  python3 rejection_mining.py mine
+  python3 tools/rejection_mining.py mine
         Harvest gate rejections and change-requested reviews for the
         mirrored work orders, and Conductor review rework from the
         batch ledgers, then create-or-update the pinned toolsmith-queue

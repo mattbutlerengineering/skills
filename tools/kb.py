@@ -463,9 +463,9 @@ def stats(root):
                 encoding="utf-8").splitlines()) for p in every}}, []
 
 
-USAGE = ("usage: kb.py index|lint|stats|drift [root]\n"
-         "       kb.py harvest [root] [--days N] [--session ID]"
-         " [--projects-dir DIR] [--memory]")
+USAGE = ("usage: python3 tools/kb.py index|lint|stats|drift [root]\n"
+         "       python3 tools/kb.py harvest [root] [--days N]"
+         " [--session ID] [--projects-dir DIR] [--memory]")
 
 
 def main(argv):

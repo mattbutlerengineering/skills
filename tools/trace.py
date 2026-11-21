@@ -2,8 +2,8 @@
 """trace: one dated view of ticket -> requirement -> decision -> feedback
 for a key (ADR-0092).
 
-    python3 trace.py <key> [--json] [--budget BYTES] [--since DATE]
-                           [--root DIR]
+    python3 tools/trace.py <key> [--json] [--budget BYTES] [--since DATE]
+                                 [--root DIR]
 
 A key is a run ref (`feature:<slug>`, `maintenance:<slug>`, `product`),
 a typed id (`PRD-####`, `ADR-####`, `WO-####`), an issue number (`#N`)
@@ -490,7 +490,8 @@ def _git(args):
 
 def parse_args(argv):
     parser = argparse.ArgumentParser(
-        prog="trace.py", description="One dated view of ticket ->"
+        prog="python3 tools/trace.py",
+        description="One dated view of ticket ->"
         " requirement -> decision -> feedback for a key (ADR-0092).")
     parser.add_argument("key")
     parser.add_argument("--json", action="store_true")
@@ -513,6 +514,9 @@ def main(argv, run=None, environ=os.environ, git=_git):
         return report(LABEL, [f"{LABEL}: --since takes YYYY-MM-DD, not"
                               f" {args.since!r}"])
     root = Path(args.root).resolve()
+    if not root.is_dir():
+        return report(LABEL, [f"{LABEL}: --root {args.root!r} is not a"
+                              " directory"])
     run = run or root_gh(root)
     state = gh_state(environ)
     runs = read_runs(root, state["notes"])

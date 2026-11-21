@@ -770,6 +770,17 @@ def _serve_args(argv):
     return port, config, problems
 
 
+def _config_problems(path):
+    """An explicitly given --config must be a file, checked before the
+    server binds: repo_set reads an absent config as "no repos
+    configured", right for the default path and a silent typo for one
+    the operator named."""
+    if path.is_file():
+        return []
+    why = "is not a file" if path.exists() else "does not exist"
+    return [f"dashboard: --config {path} {why}"]
+
+
 def main(argv):
     if argv in (["-h"], ["--help"]):
         print(__doc__.strip())
@@ -780,6 +791,8 @@ def main(argv):
         return report("dashboard", state["problems"])
     if argv and argv[0] == "serve":
         port, config, problems = _serve_args(argv[1:])
+        if config is not None and not problems:
+            problems = _config_problems(Path(config))
         if problems:
             return report("dashboard", problems)
         return report("dashboard", serve(port, config))

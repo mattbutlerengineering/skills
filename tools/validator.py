@@ -16,14 +16,14 @@ tests never touch the network (same shape as label_sync.py).
 Conventions match gates.py/label_sync.py: functions return V:-prefixed
 problem strings; the CLI prints them and exits nonzero.
 
-  python3 validator.py pr-event --pr <N> --out <path>
+  python3 tools/validator.py pr-event --pr <N> --out <path>
         The dispatch shim (WO-0030). GitHub suppresses the pull_request
         event for a PR the factory's own token opened, so the validator is
         dispatched against a PR NUMBER — and the legs below still need an
         event to read. Write the payload cli.read_event will hand them.
         One owner for a shape three workflow steps used to build by hand.
 
-  python3 validator.py review --findings <file> [--status <rc>]
+  python3 tools/validator.py review --findings <file> [--status <rc>]
         Post the check run's output on the PR as review findings, from an
         actor that is not the PR's author — PRD-0001: no work is verified by
         the agent that produced it. The reviewing identity is derived from
@@ -33,14 +33,14 @@ problem strings; the CLI prints them and exits nonzero.
         job: failing the build is the check job's work, and a reviewer that
         goes silent on red is useless.
 
-  python3 validator.py pr-merged
+  python3 tools/validator.py pr-merged
         The merge leg. Make wo:merged the only wo: lifecycle label on the
         work order's mirrored issue (ADR-0032: exactly one at a time). The
         issue number comes from the breakdown row, never from the issue
         itself — the knowledge plane is authoritative and the mirror is
         one-way.
 
-  python3 validator.py pr-opened
+  python3 tools/validator.py pr-opened
         The PR-open leg: wo:needs-review, the same PR-shaped resolution.
 
         Both PR legs skip an uncited PR (ADR-0057), so a PR citing no work
@@ -52,7 +52,7 @@ problem strings; the CLI prints them and exits nonzero.
         both. The rule is the verb's, not the caller's: there is no flag
         to forget (#302-#306 were a recipe that forgot one).
 
-  python3 validator.py claim <N>
+  python3 tools/validator.py claim <N>
         The dispatch claim: flip KNOWN issue N (no PR to resolve) to
         wo:in-progress and write transitioned=true/false to
         $GITHUB_OUTPUT — true only when the flip took the order out of
@@ -60,15 +60,15 @@ problem strings; the CLI prints them and exits nonzero.
         (a repeat label event gets false and the paid agent step is
         skipped).
 
-  python3 validator.py fail <N>
+  python3 tools/validator.py fail <N>
         The dispatch failure leg: the same KNOWN-issue flip, to wo:failed,
         writing no verdict. The assembler runs it from a failure() step,
         so an order whose agent run died lands on wo:failed instead of
         sitting on wo:in-progress forever — the state both the gate digest
         and the improvement routine read as work still in flight.
 
-  python3 validator.py lifecycle --label <label> [--issue <N> [--verdict skip]
-                                                  | --uncited skip]
+  python3 tools/validator.py lifecycle --label <label>
+                             [--issue <N> [--verdict skip] | --uncited skip]
         The grammar before the verbs, where the recipe named the label and
         a flag picked the leg. Kept as an alias because factory-init
         update never refreshes a stamped Makefile

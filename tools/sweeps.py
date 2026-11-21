@@ -219,7 +219,7 @@ def drift_intake(drift):
         body=render("label-drift", key,
                     "The live GitHub label set no longer matches"
                     " `.github/labels.json` (detector L). Re-apply with"
-                    " `python3 label_sync.py --apply`.",
+                    " `label_sync.py --apply` (beside sweeps.py).",
                     fields),
         labels=(source, work_type))
 

@@ -367,6 +367,24 @@ class TestFailClosed(unittest.TestCase):
                               " origin/main...nope failed: fatal: bad"
                               " revision 'origin/main...nope'\n")
 
+    def test_gits_fatal_line_survives_the_usage_hint_below_it(self):
+        stderr = ("fatal: ambiguous argument 'origin/main...nope': unknown"
+                  " revision or path not in the working tree.\n"
+                  "Use '--' to separate paths from revisions, like this:\n"
+                  "'git <command> [<revision>...] -- [<file>...]'\n")
+        git = FakeGit(failing=["diff"], error=fast_path.subprocess
+                      .CalledProcessError(128, "git", stderr=stderr))
+        code, out = cli_contract.capture(fast_path.main,
+                                         ["origin/main", "nope"], git=git)
+        self.assertEqual(code, 2)
+        self.assertEqual(out, "fast-path: git diff --name-only -z --no-renames"
+                              " origin/main...nope failed: fatal: ambiguous"
+                              " argument 'origin/main...nope': unknown"
+                              " revision or path not in the working tree."
+                              " | Use '--' to separate paths from revisions,"
+                              " like this: | 'git <command> [<revision>...]"
+                              " -- [<file>...]'\n")
+
     def test_a_missing_git_exits_2_with_a_problem_string(self):
         git = FakeGit(failing=["diff"], error=FileNotFoundError("git"))
         code, out = cli_contract.capture(fast_path.main,

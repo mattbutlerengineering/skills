@@ -284,6 +284,8 @@ class TestDriftIntake(unittest.TestCase):
                          "[sweep] label taxonomy drift (2 problem(s))")
         self.assertIn("drift[0]: L: missing label size:S", intake.body)
         self.assertIn("intake-key: sweep:label-drift", intake.body)
+        self.assertIn("Re-apply with `label_sync.py --apply` (beside"
+                      " sweeps.py).", intake.body)
 
 
 class TestScreen(unittest.TestCase):

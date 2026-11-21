@@ -533,16 +533,25 @@ def _content(src, dest, records):
     return seed_index(content, records) if dest == ADR_INDEX else content
 
 
+def target_problems(target):
+    """[] when target is an existing directory, else the one problem that
+    says which way it is not — stamp's and update's shared guard."""
+    if target.is_dir():
+        return []
+    why = "is not a directory" if target.exists() else "does not exist"
+    return [f"factory-init: target {target} {why} — pass the path of an"
+            " existing repo checkout"]
+
+
 def _stamp(source, target, keepable, tools_only=False):
     """(kept, problems): stamp every copy whose destination is absent.
     An existing destination is kept when keepable(dest) says so and is a
     clash otherwise; any clash refuses the whole stamp before a write."""
     source, target = Path(source), Path(target)
-    if not target.is_dir():
+    if target_problems(target):
         # A typo'd path was created and stamped as a non-repo, and one
         # under a missing root crashed in mkdir with a traceback.
-        return [], [f"factory-init: target {target} does not exist — pass"
-                    " the path of an existing repo checkout"]
+        return [], target_problems(target)
     if (target / "factory" / "manifest.json").exists():
         # One line, not a clash per payload file (105 of them).
         return [], [f"factory-init: {target} is already stamped — refresh"
@@ -781,6 +790,8 @@ def update(source, target, tools_only=False):
     no workflows to call one.
     """
     source, target = Path(source), Path(target)
+    if target_problems(target):
+        return [], [], target_problems(target)
     tools_only, problems = update_kind(target, tools_only)
     if problems:
         return [], [], problems
@@ -861,8 +872,11 @@ def main(argv):
         for rel in kept:
             print(f"factory-init: kept {rel} (yours — differs from the"
                   " payload, reconcile by hand if you want the change)")
-        print(f"factory-init: refreshed {len(written)} file(s),"
-              f" kept {len(kept)}")
+        if written:
+            # A refused update writes nothing; its problems say why, and
+            # "refreshed 0 file(s)" beside them read as a success (#2301).
+            print(f"factory-init: refreshed {len(written)} file(s),"
+                  f" kept {len(kept)}")
     else:
         print(__doc__.strip())
         return 2
