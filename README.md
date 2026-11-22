@@ -6,6 +6,11 @@ consumes; the artifacts themselves are the pipeline state.
 
 ![The skill map: the pipeline stages as a closed loop with the router inside it, a maintenance run entering from outside, and the utility skills grouped in cards by the moment you reach for them.](docs/assets/skill-map.svg)
 
+## Goal
+
+Deliver product outcomes faster, with higher quality, with more autonomy.
+How it is measured and how it decides priority: [ADR-0135](docs/adr/0135-project-goal-and-prioritization.md).
+
 ## Install
 
 **Claude Code** (primary):

@@ -1,6 +1,6 @@
 # Autonomy per human-hour: accepted orders per gate-wait hour
 
-- Status: superseded in part by ADR-0080
+- Status: superseded in part by ADR-0080 (north-star choice superseded by ADR-0135)
 - Date: 2026-09-21
 
 ## Context

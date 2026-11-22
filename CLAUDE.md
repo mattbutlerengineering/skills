@@ -5,6 +5,14 @@ state: each stage skill reads/writes run artifacts (product runs at the
 target repo's `docs/` root, feature runs under `docs/features/<slug>/`),
 and `skills/next` routes by what exists. Spec: `docs/pipeline-protocol.md`.
 
+## Goal
+
+Deliver product outcomes faster, with higher quality, with more autonomy.
+Every piece of work and every process must name the metric it moves; work
+that moves none is declined, and process that protects none is removed.
+Metrics (lead time, escape rate, unattended share, overhead ratio) and the
+prioritization rule: ADR-0135.
+
 ## Verify (CI runs all four on every PR and every push to main)
 
 - `python3 tools/run_tests.py` — the full suite, one `python3 -m unittest
