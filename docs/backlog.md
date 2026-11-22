@@ -287,3 +287,4 @@ Seed inbox — advisory only, never orientation state; grammar and read moments 
 - Fix the CORRECTION pattern so "No problem" and "Never mind" are not pushback, and let a turn that opens with a harness tag keep its typed words, once PRD 13's hand count exists to judge it (from: feature:kb-from-knowledge-work-plugins)
 - Add a gates check that a NOT RUN line in verification.md names an owner and a date, so a criterion for a human is never left to a later stage by default (from: feature:kb-from-knowledge-work-plugins)
 - Re-run this Operate scan on 2026-12-13 across both session stores and the next consumer retros, counting harvest runs, `--memory` runs, pages declaring `max-age` and class, symptom-first or wrong/right pages, and record the counts in a follow-up retro (from: feature:kb-from-knowledge-work-plugins)
+- The pipeline retunes its own selection weights and process set from the goal metrics in a closed loop (from: feature:project-goal)
