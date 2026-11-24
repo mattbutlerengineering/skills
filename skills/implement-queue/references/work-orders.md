@@ -188,6 +188,9 @@ message, one worktree per worker. Each worker's prompt must carry:
     criterion with how you verified it. Change nothing the order does not
     ask for: a case found outside its row is named in the PR body, not
     implemented.
+16. Copy the worker Bash shapes block verbatim into the prompt of every
+    worktree-isolated worker; one file owns it:
+    [worker-bash-shapes.md](worker-bash-shapes.md).
 
 Model per work order follows `factory.json`'s routing bands. Mechanical
 work does not need the implementation model.

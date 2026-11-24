@@ -91,7 +91,11 @@ table says when `conduct` or `implement-queue` fits instead.
      assumptions live); otherwise — any question with no skill-supplied
      default, including every evidentiary question — stop and surface,
      never guess; produce the stage artifact per the skill; never fabricate
-     verification evidence — run the real commands.
+     verification evidence — run the real commands;
+   - when it is dispatched with `isolation: "worktree"`, the Bash shapes.
+     Copy the worker Bash shapes block verbatim into the prompt of every
+     worktree-isolated worker; one file owns it:
+     `../implement-queue/references/worker-bash-shapes.md`.
 
 4. **Gate between stages.** When the subagent returns, confirm the stage
    artifact exists, is complete per the protocol, and is committed on
