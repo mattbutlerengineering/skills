@@ -19,8 +19,10 @@ offline, and reports each malformed one (ADR-0125).
   python3 tools/kb.py stats [root]   page count, index size, page lengths (JSON)
   python3 tools/kb.py drift [root]   instruction-file drift (kb_drift.py)
   python3 tools/kb.py harvest [root] [--days N] [--session ID] [--memory]
+                              [--summary]
                                transcript and memory candidates for
-                               ingest (JSON; kb_harvest.py)
+                               ingest (JSON, or a ranked digest on
+                               --summary; kb_harvest.py)
 
 Root defaults to the working directory, the way the skill invokes it.
 Not to be confused with knowledge_plane.py: the knowledge plane is the
@@ -465,7 +467,7 @@ def stats(root):
 
 USAGE = ("usage: python3 tools/kb.py index|lint|stats|drift [root]\n"
          "       python3 tools/kb.py harvest [root] [--days N]"
-         " [--session ID] [--projects-dir DIR] [--memory]")
+         " [--session ID] [--projects-dir DIR] [--memory] [--summary]")
 
 
 def main(argv):
