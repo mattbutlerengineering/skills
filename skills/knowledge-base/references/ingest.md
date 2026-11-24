@@ -87,7 +87,9 @@ candidate:
 - **human_turns** — in a top-level interactive transcript, a human turn
   that pushed back on the agent turn just before it (`kind:
   correction`) or answered a question the agent asked (`kind: answer`),
-  each with a short excerpt of both turns.
+  each with a short excerpt of both turns. Answers given through the
+  question tool are listed apart, under `question_answers`, in the same
+  shape, so the corrections are not buried under them.
 - **memory**, only with `--memory` — entries from the harness's
   auto-memory for this repo, where the harness keeps one, each beside
   the page it may duplicate (`page`, matched on shared file-name words)

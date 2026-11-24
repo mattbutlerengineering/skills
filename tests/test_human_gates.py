@@ -7,8 +7,9 @@ here changed the import lines and nothing else, which is what makes it
 the net for the move rather than a restatement of it.
 
 What it owns that neither tool's suite had: the partition property. For
-one event history, the passages and the rejections together are exactly
-the completed stays, and no stay is in both. That invariant lived as
+one event history, the passages, the rejections and the bypasses
+(ADR-0137) together are exactly the completed stays, and no stay is in
+two of them. That invariant lived as
 prose in a docstring, so nothing caught the day the two hand-written
 window tests stopped agreeing — now there is one window test, in
 completed_stays, and this asserts what it guarantees.
@@ -25,7 +26,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fake_gh import FakeGh  # noqa: E402
 import cost_ledger  # noqa: E402
-from human_gates import (GATES, Waiting, completed_stays, gate_labels,
+from human_gates import (BYPASSED, GATES, PASSED, REJECTED, Waiting,
+                         completed_stays, gate_bypasses, gate_labels,
                          gate_passages, gate_rejections, label_events,
                          open_queues, read_gate_issues, read_labelers,
                          read_timelines,
@@ -734,6 +736,84 @@ class TestGateRejections(unittest.TestCase):
         self.assertEqual(gate_rejections(events),
                          [("merge", "2026-08-11T09:00:00Z")])
 
+    # #2309 (ADR-0137): a rejection is a stay that ends in wo:failed /
+    # wo:blocked or moves backward in GATES order. A forward skip past
+    # the gate is neither approval nor rejection.
+
+    def test_a_forward_skip_past_the_gate_is_not_a_rejection(self):
+        # #113's live shape: wo:draft off and wo:merged on in one second
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:draft"),
+            unlabeled("2026-08-11T09:00:00Z", "wo:draft"),
+            labeled("2026-08-11T09:00:00Z", "wo:merged"),
+        ])
+        self.assertEqual(gate_rejections(events), [])
+
+    def test_a_skip_to_a_label_outside_the_gates_is_not_a_rejection(self):
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:draft"),
+            labeled("2026-08-11T09:00:00Z", "wo:in-progress"),
+            unlabeled("2026-08-11T09:00:00Z", "wo:draft"),
+        ])
+        self.assertEqual(gate_rejections(events), [])
+
+    def test_a_backward_move_in_gates_order_is_a_rejection(self):
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:needs-review"),
+            unlabeled("2026-08-11T09:00:00Z", "wo:needs-review"),
+            labeled("2026-08-11T09:00:00Z", "wo:prd-approved"),
+        ])
+        self.assertEqual(gate_rejections(events),
+                         [("merge", "2026-08-11T09:00:00Z")])
+
+    def test_a_block_added_beside_the_queue_label_is_a_rejection(self):
+        # the human adds wo:blocked mid-stay; a later flip strips wo:draft
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:draft"),
+            labeled("2026-08-11T09:00:00Z", "wo:blocked"),
+            unlabeled("2026-08-12T09:00:00Z", "wo:draft"),
+        ])
+        self.assertEqual(gate_rejections(events),
+                         [("prd", "2026-08-12T09:00:00Z")])
+
+    def test_a_failure_applied_just_after_the_removal_is_a_rejection(self):
+        # two edits, not one: the queue label off, wo:failed a minute on
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:needs-review"),
+            unlabeled("2026-08-11T09:00:00Z", "wo:needs-review"),
+            labeled("2026-08-11T09:01:00Z", "wo:failed"),
+        ])
+        self.assertEqual(gate_rejections(events),
+                         [("merge", "2026-08-11T09:00:00Z")])
+
+    def test_a_removal_with_no_later_lifecycle_label_is_not_a_rejection(self):
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:draft"),
+            unlabeled("2026-08-11T09:00:00Z", "wo:draft"),
+            labeled("2026-08-11T09:00:00Z", "size:S"),
+        ])
+        self.assertEqual(gate_rejections(events), [])
+
+
+class TestGateBypasses(unittest.TestCase):
+    """#2309 (ADR-0137): the third class of completed stay — left
+    forward without the pass label. The miner skips it; nothing counts it
+    as the human's approval either."""
+
+    def test_a_forward_skip_is_a_bypass_of_the_gate_it_skipped(self):
+        events = label_events([
+            labeled("2026-08-10T09:00:00Z", "wo:draft"),
+            unlabeled("2026-08-11T09:00:00Z", "wo:draft"),
+            labeled("2026-08-11T09:00:00Z", "wo:merged"),
+        ])
+        self.assertEqual(gate_bypasses(events),
+                         [("prd", "2026-08-11T09:00:00Z")])
+        self.assertEqual(gate_passages(events), [])
+
+    def test_a_rejection_or_a_passage_is_not_a_bypass(self):
+        self.assertEqual(gate_bypasses(label_events(REJECTED_STAY)), [])
+        self.assertEqual(gate_bypasses(label_events(CONFIRMED_STAY)), [])
+
 
 # One issue's whole gate history, hand-written so the completed stays can
 # be read off it by eye: the PRD gate entered, rejected into wo:blocked,
@@ -760,6 +840,21 @@ COMPLETED_STAYS = {
     ("merge", "2026-08-07T09:00:00Z"),
 }
 
+# A PRD stay rejected into wo:blocked, a re-entered PRD stay that skips
+# forward to wo:needs-review (past the blueprint gate, never entered),
+# and the merge gate passed: one stay of each class.
+THREE_WAY_HISTORY = [
+    labeled("2026-08-01T09:00:00Z", "wo:draft"),
+    unlabeled("2026-08-02T09:00:00Z", "wo:draft"),
+    labeled("2026-08-02T09:00:00Z", "wo:blocked"),
+    unlabeled("2026-08-03T09:00:00Z", "wo:blocked"),
+    labeled("2026-08-03T09:00:00Z", "wo:draft"),
+    unlabeled("2026-08-04T09:00:00Z", "wo:draft"),
+    labeled("2026-08-04T09:00:00Z", "wo:needs-review"),
+    unlabeled("2026-08-05T09:00:00Z", "wo:needs-review"),
+    labeled("2026-08-05T09:00:00Z", "wo:merged"),
+]
+
 
 class TestCompletedStays(unittest.TestCase):
     """One walk and one window test, returning the list the digest and
@@ -775,15 +870,15 @@ class TestCompletedStays(unittest.TestCase):
         ])
         self.assertEqual(completed_stays(events, self.PRD),
                          [("2026-07-01T09:00:00Z",
-                           "2026-07-02T09:00:00Z", True)])
+                           "2026-07-02T09:00:00Z", PASSED)])
 
     def test_a_confirmation_past_the_next_re_entry_confirms_nothing(self):
         # the window runs from a stay's start up to the gate's next
         # re-entry, so the second stay's pass cannot reach back
         events = label_events(PARTITION_HISTORY)
         self.assertEqual(completed_stays(events, self.PRD), [
-            ("2026-08-01T09:00:00Z", "2026-08-02T09:00:00Z", False),
-            ("2026-08-03T09:00:00Z", "2026-08-04T09:00:00Z", True),
+            ("2026-08-01T09:00:00Z", "2026-08-02T09:00:00Z", REJECTED),
+            ("2026-08-03T09:00:00Z", "2026-08-04T09:00:00Z", PASSED),
         ])
 
     def test_a_pass_label_beside_an_open_re_entered_stay_is_not_the_closed_ones(self):
@@ -797,7 +892,7 @@ class TestCompletedStays(unittest.TestCase):
             labeled("2026-07-04T09:00:00Z", "wo:prd-approved"),
         ])
         self.assertEqual(completed_stays(events, self.PRD), [
-            ("2026-07-01T09:00:00Z", "2026-07-02T09:00:00Z", False)])
+            ("2026-07-01T09:00:00Z", "2026-07-02T09:00:00Z", REJECTED)])
 
     def test_a_stay_ends_at_the_earliest_instant_not_the_smallest_string(self):
         # 11:30+02:00 is 09:30Z, before the 10:00Z unlabel, though the
@@ -811,7 +906,14 @@ class TestCompletedStays(unittest.TestCase):
         # pass label reads back as the instant it is.
         self.assertEqual(completed_stays(events, self.PRD),
                          [("2026-07-01T08:00:00Z",
-                           "2026-07-01T09:30:00Z", True)])
+                           "2026-07-01T09:30:00Z", PASSED)])
+
+    def test_a_forward_skip_is_bypassed_not_rejected(self):
+        events = label_events(THREE_WAY_HISTORY)
+        self.assertEqual(completed_stays(events, self.PRD), [
+            ("2026-08-01T09:00:00Z", "2026-08-02T09:00:00Z", REJECTED),
+            ("2026-08-03T09:00:00Z", "2026-08-04T09:00:00Z", BYPASSED),
+        ])
 
     def test_an_open_stay_is_absent_still_waiting(self):
         events = label_events([
@@ -824,28 +926,37 @@ class TestCompletedStays(unittest.TestCase):
 
 class TestThePartition(unittest.TestCase):
     """The invariant that joins the digest and the miner: a completed
-    stay is confirmed or it is not, so the two of them divide one list
-    between them. This class is what executes it, and the window test it
-    describes now has one spelling to execute."""
+    stay is passed, rejected or bypassed (ADR-0137, amending ADR-0056's
+    two-way split), so the digest's passages and the miner's rejections
+    are disjoint slices of one list. This class is what executes it, and
+    the window test it describes has one spelling to execute."""
 
-    def stays(self):
-        events = label_events(PARTITION_HISTORY)
+    def stays(self, history=PARTITION_HISTORY):
+        events = label_events(history)
         passed = {(gate, end) for gate, _, end, _ in gate_passages(events)}
         rejected = set(gate_rejections(events))
-        return passed, rejected
+        bypassed = set(gate_bypasses(events))
+        return passed, rejected, bypassed
 
     def test_together_they_are_exactly_the_completed_stays(self):
-        passed, rejected = self.stays()
-        self.assertEqual(passed | rejected, COMPLETED_STAYS)
+        passed, rejected, bypassed = self.stays()
+        self.assertEqual(passed | rejected | bypassed, COMPLETED_STAYS)
 
     def test_no_stay_is_both_a_passage_and_a_rejection(self):
-        passed, rejected = self.stays()
+        passed, rejected, _ = self.stays()
         self.assertEqual(passed & rejected, set())
 
-    def test_an_open_stay_is_in_neither_half(self):
-        passed, rejected = self.stays()
-        self.assertEqual([gate for gate, _ in passed | rejected].count(
-            "blueprint"), 0)
+    def test_an_open_stay_is_in_no_class(self):
+        passed, rejected, bypassed = self.stays()
+        self.assertEqual([gate for gate, _ in passed | rejected | bypassed]
+                         .count("blueprint"), 0)
+
+    def test_a_forward_skip_is_the_third_class_and_only_that(self):
+        # #2309 (ADR-0137): the partition is three-way
+        passed, rejected, bypassed = self.stays(THREE_WAY_HISTORY)
+        self.assertEqual(passed, {("merge", "2026-08-05T09:00:00Z")})
+        self.assertEqual(rejected, {("prd", "2026-08-02T09:00:00Z")})
+        self.assertEqual(bypassed, {("prd", "2026-08-04T09:00:00Z")})
 
 
 class TestWaitingSince(unittest.TestCase):
