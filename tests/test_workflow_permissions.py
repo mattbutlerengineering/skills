@@ -74,9 +74,12 @@ EXPECTED = {
         "web-quality": ({"contents": "read"}, "runs Playwright, writes nothing"),
     },
     "gate-digest.yml": {
-        "digest": ({"contents": "write", "issues": "write"},
-                   "commits the appended gate-latency ledger rows, and"
-                   " creates/edits/pins the digest issue"),
+        "digest": ({"contents": "write", "issues": "write",
+                    "actions": "write"},
+                   "commits the appended gate-latency ledger rows,"
+                   " creates/edits/pins the digest issue, and dispatches"
+                   " the validator on the new tip (ADR-0138) -- a"
+                   " GITHUB_TOKEN push starts no workflow"),
     },
     "npx-branch.yml": {
         "publish": ({"contents": "write"},
@@ -118,6 +121,9 @@ EXPECTED = {
                                " the dispatched PR to synthesize its event"),
         "merged-label": ({"contents": "read", "issues": "write"},
                          "applies wo:merged to the issue"),
+        "check-on-head": ({"checks": "write"},
+                          "posts check's verdict onto the commit check"
+                          " judged (ADR-0138); checks out no code"),
     },
 }
 

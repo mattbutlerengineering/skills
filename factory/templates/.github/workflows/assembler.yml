@@ -318,6 +318,7 @@ jobs:
       # mirrors the record step — a lost row shows red here, and detector
       # G reds the merge if the line truly never lands.
       - name: Commit the run's spend row
+        id: spend
         if: >-
           always()
           && steps.record.outcome == 'success'
@@ -350,6 +351,18 @@ jobs:
           done
           echo "::error::spend row not pushed after 3 attempts"
           exit 1
+      # The spend row is a GITHUB_TOKEN push, which starts no workflow, so
+      # the default branch's new tip would carry no `check` and the merge
+      # train would read main as unproven (ADR-0138). A validator dispatch
+      # with no `pr` checks that tip; no --ref, so it runs the default
+      # branch's own definition. continue-on-error: a missed check on main
+      # is not this order's failure, and the next push re-proves main.
+      - name: Check the default branch's new tip
+        if: always() && steps.spend.outcome == 'success'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run validator.yml
       # GitHub suppresses pull_request events for PRs the GITHUB_TOKEN
       # opens, so the agent's PR would otherwise reach gate 3 with no
       # check, no reviewer, and no queue entry (WO-0030). find-pr joins

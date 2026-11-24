@@ -34,11 +34,17 @@ on:
   # as FACTORY_EVENT_PATH — $GITHUB_ENV cannot overwrite GITHUB_EVENT_PATH —
   # which cli.read_event prefers, so the make steps read one shape on both
   # paths.
+  # A dispatch's own check runs attach to the dispatched ref's tip, never
+  # to the PR's head, so the check-on-head job posts check's verdict onto
+  # the commit check judged (ADR-0138). A dispatch with no `pr` checks the
+  # default branch's tip instead: a push made with GITHUB_TOKEN (the
+  # assembler's spend row, gate-digest's ledger rows) starts no workflow,
+  # so each of those pushes dispatches this one to give main its `check`.
   workflow_dispatch:
     inputs:
       pr:
-        description: "PR number to validate (a factory-opened PR)"
-        required: true
+        description: "PR number to validate (a factory-opened PR); omit to check the default branch's tip"
+        required: false
 
 permissions:
   contents: read
@@ -51,6 +57,11 @@ jobs:
   # Its captured output crosses to the review job as one job output of plain
   # text; the verdict crosses as this job's result, which GitHub computes.
   check:
+    # A PR dispatch's own check run lands on the default branch's tip, a
+    # commit it never judged, so it carries another name there; the run
+    # named `check` is the one check-on-head posts onto the PR's head
+    # (ADR-0138). Every other run is `check` on the commit it checks.
+    name: ${{ github.event_name == 'workflow_dispatch' && inputs.pr && format('check (dispatched for PR {0})', inputs.pr) || 'check' }}
     if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     # pull-requests: read — the dispatch shim reads the PR through gh api,
@@ -60,18 +71,27 @@ jobs:
       pull-requests: read
     outputs:
       findings: ${{ steps.handoff.outputs.findings }}
+      judged: ${{ steps.judged.outputs.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
-          # A dispatched run checks the dispatched PR's head; every other
-          # event keeps checkout's default ref ('' falls through to it).
-          ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
+          # A PR dispatch checks the dispatched PR's head; every other
+          # event, a dispatch with no `pr` included, keeps checkout's
+          # default ref ('' falls through to it).
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr && format('refs/pull/{0}/head', inputs.pr) || '' }}
           persist-credentials: false
+      # The commit this job judges, for check-on-head (ADR-0138). Recorded
+      # before any PR code runs: a later step cannot rewrite an earlier
+      # step's outputs, so the PR's code cannot redirect the verdict.
+      - name: Record the commit this check judges
+        id: judged
+        if: github.event_name == 'workflow_dispatch' && inputs.pr
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
       - name: Synthesize the PR event payload
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ inputs.pr }}
@@ -149,7 +169,7 @@ jobs:
                || github.event.action == 'reopened'
                || github.event.action == 'synchronize')
            && github.event.pull_request.head.repo.full_name == github.repository)
-          || github.event_name == 'workflow_dispatch')
+          || (github.event_name == 'workflow_dispatch' && inputs.pr))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -163,7 +183,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Synthesize the PR event payload
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ inputs.pr }}
@@ -182,6 +202,47 @@ jobs:
           CHECK_RC: ${{ needs.check.result == 'success' && '0' || '1' }}
         run: make review FINDINGS="$RUNNER_TEMP/findings.txt" STATUS="$CHECK_RC"
 
+  # The check lives on the commit it judges (ADR-0138, decision issue
+  # #2298). A dispatched run's check runs attach to the dispatched ref's
+  # tip, so a factory PR's own head never got a `check`: conductor_merge's
+  # wait_checks stalled on it, and the merge train's preflight read the
+  # PR's verdict as main's. This job posts check's verdict onto the
+  # commit check checked out, as a check run named `check` created
+  # through the Checks API (wait_checks reads check runs, not commit
+  # statuses). It runs no code at all — no checkout, no make — and takes
+  # two values across: the judged sha, recorded before any PR code ran
+  # and refused unless it is 40 hex digits, and the verdict, which GitHub
+  # computes. `--ref <agent-branch>` was never the fix: it would run the
+  # agent branch's copy of this file with the reviewer's PAT in reach.
+  check-on-head:
+    needs: check
+    if: >-
+      always()
+      && (needs.check.result == 'success' || needs.check.result == 'failure')
+      && github.event_name == 'workflow_dispatch' && inputs.pr
+    runs-on: ubuntu-latest
+    permissions:
+      checks: write
+    steps:
+      - name: Post check's verdict onto the commit it judged
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          JUDGED: ${{ needs.check.outputs.judged }}
+          VERDICT: ${{ needs.check.result }}
+          PR: ${{ inputs.pr }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          [[ "$JUDGED" =~ ^[0123456789abcdef]{40}$ ]] || { echo "::error::check recorded no readable commit"; exit 1; }
+          case "$VERDICT" in success|failure) ;; *) echo "::error::no pass or fail verdict to post"; exit 1 ;; esac
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/check-runs" \
+            -f name=check \
+            -f head_sha="$JUDGED" \
+            -f status=completed \
+            -f conclusion="$VERDICT" \
+            -f details_url="$RUN_URL" \
+            -f "output[title]=check: $VERDICT" \
+            -f "output[summary]=Validator run $RUN_URL judged PR $PR at this commit. Its own check job ran on the default branch's tip, so the verdict is posted here (ADR-0138)."
+
   # PR open flips the cited work order to wo:needs-review — the merge
   # gate's queue-entry event (ADR-0033 gate 3; ADR-0041's latency rows
   # measure its passage, and without this flip the digest's review-queue
@@ -197,7 +258,7 @@ jobs:
       (github.event_name == 'pull_request'
        && (github.event.action == 'opened' || github.event.action == 'reopened')
        && github.event.pull_request.head.repo.full_name == github.repository)
-      || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'workflow_dispatch' && inputs.pr)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -219,7 +280,7 @@ jobs:
         with:
           python-version: "3.12"
       - name: Synthesize the PR event payload
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' && inputs.pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR: ${{ inputs.pr }}

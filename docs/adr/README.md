@@ -118,7 +118,7 @@ the canonical vocabulary.
 | [0095](0095-the-plugin-version-moves-only-in-a-release-pr-or-at-a-conductor-merge.md) | The plugin version moves only in a release PR or at a Conductor merge | accepted (Owner, 2026-10-15) |
 | [0096](0096-this-repo-opts-in-to-implement-queue-auto-merge-with-a-docs-fast-path.md) | This repo opts in to implement-queue auto-merge, with a docs fast path | amended by ADR-0121 (the gate paths and fast-path rule; accepted by the Owner 2026-10-15) |
 | [0097](0097-fast-path-joins-the-root-only-importers-of-cli.md) | fast_path joins the root-only importers of cli.py | provisional |
-| [0098](0098-the-reviewer-credential-never-meets-pr-code.md) | The reviewer's credential never meets the pull request's code | provisional |
+| [0098](0098-the-reviewer-credential-never-meets-pr-code.md) | The reviewer's credential never meets the pull request's code | amended by ADR-0138 (check's second output, judged; provisional) |
 | [0099](0099-a-stamp-may-be-tools-only-and-its-manifest-says-so.md) | A stamp may be tools-only, and its manifest says so | provisional |
 | [0100](0100-every-stage-commits-its-artifact-at-its-boundary.md) | Every stage commits its artifact at its boundary | provisional |
 | [0101](0101-ship-completes-on-the-outcome-it-recorded.md) | Ship completes on the outcome it recorded, not on release.md existing | provisional |
@@ -155,3 +155,4 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0138](0138-the-check-lives-on-the-commit-it-judges.md) | The check lives on the commit it judges | accepted |

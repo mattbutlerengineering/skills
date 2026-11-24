@@ -4075,8 +4075,20 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # git mutation glue: commits the ledger rows `make gate-digest`
             # just wrote (the make target computes, the YAML mutates)
             'git config user.name "github-actions[bot]"',
+            # the push above starts no workflow (GITHUB_TOKEN), so the
+            # new tip's `check` is dispatched by name (ADR-0138) — a gh
+            # mutation, which the compute/mutate boundary keeps in YAML
+            "gh workflow run validator.yml",
         ),
         "validator.yml": (
+            # check's record of the commit it judges (ADR-0138): one git
+            # read written as a step output before any PR code runs
+            'echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"',
+            # check-on-head (ADR-0138): validates the judged sha, then
+            # posts check's verdict onto it through the Checks API — a gh
+            # mutation in a job that runs no code, nothing to move to make
+            '[[ "$JUDGED" =~ ^[0123456789abcdef]{40}$ ]] || { echo'
+            ' "::error::check recorded no readable commit"; exit 1; }',
             # shell glue capturing `make check`'s output for the review
             # job; the command underneath is still make, and pipefail keeps
             # its exit code the gate's (ADR-0098)
@@ -4103,6 +4115,10 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # keeps in YAML (the PR number it consumes comes from
             # `make find-pr`, the tested authority)
             "gh workflow run validator.yml -f pr=${{ steps.find.outputs.pr }}",
+            # the spend row's push starts no workflow (GITHUB_TOKEN), so
+            # main's new tip gets its `check` by a dispatch with no `pr`
+            # (ADR-0138) — the same gh-mutation boundary
+            "gh workflow run validator.yml",
             # git mutation glue (WO-0031): pushes the spend row `make
             # wo-record` just appended from a fresh origin/main worktree —
             # the deliver step fetched the order's branch into this repo,
