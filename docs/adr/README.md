@@ -76,7 +76,7 @@ the canonical vocabulary.
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
 | [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | accepted |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
-| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0090 (and earlier by ADR-0074) |
+| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0137 (and earlier by ADR-0090 and ADR-0074) |
 | [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | amended by ADR-0064 |
 | [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | accepted |
 | [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | superseded in part by ADR-0091 (the blocker table and the provisional note) |
@@ -155,3 +155,4 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0137](0137-a-forward-gate-skip-is-a-bypass-not-a-rejection.md) | A forward gate skip is a bypass, not a rejection | accepted |
