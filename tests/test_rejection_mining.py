@@ -8,9 +8,9 @@ composition — are exercised directly; run_mine composes them against
 the fakes.
 
 Rejection detection moved to human_gates.py (ADR-0056) with the
-passages it is the complement of, so its cases live in
-tests/test_human_gates.py, beside the property that says the two halves
-partition one list.
+passages it is disjoint from, so its cases live in
+tests/test_human_gates.py, beside the property that says passages,
+rejections and bypasses (ADR-0137) partition one list.
 """
 import json
 import subprocess
