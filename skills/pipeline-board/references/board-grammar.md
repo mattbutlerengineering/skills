@@ -37,7 +37,8 @@ maintenance glyph in a column its ladder doesn't have.
 | `done` | check path `M(cx-9) cy l3.5 4 6.5 -8`, stroke `--muted` 1.4 |
 | `current` | filled circle r 5.5, `--accent` — the board's only accent use, with the progress count |
 | `current` at implement | accent ring r 5.5 + right-half fill (`M cx (cy-5.5) a5.5 5.5 0 0 1 0 11 Z`) + mono 9 `done/total` in `--accent` centered 16 below |
-| `ahead` | dot r 1.5, fill `--ahead` |
+| `ahead` | dot r 1.5, fill `--ahead` — not reached yet; only ever after `current` |
+| `missing` | open ring r 3.5, stroke `--muted` 1.2, no fill — a gap passed over before `current` (or anywhere in a complete run), never drawn as `ahead` |
 | `skipped` | 10px horizontal line, stroke `--skip`, round caps |
 
 ## The model, verbatim

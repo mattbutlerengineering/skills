@@ -25,7 +25,11 @@ PROTOCOL_DOC = REPO_ROOT / "docs" / "pipeline-protocol.md"
 HEADING = "Commit at the stage boundary"
 RULE = "A stage ends by committing its own artifact"
 SUBJECT = "`docs(<slug>): <stage> — <one line>`"
-CHECK = "`git status --porcelain -- <artifact>` prints nothing"
+# The check is two commands: tracked, and clean even counting untracked
+# and ignored files (a gitignored artifact would otherwise print nothing).
+TRACKED = "`git ls-files --error-unmatch -- <artifact>` succeeds"
+CLEAN = ("`git status --porcelain --untracked-files=all --ignored -- "
+         "<artifact>` prints nothing")
 CARVE_OUT = "not the completion predicate"
 # The one sentence every stage skill's last step carries, verbatim.
 RECITAL = ("Commit the artifact on the run's branch — the protocol's "
@@ -74,7 +78,8 @@ class TestProtocolStatesTheRule(unittest.TestCase):
         self.assertIn(SUBJECT.lower(), self.body)
 
     def test_it_fixes_the_check(self):
-        self.assertIn(CHECK.lower(), self.body)
+        self.assertIn(TRACKED.lower(), self.body)
+        self.assertIn(CLEAN.lower(), self.body)
 
     def test_the_commit_is_not_the_completion_predicate(self):
         # Orientation still reads the working tree (ADR-0021); the
@@ -114,7 +119,8 @@ class TestAutorunGatesOnTheCommit(unittest.TestCase):
         gate = self.text[self.text.index("gate between stages"):
                          self.text.index("repeat 2–4")]
         self.assertIn(HEADING.lower(), gate)
-        self.assertIn(CHECK.lower(), gate)
+        self.assertIn(TRACKED.lower(), gate)
+        self.assertIn(CLEAN.lower(), gate)
 
     def test_an_uncommitted_artifact_is_a_failed_stage_named_by_file(self):
         gate = self.text[self.text.index("gate between stages"):

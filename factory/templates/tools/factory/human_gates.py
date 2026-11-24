@@ -12,7 +12,8 @@ start, the open queues aged from it, and (read_timelines) the one read
 that produces the stream and says what its admission refused.
 
 Its callers are thin: gate_digest.py keeps the confirmed stays as
-latency rows, rejection_mining.py harvests the rest, dashboard.py ages
+latency rows, rejection_mining.py harvests the rejected ones (a
+forward skip is neither, ADR-0137), dashboard.py ages
 the open ones, gates.py's detector J asks which labels the gates
 name, validator.py reads GATES, trace.py reads a run's timelines, and
 work_queue.py asks who applied its ready label. They differ in what a stay MEANS to them, never in what a stay
@@ -65,6 +66,17 @@ def gate_labels():
 
 
 LABELS = tuple(sorted(gate_labels()))
+
+# What a completed stay was (ADR-0137, amending ADR-0056's two-way
+# partition): the human passed it, the order was sent back (wo:failed,
+# wo:blocked, or a gate label earlier in GATES order), or it left forward
+# without the pass label — a skip, neither approval nor rejection.
+PASSED, REJECTED, BYPASSED = "passed", "rejected", "bypassed"
+REJECTION_LABELS = ("wo:failed", "wo:blocked")
+# Every gate label in pipeline order, each once: a stay that leaves for
+# one earlier than its own queue moved backward.
+GATE_ORDER = tuple(dict.fromkeys(
+    label for gate in GATES for label in (gate.queue, gate.passed)))
 
 
 def _parse_ts(iso):
@@ -375,13 +387,43 @@ def read_gate_issues(mirror, run, label):
                       list(read.problems) + problems)
 
 
+def _exit_labels(events, gate, begun, ended, next_start):
+    """The lifecycle labels an unconfirmed stay left for: every `wo:`
+    label but the queue added from its start through its end (a block
+    added beside the queue label counts), or, when none was, the first
+    one added after the end and before the gate's next re-entry (the
+    removal and the new label were two edits)."""
+    added = [(_parse_ts(ts), name) for ts, kind, name in events
+             if kind == "labeled" and name != gate.queue
+             and name.startswith(LIFECYCLE_PREFIX)]
+    inside = [name for at, name in added if begun <= at <= ended]
+    if inside:
+        return inside
+    after = [name for at, name in added
+             if at > ended and (next_start is None or at < next_start)]
+    return after[:1]
+
+
+def _unconfirmed_outcome(gate, exits):
+    """REJECTED when the stay left for wo:failed / wo:blocked or for a
+    gate label earlier than its own queue; BYPASSED otherwise (#2309)."""
+    floor = GATE_ORDER.index(gate.queue)
+    backward = any(name in GATE_ORDER and GATE_ORDER.index(name) < floor
+                   for name in exits)
+    if backward or any(name in REJECTION_LABELS for name in exits):
+        return REJECTED
+    return BYPASSED
+
+
 def completed_stays(events, gate):
-    """[(start, end, confirmed)] — every stay in one gate's queue that
-    was entered AND left, with `confirmed` true when the gate's pass
+    """[(start, end, outcome)] — every stay in one gate's queue that
+    was entered AND left. `outcome` is PASSED when the gate's pass
     label was applied inside that stay's window: from its start up to
-    the gate's next re-entry. So a flip to any other label (rejection,
-    block) leaves the stay unconfirmed even when the gate is re-entered
-    and passed later.
+    the gate's next re-entry. So a flip to any other label leaves the
+    stay unpassed even when the gate is re-entered and passed later.
+    An unpassed stay is REJECTED when it left for wo:failed, wo:blocked
+    or an earlier gate label, and BYPASSED when it skipped forward
+    (ADR-0137, #2309: draft straight to merged is not a rejection).
 
     A stay ends when its queue label is removed or, for a confirmed stay,
     at its first pass label if that came earlier (ADR-0074, amending
@@ -389,11 +431,11 @@ def completed_stays(events, gate):
     a human applies a gate label, so an added pass label must not leave
     the stay running until the next automated flip.
 
-    This is the invariant made executable. A completed stay is confirmed
-    or it is not, so the digest and the miner partition one list between
-    them — every stay a passage there or a rejection here, never both —
+    This is the invariant made executable. A completed stay has exactly
+    one outcome, so the digest's passages and the miner's rejections are
+    disjoint slices of one list — never both, and a bypass is neither —
     instead of agreeing by two hand-written window tests. An open stay
-    is absent: still waiting, neither passage nor rejection."""
+    is absent: still waiting, in no class."""
     confirmations = [ts for ts, kind, name in events
                      if kind == "labeled" and name == gate.passed]
     # Every queue-label entry, the open stay's included: a pass label
@@ -424,7 +466,12 @@ def completed_stays(events, gate):
         # (ADR-0074): a pass label ADDED beside the queue label leaves the
         # queue label on until some later flip strips it, and that gap is
         # automation's, not the human's wait.
-        completed.append((start, min([end, *inside], key=_parse_ts), bool(inside)))
+        if inside:
+            completed.append((start, min([end, *inside], key=_parse_ts),
+                              PASSED))
+            continue
+        exits = _exit_labels(events, gate, begun, _parse_ts(end), next_start)
+        completed.append((start, end, _unconfirmed_outcome(gate, exits)))
     return completed
 
 
@@ -436,19 +483,33 @@ def gate_passages(events):
     walk computes the end can move — the ledger keys on it (ADR-0132)."""
     return [(gate.name, waited_seconds(start, end), end, start)
             for gate in GATES
-            for start, end, confirmed in completed_stays(events, gate)
-            if confirmed]
+            for start, end, outcome in completed_stays(events, gate)
+            if outcome == PASSED]
+
+
+def _ended(events, wanted):
+    """[(gate, stay ended at)] for the completed stays with outcome
+    `wanted`, oldest first."""
+    return sorted(((gate.name, end)
+                   for gate in GATES
+                   for _, end, outcome in completed_stays(events, gate)
+                   if outcome == wanted),
+                  key=lambda item: item[1])
 
 
 def gate_rejections(events):
-    """[(gate, stay ended at)] — the completed stays the pass label
-    never confirmed, oldest first. The complement of gate_passages over
-    the same list."""
-    return sorted(((gate.name, end)
-                   for gate in GATES
-                   for _, end, confirmed in completed_stays(events, gate)
-                   if not confirmed),
-                  key=lambda item: item[1])
+    """[(gate, stay ended at)] — the completed stays that were sent back
+    (wo:failed, wo:blocked, or an earlier gate label), oldest first.
+    Not the complement of gate_passages: a forward skip is a bypass
+    (ADR-0137)."""
+    return _ended(events, REJECTED)
+
+
+def gate_bypasses(events):
+    """[(gate, stay ended at)] — the completed stays left forward without
+    the pass label, oldest first: neither the human's approval nor a
+    rejection (ADR-0137, #2309)."""
+    return _ended(events, BYPASSED)
 
 
 def waiting_since(events, queue_label):

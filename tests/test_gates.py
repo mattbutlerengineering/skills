@@ -3669,6 +3669,7 @@ class TestLockstep(unittest.TestCase):
                                     / ".github" / "workflows"
                                     / "cost-report.yml")
     COST_REPORT_TARGET = ["python3 tools/cost_report.py report"]
+    COST_CHECK_TARGET = ["python3 tools/cost_report.py check"]
     GATE_DIGEST_WORKFLOW = (REPO / ".github" / "workflows"
                             / "gate-digest.yml")
     PAYLOAD_GATE_DIGEST_WORKFLOW = (REPO / "factory" / "templates"
@@ -4019,6 +4020,31 @@ class TestLockstep(unittest.TestCase):
         text = self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8")
         self.assertIn("vars.FACTORY_PAUSED != 'true'", text)
 
+    def test_both_makefiles_expose_the_cost_check_target(self):
+        self.assertEqual(self.recipes(self.MAKEFILE, "cost-check"),
+                         self.COST_CHECK_TARGET)
+        self.assertEqual(
+            self.recipes(self.TEMPLATE_MAKEFILE, "cost-check"),
+            [product_form(c) for c in self.COST_CHECK_TARGET])
+
+    def test_the_dispatch_job_checks_the_cap_before_it_claims(self):
+        """ADR-0136 (#2312): the cap is checked where the money is spent.
+        The dispatch job runs `make cost-check` (the current month,
+        judged now) ahead of the claim, with no continue-on-error, so a
+        PAUSE verdict fails the job before any order leaves ready and
+        the agent and deliver jobs never run."""
+        dispatch = workflow_jobs(
+            self.ASSEMBLER_WORKFLOW.read_text(encoding="utf-8"))["dispatch"]
+        self.assertIn("run: make cost-check", dispatch)
+        self.assertLess(dispatch.index("make cost-check"),
+                        dispatch.index("make wo-in-progress"))
+        at = dispatch.index("make cost-check")
+        end = dispatch.find("- name:", at)
+        check_step = dispatch[dispatch.rindex("- name:", 0, at):
+                              end if end != -1 else None]
+        self.assertNotIn("continue-on-error", check_step)
+        self.assertNotIn("if:", check_step)
+
     def test_the_cost_report_workflow_clears_the_breaker_under_the_cap(self):
         """ADR-0034's breaker is MONTHLY: a new month opening under the
         cap must clear FACTORY_PAUSED (the resume leg) — without it the
@@ -4141,6 +4167,10 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # direction — clears FACTORY_PAUSED once a new month's spend
             # is back under the cap
             'if [ -n "${GH_TOKEN}" ]; then',
+            # git mutation glue (ADR-0136): writes the pause state the
+            # report step composed and commits it for the cloud routines
+            # (the make target computes, the YAML mutates)
+            """printf '%s\\n' "$PAUSE_STATE" > docs/factory/pause.json""",
         ),
         "npx-branch.yml": (
             # this-repo-only, never mirrored, like sweeps: the build tool
