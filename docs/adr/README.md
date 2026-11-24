@@ -32,14 +32,14 @@ the canonical vocabulary.
 | [0009](0009-audience-you-first-publishable-always.md) | Audience: you first, publishable always | accepted |
 | [0010](0010-stage-skills-plus-thin-router.md) | Stage skills + thin router | accepted |
 | [0011](0011-interview-early-draft-late.md) | Interview early, draft late | accepted |
-| [0012](0012-lightweight-ledger.md) | Lightweight ledger | accepted |
+| [0012](0012-lightweight-ledger.md) | Lightweight ledger | amended by ADR-0140 |
 | [0013](0013-plugin-name-idea-to-prod.md) | Plugin name: idea-to-prod | accepted |
 | [0014](0014-mit-license.md) | License: MIT | accepted |
 | [0015](0015-templates-per-stage.md) | Templates per stage | accepted |
 | [0016](0016-operate-scope.md) | Operate scope | accepted |
 | [0017](0017-conditional-ux-frontmatter.md) | Conditional-UX mechanics | accepted |
 | [0018](0018-git-bootstrap.md) | Git bootstrap | accepted |
-| [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | accepted |
+| [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | amended by ADR-0140 |
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
 | [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | amended by ADR-0052 |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
@@ -155,3 +155,4 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0140](0140-a-factory-driven-run-that-reached-a-human-merged-pr-graduates-maturity.md) | A factory-driven run that reached a human-merged PR graduates maturity | accepted (Owner, 2026-11-24) |
