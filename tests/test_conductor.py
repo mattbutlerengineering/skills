@@ -815,8 +815,16 @@ class TestAutorunHonoursStopAfter(unittest.TestCase):
         text = self.text()
         self.assertIn("`stop-after: <stage>` line in `autorun-brief.md`",
                       text)
-        self.assertIn("stop once that stage's artifact or recorded skip"
-                      " exists, without starting the next stage", text)
+        self.assertIn("stop once the protocol's stage states "
+                      "(`stage_states`) report that stage `done` or "
+                      "`skipped`", text)
+        self.assertIn("without starting the next stage", text)
+
+    def test_an_off_ladder_stop_after_is_refused_before_dispatch(self):
+        text = self.text()
+        step1 = text[:text.index("2. **Orient.**")]
+        self.assertIn("not on the run's own ladder", step1)
+        self.assertIn("refused here, before any dispatch", step1)
 
 
 if __name__ == "__main__":
