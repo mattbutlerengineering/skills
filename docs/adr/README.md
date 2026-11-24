@@ -155,3 +155,4 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0139](0139-eval-records-are-append-only-in-ci.md) | Eval records are append-only, enforced in CI | accepted |
