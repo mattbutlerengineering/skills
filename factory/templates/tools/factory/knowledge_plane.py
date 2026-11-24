@@ -520,13 +520,24 @@ def breakdown_rows(lines):
     return out
 
 
-def run_dirs(root):
-    """Candidate run directories per the pipeline protocol."""
+def run_dirs(root, unreadable=None):
+    """Candidate run directories per the pipeline protocol.
+
+    A parent (docs/features, docs/fixes) that cannot be listed raises,
+    unless the caller passes an UNREADABLE list: then (parent, error) is
+    appended to it and the walk goes on, so docs/ and the other parent's
+    runs are still found (#2180)."""
     dirs = [root / "docs"]
     for parent in ("features", "fixes"):
         base = root / "docs" / parent
-        if base.is_dir():
+        if not base.is_dir():
+            continue
+        try:
             dirs.extend(p for p in sorted(base.iterdir()) if p.is_dir())
+        except OSError as err:
+            if unreadable is None:
+                raise
+            unreadable.append((base, err))
     return [d for d in dirs if d.is_dir()]
 
 
@@ -535,17 +546,14 @@ def active_runs(root):
     candidate directory holding at least one run artifact whose next
     stage is not `complete`. A run whose artifacts cannot be read
     (unreadable, undecodable) is still listed, with stage None and the
-    error, so a reader reports it instead of aborting on it. board and
-    dashboard share it (two walks until the 2026-10-25 consolidation;
-    the dashboard's had no per-run guard)."""
-    try:
-        candidates = run_dirs(Path(root))
-    except OSError as err:
-        # docs/features or docs/fixes cannot be listed: the walk cannot
-        # see the runs inside, so it says so rather than raising out of
-        # every reader (the error names the directory).
-        return [(Path(root) / "docs", None, err)]
-    found = []
+    error, so a reader reports it instead of aborting on it. A parent
+    (docs/features, docs/fixes) that cannot be listed is one such entry,
+    first, under the parent's own path; the runs the walk can still see
+    follow it (#2180). board and dashboard share it (two walks until the
+    2026-10-25 consolidation; the dashboard's had no per-run guard)."""
+    unreadable = []
+    candidates = run_dirs(Path(root), unreadable)
+    found = [(parent, None, err) for parent, err in unreadable]
     for run_dir in candidates:
         try:
             # Inside the guard: before 3.14, is_file() raises on a

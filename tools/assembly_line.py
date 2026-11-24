@@ -91,8 +91,8 @@ def _history(run_dir, ladder, status, fallback_day):
         return None if day is None or day > fallback_day else day
 
     # The run enters on its FIRST artifact's date — the earliest of all,
-    # not the first visited station's own (a feature run holding
-    # defect.md visits capture first, though idea.md came before it).
+    # not the first visited station's own (a fix run holding an idea.md
+    # visits capture first, though idea.md came before defect.md).
     own = day_of(table[visited[0]])
     days = [day for day in (day_of(name) for name in RUN_ARTIFACTS) if day]
     start = min(days) if days else fallback_day
@@ -150,6 +150,16 @@ def _attention(root, run_dir, reason):
             "history": [], "work_orders": []}
 
 
+def _parent_attention(root, parent, reason):
+    """A run parent (docs/features, docs/fixes) that cannot be listed:
+    an attention entry like a run's, but it is no run, so it carries no
+    kind or slug, and its ref is its directory."""
+    rel = str(parent.relative_to(root))
+    return {"ref": rel, "kind": None, "slug": None, "dir": rel,
+            "status": "attention", "station": None, "ladder": [],
+            "reason": reason, "history": [], "work_orders": []}
+
+
 def _placed(root, run_dir, entry, status, fallback_day):
     current = next((row["stage"] for row in entry["ladder"]
                     if row["state"] == "current"), None)
@@ -176,13 +186,14 @@ def gather(root, clock=None):
     attention = {entry["dir"]: entry["reason"]
                  for entry in placed["attention"]}
     today = placed["generated"][:10]
-    runs = []
-    try:
-        dirs = run_dirs(root)
-    except OSError:
-        # docs/features or docs/fixes cannot be listed: board.gather
-        # reports that as a `docs` attention entry; render it, not crash.
-        dirs = [root / "docs"]
+    # docs/features or docs/fixes that cannot be listed is no run: one
+    # attention entry under the parent's path, with board's reason and
+    # no run kind (#2180). The runs the walk still sees are placed.
+    unreadable = []
+    dirs = run_dirs(root, unreadable)
+    runs = [_parent_attention(root, parent, attention.get(
+                str(parent.relative_to(root)), board.reason(err)))
+            for parent, err in unreadable]
     for run_dir in dirs:
         rel = str(run_dir.relative_to(root))
         try:

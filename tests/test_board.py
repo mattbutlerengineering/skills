@@ -8,6 +8,7 @@ seam discipline: functions take root and read real files under it).
 import contextlib
 import io
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -104,18 +105,22 @@ class TestGather(unittest.TestCase):
 class TestBoardEdges(unittest.TestCase):
     """Found by the 2026-11-20 board audit."""
 
-    def test_a_feature_run_holding_defect_md_is_kind_maintenance(self):
-        # It walks the maintenance ladder; a renderer keyed on kind would
-        # map its 8 rungs onto the feature columns.
+    def test_a_feature_run_holding_defect_md_stays_a_feature_run(self):
+        # Folder wins (#2180): kind and ladder both come from the folder,
+        # so idea and prd stay visible and a renderer keyed on kind maps
+        # the ladder onto the right columns.
         with tempfile.TemporaryDirectory() as tmp:
-            write(Path(tmp) / "docs" / "features" / "f" / "defect.md",
+            run_dir = Path(tmp) / "docs" / "features" / "f"
+            write(run_dir / "idea.md", frontmatter(stage="idea"))
+            write(run_dir / "defect.md",
                   frontmatter(stage="capture", **{"re-entry": "implement"})
                   + "- [ ] a\n")
             model, _ = board.gather(tmp)
             (run,) = model["runs"]
-            self.assertEqual((run["ref"], run["kind"], run["ladder"][0]),
-                             ("feature:f", "maintenance",
-                              {"stage": "capture", "state": "done"}))
+            self.assertEqual((run["ref"], run["kind"], run["ladder"][:2]),
+                             ("feature:f", "feature",
+                              [{"stage": "idea", "state": "done"},
+                               {"stage": "prd", "state": "current"}]))
 
     def gather_unreadable(self, tmp, path):
         path.chmod(0)
@@ -133,14 +138,27 @@ class TestBoardEdges(unittest.TestCase):
             self.assertEqual([a["dir"] for a in model["attention"]],
                              ["docs/features/locked"])
 
-    def test_an_unreadable_features_directory_does_not_crash(self):
+    def test_an_unreadable_features_directory_keeps_the_readable_runs(self):
+        # #2180: the parent that cannot be listed is one attention entry
+        # of its own; the product run and the fix run still render.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root reads a chmod-000 directory anyway")
         with tempfile.TemporaryDirectory() as tmp:
-            features = Path(tmp) / "docs" / "features"
+            root = Path(tmp)
+            features = root / "docs" / "features"
             write(features / "f" / "idea.md", "x")
+            write(root / "docs" / "idea.md", "x")
+            write(root / "docs" / "fixes" / "bug" / "defect.md",
+                  frontmatter(stage="capture", **{"re-entry": "implement"})
+                  + "- [ ] a\n")
             model, problems = self.gather_unreadable(tmp, features)
             self.assertEqual(problems, [])
-            (entry,) = model["attention"]
-            self.assertIn("features", entry["reason"])
+            self.assertEqual(sorted(run["ref"] for run in model["runs"]),
+                             ["maintenance:bug", "product"])
+            self.assertEqual(model["attention"], [{
+                "dir": "docs/features",
+                "reason": board.reason(
+                    f"[Errno 13] Permission denied: '{features}'")}])
 
     def test_a_long_reason_is_cut_to_one_row(self):
         text = board.reason(OSError("x" * 500))

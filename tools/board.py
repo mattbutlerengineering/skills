@@ -16,8 +16,7 @@ from pathlib import Path
 
 import cli
 from knowledge_plane import active_runs
-from protocol import (breakdown_path, checkbox_progress, is_maintenance_run,
-                      run_ref, stage_states)
+from protocol import breakdown_path, checkbox_progress, run_ref, stage_states
 
 
 # An attention row is one mono-10 line inside the 832px content width.
@@ -56,13 +55,9 @@ def run_entry(root, run_dir):
     run for assembly_line, which places completed runs too. Raises
     whatever orientation raises — gather turns that into an attention
     entry."""
+    # The folder decides both kind and ladder (#2180), so the kind from
+    # the path is the ladder stage_states walks.
     ref, kind, slug = run_identity(root, run_dir)
-    if is_maintenance_run(run_dir):
-        # A feature or product run holding the capture seed defect.md
-        # walks the maintenance ladder (stage_states), so its kind must
-        # say so, or a renderer keyed on kind maps it onto the wrong
-        # columns. The ref stays the path's.
-        kind = "maintenance"
     ladder = [{"stage": stage, "state": state}
               for stage, state in stage_states(run_dir)]
     current = next((row["stage"] for row in ladder
