@@ -100,6 +100,31 @@ class TestParseRow(unittest.TestCase):
         self.assertEqual(rows[0]["blockers"], ["WO-0001", "WO-0003"])
         self.assertEqual(rows[1]["blockers"], [])
 
+    def test_a_parenthetical_mid_clause_does_not_end_the_clause(self):
+        # #2327: the clause stopped at the first "(", so a note on one
+        # blocker dropped every blocker after it, and the planner
+        # dispatched the row before its dependency.
+        row = parse_row("- [ ] **WO-0002** t — size:S, blocked by: WO-0001"
+                        " (the export API), WO-0003 (PRD-0001 §2)"
+                        " (tracker: #7)")
+        self.assertEqual((row["blockers"], row["unreadable"]),
+                         (["WO-0001", "WO-0003"], None))
+        rows = breakdown_rows(["- [ ] **WO-0002** t — size:M",
+                               "  - Blocked by: WO-0001 (API), WO-0003"])
+        self.assertEqual(rows[0]["blockers"], ["WO-0001", "WO-0003"])
+        # Prose after a trailing citation is still no part of the clause.
+        self.assertEqual(parse_row(
+            "- [ ] **WO-0064** t — blocked by: WO-0058 (PRD-0001 §2) —"
+            " tracked at issue #518")["unreadable"], None)
+        # A parenthetical names nothing, even a work order, and an
+        # unclosed one still ends the clause, as before.
+        self.assertEqual(parse_row(
+            "- [ ] **WO-0002** t — blocked by: WO-0001 (see WO-0009)")
+            ["blockers"], ["WO-0001"])
+        self.assertEqual(parse_row(
+            "- [ ] **WO-0002** t — blocked by: WO-0001 (unclosed, WO-0009")
+            ["blockers"], ["WO-0001"])
+
     def test_unreadable_blockers_are_named_not_dropped(self):
         def row(clause):
             return parse_row(f"- [ ] **WO-0002** t — size:S, blocked by:"

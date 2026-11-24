@@ -220,6 +220,17 @@ def compose_brief(step, item, item_type, worktree, branch, block, wo,
         f"Only these: {', '.join(tools)}. never git push, and"
         " never run any gh command: this environment carries no GitHub"
         " credential, and every push fails.", "",
+        "## Bash shapes", "",
+        "One plain command per call: no heredoc, no `&&`, `||`, `;` or"
+        " `|` compound, and never `cd`, since each allowed Bash pattern"
+        f" matches one command and your working directory is already"
+        f" {worktree}. Name files by absolute path. Write file content"
+        " with Write or Edit, never through the shell. Run git in its"
+        " plain allowed form from that directory, never `git -C`, which"
+        " the patterns do not match. Put logic with more than one step in"
+        " a python3 script written with Write outside the repo's tracked"
+        " files, and run it as one `python3 <absolute script path>` call.",
+        "",
         "## Boundaries", "",
         f"Work only in {worktree}. New PRD, ADR and WO ids come only from"
         f" this item's reserved block ({reserved}); if it runs out, stop"
