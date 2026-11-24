@@ -61,6 +61,7 @@ at implement, pipeline-board at prd; one run needs attention.</desc>
   .rule    { stroke: var(--rule); stroke-width: 1; }
   .done    { stroke: var(--muted); stroke-width: 1.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
   .skipline{ stroke: var(--skip); stroke-width: 1.2; stroke-linecap: round; }
+  .gapring { stroke: var(--muted); stroke-width: 1.2; fill: none; }
 </style>
 
 <!-- ground -->
@@ -171,8 +172,10 @@ at implement, pipeline-board at prd; one run needs attention.</desc>
   <text class="legend" x="152" y="3">in progress n/m</text>
   <circle cx="256" cy="0" r="1.5" fill="var(--ahead)"/>
   <text class="legend" x="266" y="3">ahead</text>
-  <line class="skipline" x1="318" y1="0" x2="328" y2="0"/>
-  <text class="legend" x="336" y="3">skipped</text>
+  <circle class="gapring" cx="320" cy="0" r="3.5"/>
+  <text class="legend" x="330" y="3">missing</text>
+  <line class="skipline" x1="396" y1="0" x2="406" y2="0"/>
+  <text class="legend" x="414" y="3">skipped</text>
   <text class="legend" x="832" y="3" text-anchor="end">sorted furthest-along first</text>
 </g>
 </svg>

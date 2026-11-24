@@ -521,13 +521,22 @@ def _maintenance_stage_skipped(stage, artifact, run_dir):
             and not _re_entry_architect(run_dir))
 
 
+# Every state stage_states may return, in roster order. The renderers
+# (the pipeline-board grammar and boilerplate legend, the assembly
+# line's crate card) draw each one.
+STAGE_STATES = ("done", "current", "ahead", "missing", "skipped")
+
+
 def stage_states(run_dir):
     """Every stage of this run's own ladder, in order, with its state:
-    done | current | ahead | skipped. The full form of the next_stage
-    walk — the one "current" row IS next_stage (a complete run has no
-    current row), "skipped" marks completion excused by rule rather
-    than by artifact, and a stage after current whose artifact exists
-    anyway reads "done" so a gapped run shows its gap."""
+    done | current | ahead | missing | skipped. The full form of the
+    next_stage walk — the one "current" row IS next_stage (a complete
+    run has no current row), "skipped" marks completion excused by rule
+    rather than by artifact, and a stage after current whose artifact
+    exists anyway reads "done" so a gapped run shows its gap. An
+    incomplete stage before current — or anywhere in a complete run —
+    was passed over, not yet reached: it reads "missing", never "ahead"
+    (#2281; only a retro.md can place a run past a gap, ADR-0102)."""
     run_dir = Path(run_dir)
     if is_maintenance_run(run_dir):
         rows = MAINTENANCE_STAGE_ARTIFACTS
@@ -538,6 +547,9 @@ def stage_states(run_dir):
         complete = _stage_complete
         skipped = _stage_skipped
     current = next_stage(run_dir)  # "complete" matches no row
+    # Past current, an incomplete stage is ahead; before it (and
+    # throughout a complete run, which matches no row) it is missing.
+    past_current = False
     states = []
     for stage, artifact in rows:
         if complete(stage, artifact, run_dir):
@@ -545,8 +557,9 @@ def stage_states(run_dir):
                      else "done")
         elif stage == current:
             state = "current"
+            past_current = True
         else:
-            state = "ahead"
+            state = "ahead" if past_current else "missing"
         states.append((stage, state))
     return states
 
