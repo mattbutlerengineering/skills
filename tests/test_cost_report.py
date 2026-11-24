@@ -660,7 +660,19 @@ class TestEveryConsumerOfTheReportStatesItsGate(unittest.TestCase):
             [name for name, _ in self.consuming_steps()],
             ["Post the weekly cost report issue",
              "Pause dispatch on a cap breach",
-             "Resume dispatch when under the cap"])
+             "Resume dispatch when under the cap",
+             "Publish the pause state for the routines"])
+
+    def test_the_pause_state_is_published_on_a_failing_report_step(self):
+        # ADR-0136: the fail-closed verdicts carry pause=true, and the
+        # routines read only the published file — so it is written on
+        # exactly the runs the pause step survives, never only on success.
+        block = step_block(self.workflow(),
+                           "Publish the pause state for the routines")
+        self.assertIn("always()", block)
+        self.assertIn("steps.report.outputs.state != ''", block)
+        self.assertIn("docs/factory/pause.json", block)
+        self.assertIn("git push", block)
 
 
 class TestWorkflowOutputLockstep(unittest.TestCase):
@@ -691,7 +703,8 @@ class TestWorkflowOutputLockstep(unittest.TestCase):
         self.assertLessEqual(self.yaml_refs(), self.emitted_keys())
 
     def test_the_workflow_consumes_the_circuit_breaker_keys(self):
-        self.assertLessEqual({"pause", "title", "body"}, self.yaml_refs())
+        self.assertLessEqual({"pause", "title", "body", "state"},
+                             self.yaml_refs())
 
 
 class TestAcceptanceScenario(unittest.TestCase):
@@ -731,6 +744,139 @@ class TestAcceptanceScenario(unittest.TestCase):
             self.assertEqual(problems, [])
             self.assertEqual(outputs["pause"], "true")
             self.assertIn("FACTORY_PAUSED", outputs["reason"])
+
+
+class TestDispatchTimeCapCheck(unittest.TestCase):
+    """ADR-0136 (#2312): `check` is the cap check the assembler's dispatch
+    job runs before it claims an order — the current UTC month judged at
+    dispatch time, not on the weekly report's schedule."""
+
+    def run_check(self, tree, today):
+        return cli_contract.capture(
+            cost_report.main, ["check"], env={},
+            clock=fixed_clock(today), root=tree.root)
+
+    def test_under_the_cap_lets_dispatch_through(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
+                               "2026-11-02")])
+            code, out = self.run_check(tree, "2026-11-25")
+        self.assertEqual(code, 0)
+        self.assertIn("cr: spend $50.00 is within the $300.00 monthly cap",
+                      out)
+        self.assertIn("cost_report: 0 problem(s)", out)
+
+    def test_spend_after_the_weekly_report_refuses_dispatch(self):
+        # The #2312 repro: Monday's report saw $90 and CONTINUEd; rows
+        # dated later in the week cross the cap. The weekly breaker would
+        # not look again until the next Monday (a new month by then); the
+        # dispatch-time check refuses on the very next ready label.
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([
+                entry("WO-0001", "r-1", "m", 1000, 90.0, "merged",
+                      "2026-11-23"),
+                entry("WO-0002", "r-2", "m", 1000, 250.0, "merged",
+                      "2026-11-27"),
+            ])
+            code, out = self.run_check(tree, "2026-11-29")
+        self.assertEqual(code, 1)
+        self.assertIn(
+            "cr: spend $340.00 has reached or exceeded the $300.00 monthly"
+            " cap — pausing dispatch (FACTORY_PAUSED)", out)
+        self.assertIn("cost_report: 1 problem(s)", out)
+
+    def test_a_past_month_over_the_cap_does_not_refuse(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger([entry("WO-0001", "r-1", "m", 1000, 500.0,
+                               "merged", "2026-10-30")])
+            code, _ = self.run_check(tree, "2026-11-02")
+        self.assertEqual(code, 0)
+
+    def test_an_unreadable_ledger_refuses_dispatch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.write("docs/factory/costs.jsonl", "not json\n")
+            code, out = self.run_check(tree, "2026-11-25")
+        self.assertEqual(code, 1)
+        self.assertIn("cr: unreadable ledger — failing closed", out)
+
+
+class TestPublishedPauseState(unittest.TestCase):
+    """ADR-0136 (#2261): the weekly report publishes its verdict as
+    docs/factory/pause.json, a committed file the cloud routines can read
+    where `gh variable list` answers 403, and `pause-state` is the one
+    reader they run."""
+
+    def state(self, ledger_rows, today):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp).factory()
+            tree.ledger(ledger_rows)
+            outputs, _ = cost_report.run_report(
+                tree.root, clock=fixed_clock(today))
+        return outputs["state"]
+
+    def read_state(self, text):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = FixtureTree(tmp)
+            if text is not None:
+                tree.write(cost_report.PAUSE_STATE_PATH, text)
+            return cli_contract.capture(
+                cost_report.main, ["pause-state"], env={}, root=tree.root)
+
+    def test_the_report_emits_its_verdict_as_the_pause_state(self):
+        state = json.loads(self.state(
+            [entry("WO-0001", "r-1", "m", 1000, 50.0, "merged",
+                   "2026-07-06")], "2026-07-13"))
+        self.assertEqual(state, {
+            "paused": False, "as_of": "2026-07-13",
+            "reason": "cr: spend $50.00 is within the $300.00 monthly cap"})
+
+    def test_a_breach_publishes_paused(self):
+        state = json.loads(self.state(
+            [entry("WO-0001", "r-1", "m", 1000, 305.0, "merged",
+                   "2026-07-06")], "2026-07-13"))
+        self.assertIs(state["paused"], True)
+
+    def test_the_state_has_no_trailing_newline_for_the_heredoc(self):
+        state = self.state([], "2026-07-13")
+        self.assertFalse(state.endswith("\n"))
+
+    def test_a_published_continue_reads_back_as_not_paused(self):
+        code, out = self.read_state(self.state([], "2026-07-13") + "\n")
+        self.assertEqual(code, 0)
+        self.assertIn("cr: not paused (pause state as of 2026-07-13):"
+                      " cr: spend $0.00 is within the $300.00 monthly cap",
+                      out)
+        self.assertIn("cost_report: 0 problem(s)", out)
+
+    def test_a_published_pause_reads_back_as_paused(self):
+        text = self.state([entry("WO-0001", "r-1", "m", 1000, 305.0,
+                                 "merged", "2026-07-06")], "2026-07-13")
+        code, out = self.read_state(text + "\n")
+        self.assertEqual(code, 1)
+        self.assertIn("cr: paused (pause state as of 2026-07-13): cr: spend"
+                      " $305.00 has reached or exceeded", out)
+
+    def test_no_published_state_fails_closed(self):
+        code, out = self.read_state(None)
+        self.assertEqual(code, 1)
+        self.assertIn("cr: no pause state at docs/factory/pause.json —"
+                      " failing closed", out)
+
+    def test_unparseable_state_fails_closed(self):
+        code, out = self.read_state("{not json\n")
+        self.assertEqual(code, 1)
+        self.assertIn("cr: docs/factory/pause.json is not valid JSON", out)
+        self.assertIn("failing closed", out)
+
+    def test_a_state_without_a_boolean_paused_fails_closed(self):
+        code, out = self.read_state('{"paused": "false"}\n')
+        self.assertEqual(code, 1)
+        self.assertIn("cr: docs/factory/pause.json has no boolean"
+                      " `paused` — failing closed", out)
 
 
 if __name__ == "__main__":

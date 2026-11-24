@@ -54,7 +54,7 @@ the canonical vocabulary.
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
 | [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035 and ADR-0134) |
 | [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0087 (and earlier by ADR-0036) |
-| [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0084 (and earlier by ADR-0041) |
+| [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0136 (the monthly breaker), ADR-0084 (and earlier by ADR-0041) |
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | superseded in part by ADR-0083 (the beads carve-out) |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | amended by ADR-0085 |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
@@ -155,5 +155,6 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0136](0136-the-cap-is-checked-at-dispatch-and-the-pause-state-is-committed.md) | The cap is checked at dispatch, and the pause state is committed | accepted |
 | [0137](0137-a-forward-gate-skip-is-a-bypass-not-a-rejection.md) | A forward gate skip is a bypass, not a rejection | accepted |
 | [0140](0140-a-factory-driven-run-that-reached-a-human-merged-pr-graduates-maturity.md) | A factory-driven run that reached a human-merged PR graduates maturity | accepted (Owner, 2026-11-24) |

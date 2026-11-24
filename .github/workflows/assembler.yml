@@ -52,8 +52,10 @@ jobs:
     # The whole gate, physical not conventional (ADR-0032): the applied label
     # is wo:ready-for-agent AND the labeler is the repo owner AND the monthly
     # circuit breaker has not tripped (cost-report.yml sets FACTORY_PAUSED on
-    # a cap breach — ADR-0034; this term is its one reader). A label from
-    # anyone or anything else is inert — the job simply never runs.
+    # a cap breach — ADR-0034; this term is its one reader, and it stays the
+    # kill switch). A label from anyone or anything else is inert — the job
+    # simply never runs. The cap itself is also checked inside the job, at
+    # dispatch time (ADR-0136): the variable is set only weekly.
     # "The repo owner" is vars.FACTORY_OWNER_LOGIN when set, else
     # github.repository_owner: an organization-owned repo's owner is the
     # org, which never applies a label, so an org repo must name the
@@ -95,6 +97,13 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      # The monthly cap, checked where the money is spent (ADR-0136,
+      # #2312): the current UTC month's ledger spend against factory.json's
+      # cap, judged now rather than on the weekly report's schedule. A
+      # PAUSE verdict (or an unreadable ledger or cap) fails this step, so
+      # nothing below runs: no order leaves ready, no agent is paid for.
+      - name: Refuse dispatch once the month is over its cap
+        run: make cost-check
       # Resolve the dispatch from the REPO-CONTROLLED breakdown row (never the
       # issue body). Re-runs the owner check as the tested authority and emits
       # dispatch/charter/band/model/prompt to $GITHUB_OUTPUT. A non-owner or
