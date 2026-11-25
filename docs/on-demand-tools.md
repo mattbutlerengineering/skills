@@ -57,6 +57,18 @@ pre-pass, deliberately **not** a gate:
   place of a trend, and a refusal exits 0 (it is data); only a malformed
   record exits 1. It measures recorded history only and moves no LEDGER
   maturity. `python3 tools/factory.py eval-trends` is the same tool.
+- `python3 tools/goal_metrics.py [--days 28] [--append
+  docs/factory/goal-metrics.jsonl]` — ADR-0135's four goal metrics over
+  merged PRs: lead time, escape rate, unattended share and overhead ratio.
+  It reads `gh` (one PR listing plus one REST commit read per product PR,
+  about a minute), writes only with `--append`, and exits 1 with nothing
+  written on a failed or truncated read. The escape rate falls back to
+  "a later `fix` PR touched the same shipped file" whenever a fix names no
+  PR with `Fixes-PR: #N`, so it over-counts until that trailer is in use.
+  An Owner touch is an Owner-login commit, review or comment; an agent
+  that comments as the Owner's account counts as a touch. It is a
+  measurement, never a gate. `python3 tools/factory.py goal-metrics` is
+  the same tool.
 - `python3 tools/size_band_calibration.py` — each S/M/L band's past cost
   error against its budget, from the cost ledger joined at read time to
   the breakdown row's `size:`, beside its cost and re-plan rate. Free,
