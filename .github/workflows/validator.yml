@@ -67,6 +67,9 @@ jobs:
           # event keeps checkout's default ref ('' falls through to it).
           ref: ${{ github.event_name == 'workflow_dispatch' && format('refs/pull/{0}/head', inputs.pr) || '' }}
           persist-credentials: false
+          # Detector P diffs eval records against the PR's base sha
+          # (ADR-0139); a depth-1 clone does not hold that commit.
+          fetch-depth: 0
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"

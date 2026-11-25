@@ -1960,6 +1960,7 @@ class TestRoster(unittest.TestCase):
             "N": fixtures.needs_clarification_defect_fixture,
             "O": lambda root: fixtures.prd_coverage_fixture(
                 root, waive_actors=False),
+            "P": fixtures.eval_rewrite_defect_fixture,
         }
 
     def test_each_row_reports_its_planted_defect_under_its_own_letter(self):
@@ -2458,6 +2459,91 @@ class TestPrTraceability(unittest.TestCase):
                 gates.check_pr_traceability(
                     Path(tmp), env={"GITHUB_EVENT_PATH": str(path)}),
                 [f"B: GITHUB_EVENT_PATH {path} is not a JSON object"])
+
+
+class TestEvalAppendOnly(unittest.TestCase):
+    """P (ADR-0139): a PR that rewrites, deletes or renames an existing
+    eval record fails; one that only adds records passes. Each case runs
+    against a real temp git repo whose first commit is the PR's base."""
+
+    def test_rewrite_delete_and_rename_each_fire(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = fixtures.eval_rewrite_defect_fixture(root)
+            self.assertEqual(gates.check_eval_append_only(root, env), [
+                "P: evals/results/trigger-2026-01-01.json is rewritten;"
+                " an eval record is append-only",
+                "P: evals/results/trigger-2026-01-02.json is deleted;"
+                " an eval record is append-only",
+                "P: evals/results/trigger-2026-01-03.json is renamed to"
+                " evals/results/trigger-2026-01-04.json;"
+                " an eval record is append-only",
+                "P: plugin-evals/records/2026-01-01.json is rewritten;"
+                " an eval record is append-only",
+            ])
+
+    def test_a_pr_that_only_adds_records_passes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = fixtures.eval_records_fixture(root)
+            fixtures.eval_records_commit(root, {
+                "evals/results/trigger-2026-01-05.json": "{}\n",
+                "plugin-evals/records/2026-01-05.json": "{}\n"})
+            self.assertEqual(gates.check_eval_append_only(root, env), [])
+
+    def test_a_file_outside_the_record_dirs_may_change(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            env = fixtures.eval_records_fixture(root)
+            fixtures.eval_records_commit(
+                root, {"evals/trigger-evals/next.json": "[1]\n"})
+            self.assertEqual(gates.check_eval_append_only(root, env), [])
+
+    def test_no_event_path_skips_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(
+                gates.check_eval_append_only(Path(tmp), env={}), [])
+
+    def test_non_pr_event_skips_silently(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            env = fixtures.pr_event_fixture(
+                Path(tmp), {"ref": "refs/heads/main"})
+            self.assertEqual(
+                gates.check_eval_append_only(Path(tmp), env=env), [])
+
+    def test_a_pr_event_without_a_base_sha_is_a_problem(self):
+        for pr in ({}, {"base": None}, {"base": {"sha": ""}},
+                   {"base": {"sha": 7}}):
+            with self.subTest(pr=pr), tempfile.TemporaryDirectory() as tmp:
+                env = fixtures.pr_event_fixture(
+                    Path(tmp), {"pull_request": pr})
+                self.assertEqual(
+                    gates.check_eval_append_only(Path(tmp), env=env),
+                    ["P: PR event carries no base sha"])
+
+    def test_a_base_missing_from_the_clone_is_a_problem(self):
+        """A shallow checkout lacks the base commit: a red check, never a
+        silent pass."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            fixtures.eval_records_fixture(root)
+            base = "0" * 40
+            env = fixtures.pr_event_fixture(
+                root, {"pull_request": {"base": {"sha": base}}})
+            problems = gates.check_eval_append_only(root, env=env)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                f"P: cannot diff eval records against base {base}: "),
+                problems)
+
+    def test_an_unreadable_event_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "event.json"
+            path.write_text("[1, 2]", encoding="utf-8")
+            self.assertEqual(
+                gates.check_eval_append_only(
+                    Path(tmp), env={"GITHUB_EVENT_PATH": str(path)}),
+                [f"P: GITHUB_EVENT_PATH {path} is not a JSON object"])
 
 
 class TestPrBodyProblems(unittest.TestCase):
@@ -4245,6 +4331,24 @@ class TestSelftest(unittest.TestCase):
         with mock.patch.object(gates, "check_config_shape", blind), \
                 mock.patch("sys.stdout", new_callable=io.StringIO):
             self.assertEqual(fixtures.selftest(), 1)
+
+    def test_selftest_fails_when_p_misses_a_deleted_record(self):
+        """The P fixture deletes a record; a P that stopped reporting a
+        deletion must turn the selftest red, and so must a P that fired
+        on a PR adding records only."""
+        real = gates.check_eval_append_only
+
+        def blind(root, env=None):
+            return [p for p in real(root, env) if "deleted" not in p]
+        code, labels = self._selftest_failures(
+            "check_eval_append_only", blind)
+        self.assertEqual((code, labels), (1, {"P"}))
+
+        def noisy(root, env=None):
+            return real(root, env) or ["P: noise"]
+        code, labels = self._selftest_failures(
+            "check_eval_append_only", noisy)
+        self.assertEqual((code, labels), (1, {"P append"}))
 
     def _selftest_failures(self, name, replacement):
         """Run the selftest with gates.NAME replaced; return its exit code

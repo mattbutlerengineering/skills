@@ -157,4 +157,5 @@ the canonical vocabulary.
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
 | [0136](0136-the-cap-is-checked-at-dispatch-and-the-pause-state-is-committed.md) | The cap is checked at dispatch, and the pause state is committed | accepted |
 | [0137](0137-a-forward-gate-skip-is-a-bypass-not-a-rejection.md) | A forward gate skip is a bypass, not a rejection | accepted |
+| [0139](0139-eval-records-are-append-only-in-ci.md) | Eval records are append-only, enforced in CI | accepted |
 | [0140](0140-a-factory-driven-run-that-reached-a-human-merged-pr-graduates-maturity.md) | A factory-driven run that reached a human-merged PR graduates maturity | accepted (Owner, 2026-11-24) |
