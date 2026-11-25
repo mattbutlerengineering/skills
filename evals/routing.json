@@ -254,14 +254,14 @@
       "kind": "near-miss",
       "expected": null,
       "query": "Keep an eye on my PR and let me know when CI goes green",
-      "notes": "watch-only phrasing must not fire address-pr-review (it acts, never just watches)"
+      "notes": "watch-only phrasing fires no skill: nothing shipped just watches a PR's CI — implement-queue and conduct act on PRs, ship releases. (Written against address-pr-review, removed in #1754.)"
     },
     {
       "id": "review-vs-apr-1",
       "kind": "near-miss",
       "expected": "review",
       "query": "Look over this run's diff for defects before I put up the PR",
-      "notes": "adjacency: review vs address-pr-review — a quality pass on our own changes, no PR feedback in play"
+      "notes": "adjacency: review vs ship — a quality pass on the run's own diff before the PR exists; mentioning the PR does not make it a release. (Written against address-pr-review, removed in #1754.)"
     },
     {
       "id": "autorun-1",
@@ -312,14 +312,14 @@
       "kind": "near-miss",
       "expected": "ux-design",
       "query": "Diagram the onboarding flow — which screens users see and where each takes them",
-      "notes": "adjacency: mermaid vs ux-design — user-facing flows and screens are the ux-design stage, not a documentation diagram"
+      "notes": "adjacency: ux-design vs animated-diagram — user-facing flows and screens are the ux-design stage even when the verb is 'diagram'; nothing asks for motion. (Written against mermaid, removed in #1754.)"
     },
     {
       "id": "mermaid-vs-docs-1",
       "kind": "near-miss",
       "expected": null,
       "query": "Write up the deployment process in the operations guide",
-      "notes": "prose documentation must not fire mermaid — nobody asked for a diagram"
+      "notes": "prose documentation fires no skill — nobody asked for a diagram (animated-diagram) or a knowledge-base page. (Written against mermaid, removed in #1754.)"
     },
     {
       "id": "ad-1",
@@ -344,7 +344,7 @@
       "kind": "near-miss",
       "expected": "animated-diagram",
       "query": "Make an architecture SVG for the README where you can watch requests flowing through the services",
-      "notes": "adjacency: architecture-diagram vs animated-diagram — visible flow is motion, and motion is animated-diagram even when the ask says SVG for a README"
+      "notes": "adjacency: animated-diagram vs architect — the word 'architecture' names the picture's subject, not a design stage; visible flow is motion, and motion is animated-diagram even when the ask says SVG for a README. (Written against architecture-diagram, removed in #1754.)"
     },
     {
       "id": "capture-1",
@@ -689,7 +689,7 @@
       "kind": "near-miss",
       "expected": "next",
       "query": "What's next for the dark-mode run? A couple of PRs are still open from the last stage",
-      "notes": "adjacency: next vs address-pr-review — open PRs mentioned while asking what's next is the router's pre-flight, not acting on reviewer feedback"
+      "notes": "adjacency: next vs implement-queue — open PRs mentioned while asking what's next for one run is the router's pre-flight, not a queue to drain. (Written against address-pr-review, removed in #1754.)"
     },
     {
       "id": "next-vs-idea-open-prs-1",

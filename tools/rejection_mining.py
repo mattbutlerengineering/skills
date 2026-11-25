@@ -7,12 +7,13 @@ place before any rule is written. Two streams exist on the dispatch
 plane, and this tool reads both through the injected gh runner (same
 seam as gate_digest.py, so tests never touch the network):
 
-- gate rejections — a `wo:` queue stay that ended WITHOUT the gate's
-  pass label. These are exactly the stays human_gates.gate_passages
-  deliberately skips: a flip to wo:failed / wo:blocked records no
-  latency row there, so this tool is where those flips finally land.
-  One walk answers both (human_gates.completed_stays, ADR-0056): the
-  digest keeps the confirmed stays, this keeps the rest.
+- gate rejections — a `wo:` queue stay that was sent back: it ended in
+  wo:failed / wo:blocked or moved backward in GATES order. Such a flip
+  records no latency row in the digest, so this tool is where it
+  finally lands. One walk answers both (human_gates.completed_stays,
+  ADR-0056): the digest keeps the passed stays, this keeps the rejected
+  ones, and a forward skip past a gate (wo:draft straight to wo:merged)
+  is a bypass that neither keeps (ADR-0137, #2309).
 - PR change-requests — CHANGES_REQUESTED reviews on the work orders'
   PRs, joined to their WO through the `Closes #N` grammar
   (knowledge_plane.CLOSES_TOKEN).

@@ -42,8 +42,13 @@ still gets a real verdict; silence would read as a pass.
    exactly like a current one until something names the number.
 
 3. **Any run artifacts parse.** Walk the candidate run directories (`docs/`
-   plus every `docs/features/*/` and `docs/fixes/*/`). For each artifact
-   present, check what the protocol requires: a frontmatter block that
+   plus every `docs/features/*/` and `docs/fixes/*/`). Skip every run the
+   protocol calls complete (a populated `retro.md`, or a `summary.md`
+   left by compaction) unless the user asks for every run: orientation
+   settles a complete run on that one file, and on a busy repo complete
+   runs are most of the tree (#2058). Say how many complete runs you skipped.
+   For each artifact present in the runs left, check what the protocol
+   requires: a frontmatter block that
    parses, a `stage:` matching the artifact, a `run:` in a legal form
    (`product`, `feature:<slug>`, `maintenance:<slug>`), a `date:`, plus the
    conditionals — `ux:` on a `prd.md`, `re-entry:` on a `defect.md`, and a
@@ -147,7 +152,9 @@ installed plugin. Equal versions are not a problem. A difference is one
 6. **The Makefile carries its full target set.** `check`, `review`,
    `pr-event`, the four lifecycle targets (`wo-merged`, `wo-in-progress`,
    `wo-needs-review`, `wo-failed`), `wo-record`, `assembler`, `find-pr`,
-   `cost-report`, `gate-digest`, `toolsmith-mine`, `web-quality`. A missing
+   `cost-report`, `cost-check`, `gate-digest`, `toolsmith-mine`,
+   `web-quality`. Without `cost-check` the assembler's dispatch job fails
+   on every ready label (ADR-0136). A missing
    lifecycle target is a hole in the work-order state machine that nothing
    else reports: without `wo-failed`, for instance, a dispatched run that
    dies leaves its order on `wo:in-progress` forever; without `wo-record`,

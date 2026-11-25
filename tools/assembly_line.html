@@ -2856,6 +2856,11 @@ function factory(THREE, model) {
   function skippedOf(run) {
     return run.ladder.filter((row) => row.state === "skipped").map((row) => nameOf(row.stage));
   }
+  // Stages passed over before the current one (or anywhere in a
+  // finished run): a gap, not work still to come (#2281).
+  function missingOf(run) {
+    return run.ladder.filter((row) => row.state === "missing").map((row) => nameOf(row.stage));
+  }
   function aheadOf(run) {
     const i = run.ladder.findIndex((row) => row.state === "current");
     if (i < 0) return [];
@@ -2864,7 +2869,7 @@ function factory(THREE, model) {
   function stationCard(key) {
     const here = runsAt(key);
     const [name, line] = infoOf(key);
-    const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
+    const oldest = here.slice(0, 5).map((run) => run.slug || run.ref).join(", ");
     // The pile's age: how long its oldest crate has waited (runsAt sorts
     // oldest first). Not for the city or the bin — nothing waits there.
     const longest = here.length && key !== "completed" && key !== "bin" ? waitedDays(here[0]) : 0;
@@ -2910,8 +2915,9 @@ function factory(THREE, model) {
       if (where && where.station === "implement" && run.work_orders.length)
         line += ` · ${doneCount(run)}/${run.work_orders.length} WOs${isToday() ? "" : " (today)"}`;
       rows.push(el("p", {}, dot, line), el("p", {class: "muted"}, run.dir));
-      const skipped = skippedOf(run), ahead = aheadOf(run);
+      const skipped = skippedOf(run), missing = missingOf(run), ahead = aheadOf(run);
       if (skipped.length) rows.push(el("p", {}, `skipped: ${skipped.join(", ")}`));
+      if (missing.length) rows.push(el("p", {}, `missing: ${missing.join(", ")}`));
       if (ahead.length) rows.push(el("p", {}, `already has: ${ahead.join(", ")}`));
     }
     card.replaceChildren(...rows);

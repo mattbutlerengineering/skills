@@ -79,7 +79,56 @@ Scoped to feedback capture and retrospective — not monitoring infrastructure.
    into the run directory as `retro.md` with protocol frontmatter, the
    population line included. This completes the run. Commit the artifact on the run's branch — the
    protocol's "Commit at the stage boundary" section owns the rule and the
-   commit subject.
+   commit subject. Then, for a feature or fix run, offer Compaction
+   (below).
+
+## Compaction (offered after the retro)
+
+With `retro.md` committed, offer to collapse a feature or fix run
+directory into one `summary.md`. Offer it once and act only on the
+user's yes; silence or "not now" leaves the run as it is. Never compact
+the product run at `docs/`, since that directory holds the project's own
+docs too. Finished runs are records nobody edits, and on a busy repo
+they soon hold most of the markdown under `docs/` (#2058).
+
+- **Write `summary.md`** in the run directory, with protocol
+  frontmatter (`stage: operate`, `run:`, `date:`, plus `id:` when
+  `prd.md` declares one). Its body holds what was built, the pull
+  request(s), the key decisions and every logged assumption, pointers
+  to the verification evidence (the commands, CI runs and results
+  `verification.md` names), and the retro's population line, lessons
+  and seeds. Name the commit the compaction starts from, so
+  `git show <sha>:<path>` restores any deleted artifact.
+- **Keep the files that resolve typed ids.** Keep `prd.md` when its
+  frontmatter declares an `id:`, because gate detector C resolves a
+  `PRD-####` citation only against `prd.md` frontmatter. Keep
+  `breakdown.md` when a row carries a work-order id, because detector
+  C resolves a `WO-####` citation only against breakdown rows, and the
+  reconcile sweep judges each `wo:*` issue against its row. `retro.md`
+  declares no typed id, so it goes with the rest.
+- **Repoint links before deleting.** Search the repo outside the run
+  for links and path citations into the run directory (detector I
+  fails a knowledge-plane link to a missing path). Point each one at
+  `summary.md`, or keep the file it names.
+- **Delete everything else** with `git rm` (git history keeps it).
+  Commit on the run's branch with the subject
+  `docs(<slug>): compact — <one line>`.
+
+A run directory holding `summary.md` and no `retro.md` is complete
+(the protocol's "Artifacts are the state"). Orientation never reads it
+as a fresh run: `next`, `board.py` and the dashboard leave it out, and
+`assembly_line.py` places it under Completed only while it keeps
+`prd.md` or `breakdown.md`, since a directory holding no stage
+artifact is no run to it. These tools still read a compacted run:
+
+- gate detectors C, D and I scan `summary.md` like any doc, so every
+  typed id it cites must resolve
+- detectors A, C, G, N and O, `trace.py`, `size_band_calibration.py`
+  and the dashboard's factory-output table read a kept `prd.md` or
+  `breakdown.md`
+- `decompose_signals.py` (and `decompose_lessons.py` through it)
+  measures every working-tree `breakdown.md`, complete runs included,
+  so a run whose breakdown was deleted drops out of its sample
 
 ## Rules
 

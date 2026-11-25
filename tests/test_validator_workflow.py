@@ -211,10 +211,12 @@ class TestReviewJobTakesTheHandOffAsData(unittest.TestCase):
                 self.assertNotIn("${{", line)
 
     def test_the_handed_over_text_sits_in_one_env_beside_no_secret(self):
+        # The findings output only: ADR-0138's `judged` output is a sha
+        # recorded before any PR code runs, pinned by its own suite below.
         holders = [(name, step.splitlines()[0].strip())
                    for name, text in self.jobs().items()
                    for step in job_steps(text)
-                   if "needs.check.outputs" in code(step)]
+                   if "needs.check.outputs.findings" in code(step)]
         self.assertEqual(holders, [("review", f"- name: {self.WRITE}")])
         step = step_named(self.review(), self.WRITE)
         env = step_block(step, "env")
@@ -480,3 +482,232 @@ class TestMergedLabelBase(unittest.TestCase):
             encoding="utf-8"))["merged-label"])
         self.assertIn("github.event.pull_request.base.ref =="
                       " github.event.repository.default_branch", condition)
+
+
+WORKFLOWS = REPO_ROOT / ".github" / "workflows"
+DISPATCHED_PR = "github.event_name == 'workflow_dispatch' && inputs.pr"
+POSTER = "check-on-head"
+POST_STEP = "Post check's verdict onto the commit it judged"
+TIP_STEP = "Check the default branch's new tip"
+
+
+def step_if(step_text):
+    """A step's `if:` expression, a folded block joined to one line, or
+    None when the step declares none."""
+    lines = step_text.splitlines()
+    at = [i for i, line in enumerate(lines) if line.startswith("        if:")]
+    if not at:
+        return None
+    first = lines[at[0]][len("        if:"):].strip()
+    parts = [] if first in (">-", ">", "|") else [first]
+    for line in lines[at[0] + 1:]:
+        if not line.startswith("          "):
+            break
+        parts.append(line.strip())
+    return " ".join(parts)
+
+
+def job_scalar(job_text, key):
+    """A job-level `key: value` scalar (four-space indent), or None."""
+    found = re.search(rf"(?m)^    {key}: (.+)$", job_text)
+    return found.group(1).strip() if found else None
+
+
+class TestCheckLandsOnTheCommitItJudges(unittest.TestCase):
+    """ADR-0138 (decision issue #2298, option A). A dispatched run's own
+    check run attaches to the default branch's tip, whatever it checked
+    out, so `check` on a factory PR used to land on main and never on the
+    PR's head. Two halves: a base-code job posts check's verdict onto the
+    commit check judged, through the Checks API, and a dispatch with no
+    `pr` checks the default branch's tip, so a GITHUB_TOKEN push to main
+    (the spend row, the gate-latency rows) gets its `check` too."""
+
+    def jobs(self):
+        return jobs()
+
+    def test_the_pr_input_is_optional(self):
+        text = WORKFLOW.read_text(encoding="utf-8")
+        block = text.split("  workflow_dispatch:\n", 1)[1].split(
+            "\npermissions:", 1)[0]
+        self.assertRegex(block, r"(?m)^      pr:$")
+        self.assertRegex(block, r"(?m)^        required: false$")
+        self.assertNotRegex(block, r"required: true")
+
+    def test_check_checks_out_the_pr_only_when_one_was_dispatched(self):
+        """No `pr` on a dispatch falls through to checkout's default, the
+        dispatched ref's tip — the commit the run's own check lands on."""
+        self.assertEqual(
+            [with_.get("ref") for with_ in checkouts(self.jobs()["check"])],
+            ["${{ " + DISPATCHED_PR
+             + " && format('refs/pull/{0}/head', inputs.pr) || '' }}"])
+
+    def test_every_pr_reading_leg_needs_a_dispatched_pr(self):
+        """A dispatch with no `pr` has no PR to synthesize, review or
+        label: each of those legs admits a dispatch only with `pr` set."""
+        for name, text in self.jobs().items():
+            for step in job_steps(text):
+                if "name: Synthesize the PR event payload" not in step:
+                    continue
+                with self.subTest(job=name, step="synthesize"):
+                    self.assertEqual(step_if(step), DISPATCHED_PR)
+        for name in ("review", "needs-review-label"):
+            cond = job_if(self.jobs()[name])
+            with self.subTest(job=name):
+                self.assertIn(f"|| ({DISPATCHED_PR})", cond)
+                self.assertEqual(
+                    cond.count("github.event_name == 'workflow_dispatch'"),
+                    1)
+
+    def test_a_pr_dispatch_names_its_own_check_run_apart(self):
+        """The dispatched run's own check run lands on the default
+        branch's tip; named `check` it would read as main's verdict."""
+        self.assertEqual(
+            job_scalar(self.jobs()["check"], "name"),
+            "${{ " + DISPATCHED_PR + " && format('check (dispatched for"
+            " PR {0})', inputs.pr) || 'check' }}")
+
+    def test_check_records_the_commit_it_judges_before_any_pr_code(self):
+        check = self.jobs()["check"]
+        steps = job_steps(check)
+        record = step_named(check, "Record the commit this check judges")
+        self.assertIn("        id: judged\n", record)
+        self.assertEqual(step_if(record), DISPATCHED_PR)
+        self.assertEqual(run_lines(record),
+                         ['echo "sha=$(git rev-parse HEAD)"'
+                          ' >> "$GITHUB_OUTPUT"'])
+        first_make = next(i for i, step in enumerate(steps)
+                          if any(MAKE.search(line)
+                                 for line in run_lines(step)))
+        self.assertLess(steps.index(record), first_make)
+        self.assertRegex(check, r"(?m)^      judged: \$\{\{ "
+                                r"steps\.judged\.outputs\.sha \}\}$")
+
+    def test_the_poster_is_a_base_code_job_after_check(self):
+        poster = self.jobs()[POSTER]
+        self.assertRegex(poster, r"(?m)^    needs: check$")
+        cond = job_if(poster)
+        self.assertIn("always()", cond)
+        self.assertIn(DISPATCHED_PR, cond)
+        self.assertEqual(
+            set(re.findall(r"needs\.check\.result == '(\w+)'", cond)),
+            {"success", "failure"})
+        self.assertEqual(permission_block(poster), {"checks": "write"})
+        self.assertEqual(checkouts(poster), [],
+                         "the poster checks out no code at all")
+        self.assertEqual(set(re.findall(r"secrets\.(\w+)", code(poster))),
+                         {"GITHUB_TOKEN"})
+        for line in run_lines(poster):
+            with self.subTest(line=line):
+                self.assertIsNone(MAKE.search(line), line)
+                self.assertNotIn("${{", line)
+
+    def test_the_judged_sha_reaches_only_the_posting_steps_env(self):
+        holders = [(name, step.splitlines()[0].strip())
+                   for name, text in self.jobs().items()
+                   for step in job_steps(text)
+                   if "needs.check.outputs.judged" in code(step)]
+        self.assertEqual(holders, [(POSTER, f"- name: {POST_STEP}")])
+        env = step_block(step_named(self.jobs()[POSTER], POST_STEP), "env")
+        self.assertEqual(env.get("JUDGED"),
+                         "${{ needs.check.outputs.judged }}")
+        self.assertEqual(env.get("VERDICT"), "${{ needs.check.result }}")
+
+
+@unittest.skipUnless(shutil.which("bash"), "bash replays the poster")
+class TestPosterReplay(unittest.TestCase):
+    """The posting step's own script, read out of validator.yml, run under
+    `bash -e` with a stub gh that records its argv."""
+
+    SHA = "0123456789abcdef0123456789abcdef01234567"
+
+    def replay(self, judged, verdict="success"):
+        script = step_script(jobs()[POSTER], POST_STEP)
+        with tempfile.TemporaryDirectory() as tmp:
+            stub = Path(tmp) / "bin" / "gh"
+            stub.parent.mkdir()
+            stub.write_text('#!/bin/sh\nfor a in "$@"; do'
+                            ' printf "%s\\n" "$a"; done > "$GH_ARGS"\n',
+                            encoding="utf-8")
+            stub.chmod(0o755)
+            args = Path(tmp) / "args"
+            done = subprocess.run(
+                ["bash", "-e", "-c", script], cwd=tmp, capture_output=True,
+                text=True, env={
+                    "PATH": f"{stub.parent}:{os.environ['PATH']}",
+                    "GH_ARGS": str(args), "GITHUB_REPOSITORY": "o/r",
+                    "JUDGED": judged, "VERDICT": verdict, "PR": "42",
+                    "RUN_URL": "https://github.com/o/r/actions/runs/7"})
+            called = (args.read_text(encoding="utf-8").splitlines()
+                      if args.exists() else None)
+        return done.returncode, called
+
+    def test_the_verdict_is_posted_as_check_on_the_judged_commit(self):
+        for verdict in ("success", "failure"):
+            with self.subTest(verdict=verdict):
+                returncode, called = self.replay(self.SHA, verdict)
+                self.assertEqual(returncode, 0)
+                self.assertEqual(called[:4], [
+                    "api", "--method", "POST", "repos/o/r/check-runs"])
+                fields = [called[i + 1] for i, arg in enumerate(called)
+                          if arg == "-f"]
+                self.assertIn("name=check", fields)
+                self.assertIn(f"head_sha={self.SHA}", fields)
+                self.assertIn("status=completed", fields)
+                self.assertIn(f"conclusion={verdict}", fields)
+                self.assertIn("details_url=https://github.com/o/r/"
+                              "actions/runs/7", fields)
+
+    def test_no_readable_judged_commit_posts_nothing(self):
+        for judged in ("", "main", self.SHA[:-1], self.SHA + "0",
+                       self.SHA.upper(), f"{self.SHA}\nx"):
+            with self.subTest(judged=judged):
+                returncode, called = self.replay(judged)
+                self.assertNotEqual(returncode, 0)
+                self.assertIsNone(called)
+
+    def test_a_verdict_other_than_pass_or_fail_posts_nothing(self):
+        for verdict in ("", "cancelled", "skipped"):
+            with self.subTest(verdict=verdict):
+                returncode, called = self.replay(self.SHA, verdict)
+                self.assertNotEqual(returncode, 0)
+                self.assertIsNone(called)
+
+
+class TestBotPushesDispatchACheckOnMain(unittest.TestCase):
+    """ADR-0138's second half: a push made with GITHUB_TOKEN starts no
+    workflow, so each bot push to the default branch dispatches the
+    validator with no `pr` (and no --ref: the default branch's own
+    definition) right after it lands."""
+
+    def step(self, workflow, job):
+        text = (WORKFLOWS / workflow).read_text(encoding="utf-8")
+        return step_named(workflow_jobs(text)[job], TIP_STEP)
+
+    def test_the_spend_row_push_dispatches_a_check_on_main(self):
+        deliver = workflow_jobs((WORKFLOWS / "assembler.yml").read_text(
+            encoding="utf-8"))["deliver"]
+        spend = step_named(deliver, "Commit the run's spend row")
+        self.assertIn("        id: spend\n", spend)
+        tip = self.step("assembler.yml", "deliver")
+        self.assertEqual(step_if(tip),
+                         "always() && steps.spend.outcome == 'success'")
+        self.assertIn("        continue-on-error: true\n", tip)
+        self.assertEqual(run_lines(tip), ["gh workflow run validator.yml"])
+        self.assertEqual(step_block(tip, "env"),
+                         {"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}"})
+        steps = job_steps(deliver)
+        self.assertEqual(steps.index(tip), steps.index(spend) + 1)
+
+    def test_the_gate_latency_push_dispatches_a_check_on_main(self):
+        digest = workflow_jobs((WORKFLOWS / "gate-digest.yml").read_text(
+            encoding="utf-8"))["digest"]
+        commit = step_named(digest, "Commit the new gate-latency rows")
+        tip = self.step("gate-digest.yml", "digest")
+        self.assertEqual(step_if(tip), step_if(commit))
+        self.assertEqual(step_if(tip),
+                         "steps.digest.outputs.changed == 'true'")
+        self.assertEqual(run_lines(tip), ["gh workflow run validator.yml"])
+        self.assertEqual(step_block(tip, "env"),
+                         {"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}"})
+        steps = job_steps(digest)
+        self.assertEqual(steps.index(tip), steps.index(commit) + 1)

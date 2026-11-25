@@ -274,6 +274,67 @@ def pr_event_fixture(root, payload):
     return {"GITHUB_EVENT_PATH": str(event)}
 
 
+# P's fixtures are a real git repo: the detector reads a diff, and a
+# diff needs commits. Identity, signing, hooks and git's background
+# housekeeping are pinned in the repo's own config so the caller's git
+# config cannot change what a commit does (a detached auto-gc races the
+# temp dir's cleanup, #874).
+EVAL_RECORD_CONFIG = (("user.name", "fixture"),
+                      ("user.email", "fixture@example.invalid"),
+                      ("commit.gpgsign", "false"), ("core.hooksPath", ".git/hooks"),
+                      ("gc.auto", "0"), ("maintenance.auto", "false"))
+EVAL_RECORDS = ("evals/results/trigger-2026-01-01.json",
+                "evals/results/trigger-2026-01-02.json",
+                "evals/results/trigger-2026-01-03.json",
+                "plugin-evals/records/2026-01-01.json")
+
+
+def _git(root, *args):
+    return gates.git_runner(list(args), cwd=root).stdout
+
+
+def eval_records_commit(root, writes=(), removes=(), moves=()):
+    """Commit one change to `root`'s repo: `writes` maps a path to its
+    new text, `removes` lists paths to delete and `moves` (old, new)
+    pairs to rename."""
+    for rel, text in dict(writes).items():
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+        _git(root, "add", "--", rel)
+    for rel in removes:
+        _git(root, "rm", "-q", "--", rel)
+    for old, new in moves:
+        _git(root, "mv", "--", old, new)
+    _git(root, "commit", "-q", "--no-verify", "-m", "change")
+
+
+def eval_records_fixture(root):
+    """A repo whose first commit records four eval runs; return the env
+    of a PR event whose base is that commit."""
+    _git(root, "init", "-q")
+    for key, value in EVAL_RECORD_CONFIG:
+        _git(root, "config", key, value)
+    eval_records_commit(root, {rel: f'{{"run": "{rel}"}}\n'
+                               for rel in EVAL_RECORDS})
+    base = _git(root, "rev-parse", "HEAD").strip()
+    return pr_event_fixture(root, {"pull_request": {"base": {"sha": base}}})
+
+
+def eval_rewrite_defect_fixture(root):
+    """The PR rewrites a result and a plugin-eval record, deletes one
+    result, renames another, and adds a new one; return its env."""
+    env = eval_records_fixture(root)
+    eval_records_commit(
+        root,
+        writes={EVAL_RECORDS[0]: '{"run": "passed now"}\n',
+                EVAL_RECORDS[3]: '{"run": "passed now"}\n',
+                "evals/results/trigger-2026-01-05.json": "{}\n"},
+        removes=(EVAL_RECORDS[1],),
+        moves=((EVAL_RECORDS[2], "evals/results/trigger-2026-01-04.json"),))
+    return env
+
+
 # Fragments H's own test suite (tests/test_gates.py TestEvidenceHonesty)
 # shares with these two file-tree fixtures — each one a literal ALSO used
 # directly as `gates.evidence_problems(...)` input by a unit-level
@@ -710,6 +771,23 @@ def selftest():
             "title": "WO-0003: detector B",
             "body": "WO-0003 (PRD-0001) Fixes: #108"}})
         expect_clean("B clean", gates.check_pr_traceability(root, env))
+
+    # P: a PR that rewrites, deletes and renames eval records fires once
+    # per change; one that only adds a record stays silent.
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        env = eval_rewrite_defect_fixture(root)
+        expect("P", gates.check_eval_append_only(root, env),
+               f"{EVAL_RECORDS[0]} is rewritten",
+               f"{EVAL_RECORDS[1]} is deleted",
+               f"{EVAL_RECORDS[2]} is renamed",
+               f"{EVAL_RECORDS[3]} is rewritten")
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp)
+        env = eval_records_fixture(root)
+        eval_records_commit(root, {"evals/results/trigger-2026-01-05.json":
+                                   "{}\n"})
+        expect_clean("P append", gates.check_eval_append_only(root, env))
 
     # H: the planted-defect side.
     with tempfile.TemporaryDirectory() as tmp:

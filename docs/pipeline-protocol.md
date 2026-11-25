@@ -19,10 +19,15 @@ Verify → Review → Ship → Operate
   refactor, or dependency upgrade, entering at a capture step. Artifacts
   live under `docs/fixes/<slug>/` (kebab-case slug).
 
+A run's kind is its folder, and its folder alone picks its orientation
+table: a `defect.md` in a product or feature run does not make it a
+maintenance run.
+
 **Run discovery:** candidate run directories are `docs/` plus every
 `docs/features/*/` and every `docs/fixes/*/`. A run is *complete* when
 `retro.md` exists and carries its population line (The Operate
-population, below); *active* when it has at least one artifact and is
+population, below), or when it was compacted to `summary.md` (below the
+orientation table); *active* when it has at least one artifact and is
 not complete. If the user named a feature or fix, use (or create) its directory.
 If exactly one run is active, use it. Otherwise, list the candidates and ask
 which one.
@@ -122,7 +127,11 @@ which artifacts exist in the run directory:
 **Next stage = the first stage in order that is not complete.** An
 existing `retro.md` settles it first: populated (or predating the line)
 means the run is complete, unpopulated means Operate, whatever earlier
-stage is missing (ADR-0102, The Operate population below).
+stage is missing (ADR-0102, The Operate population below). Without a
+`retro.md`, a feature or fix run directory holding `summary.md` is
+complete too: it is a finished run that `operate` compacted, its stage
+artifacts deleted and kept in git history (#2058). The product run at
+`docs/` is never compacted, so a `docs/summary.md` decides nothing.
 
 ### Commit at the stage boundary
 
@@ -141,9 +150,12 @@ The commit is a boundary step, not the completion predicate. The
 tables here still read the working tree, so `next` sees a stage the
 user has finished and not yet committed. An unattended run has nobody
 watching that tree: `autorun` advances past a stage only once the
-stage's artifact is committed — `git status --porcelain -- <artifact>`
-prints nothing, which means tracked and unchanged since its commit —
-and otherwise stops, naming the artifact.
+stage's artifact is committed — `git ls-files --error-unmatch --
+<artifact>` succeeds (tracked) and `git status --porcelain
+--untracked-files=all --ignored -- <artifact>` prints nothing
+(unchanged since its commit; the two flags stop a gitignored or
+untracked file from printing nothing too) — and otherwise stops, naming
+the artifact.
 
 ### The UX Design conditional
 

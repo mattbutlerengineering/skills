@@ -11,6 +11,7 @@ import base64
 import contextlib
 import io
 import json
+import os
 import re
 import sys
 import tempfile
@@ -256,30 +257,69 @@ class TestFloorEdges(unittest.TestCase):
                                 for hop in only["history"]))
 
     def test_a_run_enters_on_its_earliest_artifact(self):
-        # A feature run holding defect.md visits capture first, though
-        # idea.md came a month before it.
+        # A fix run holding an idea.md visits capture first, though
+        # idea.md came a month before defect.md.
         with tempfile.TemporaryDirectory() as tmp:
-            run = Path(tmp) / "docs" / "features" / "fd"
+            run = Path(tmp) / "docs" / "fixes" / "fd"
             write(run / "idea.md", artifact("idea", "2026-08-01"))
             write(run / "defect.md", artifact(
                 "capture", "2026-09-01", "- [ ] a\n",
                 **{"re-entry": "implement"}))
             model, _ = self.gather(tmp)
             (only,) = model["runs"]
-            self.assertEqual(only["history"][0]["day"], "2026-08-01")
+            self.assertEqual(only["history"][0],
+                             {"station": "capture", "day": "2026-08-01",
+                              "inferred": True})
 
-    def test_an_unreadable_features_directory_is_attention_not_a_crash(self):
+    def test_a_feature_run_holding_defect_md_starts_at_idea(self):
+        # Folder wins (#2180): the crate's kind and its history agree.
         with tempfile.TemporaryDirectory() as tmp:
-            features = Path(tmp) / "docs" / "features"
+            run = Path(tmp) / "docs" / "features" / "weird"
+            write(run / "idea.md", artifact("idea", "2026-08-01"))
+            write(run / "defect.md", artifact(
+                "capture", "2026-09-01", "- [ ] a\n",
+                **{"re-entry": "implement"}))
+            model, _ = self.gather(tmp)
+            (only,) = model["runs"]
+            self.assertEqual((only["ref"], only["kind"], only["station"]),
+                             ("feature:weird", "feature", "prd"))
+            self.assertEqual([hop["station"] for hop in only["history"]],
+                             ["idea", "prd"])
+
+    def test_an_unreadable_features_directory_keeps_the_readable_runs(self):
+        # #2180: the unlistable parent is one attention entry with no run
+        # kind; the product run and the fix run are still on the floor.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root reads a chmod-000 directory anyway")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            features = root / "docs" / "features"
             write(features / "f" / "idea.md", "x")
+            write(root / "docs" / "idea.md", artifact("idea", "2026-10-01"))
+            write(root / "docs" / "fixes" / "bug" / "defect.md", artifact(
+                "capture", "2026-10-02", "- [ ] a\n",
+                **{"re-entry": "implement"}))
             features.chmod(0)
             try:
                 model, problems = self.gather(tmp)
             finally:
                 features.chmod(0o755)
             self.assertEqual(problems, [])
-            self.assertEqual([r["status"] for r in model["runs"]],
-                             ["attention"])
+            placed = {run["dir"]: (run["ref"], run["status"])
+                      for run in model["runs"]}
+            self.assertEqual(placed, {
+                "docs": ("product", "active"),
+                "docs/fixes/bug": ("maintenance:bug", "active"),
+                "docs/features": ("docs/features", "attention")})
+            parent = next(run for run in model["runs"]
+                          if run["dir"] == "docs/features")
+            self.assertEqual(parent, {
+                "ref": "docs/features", "kind": None, "slug": None,
+                "dir": "docs/features", "status": "attention",
+                "station": None, "ladder": [],
+                "reason": board.reason(
+                    f"[Errno 13] Permission denied: '{features}'"),
+                "history": [], "work_orders": []})
 
 
 class TestHistory(unittest.TestCase):

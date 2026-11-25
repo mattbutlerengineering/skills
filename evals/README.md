@@ -56,7 +56,9 @@ with skipped judge graders is never cited.
 ## Honesty policy
 
 - Results files are snapshots pinned to a model and CLI version — dated,
-  append-only, never rewritten. A new run gets a new file.
+  append-only, never rewritten. A new run gets a new file. Gates
+  detector P fails a PR that rewrites, deletes or renames a file under
+  `evals/results/` or `plugin-evals/records/` (ADR-0139).
 - A failing trigger case gets one 5-run rerun (`--only <id>
   --runs-per-query 5`) before being treated as real; sampling noise at three
   runs is common.

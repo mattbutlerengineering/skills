@@ -37,11 +37,16 @@ Check in order; the first hit sets the run mode.
 
 1. GitHub is unreachable — `gh auth status` fails and no GitHub MCP
    tool answers → record the failure in the session log and stop.
-2. The repo variable `FACTORY_PAUSED` is `true` (`gh variable list`) →
+2. `python3 tools/cost_report.py pause-state` exits nonzero: the
+   committed pause state (`docs/factory/pause.json`, which cost-report.yml
+   writes) says paused, or is missing or unreadable, which fails closed
+   (ADR-0136). Never read the `FACTORY_PAUSED` variable itself: `gh
+   variable list` answers 403 in the cloud (#2261). →
    **propose-only mode**. The circuit breaker (ADR-0034) formally gates
    the assembler, but a paused factory is no place to open new work.
    Orient, health sweep, reflect, and journal still run; no branch, no
-   issue, no PR.
+   issue, no PR. The journal quotes the line the command printed, so it
+   names which case applied.
 3. An open PR authored by this routine exists — head branch prefixed
    `routine/`, or body starting `<!-- improvement-routine -->` →
    **no-new-PR mode**: routine PRs never stack. If that PR has

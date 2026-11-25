@@ -1,7 +1,7 @@
 ---
 summary: Detectors C and I scan every repo markdown, fences included; an example PRD/ADR/WO id or a sample link fails gates.
-sources: tools/gates.py, tools/knowledge_plane.py
-verified: 79457eb571853cf0794d5380ec65d52a6e5e4595
+sources: tools/gates.py, tools/knowledge_plane.py, tools/validator.py
+verified: 6c01025664432c254a4f5730ef11e66e0cde072a
 related: pr-body-contract, manifest-regen
 ---
 
@@ -43,6 +43,8 @@ with fewer than four digits) and URL-shaped sample links. Run
 `python3 tools/gates.py` after writing any doc, not only before committing
 code — a docs-only change can turn CI red.
 
-Not the same rule as the PR-body gate: there, ADR-0064 strips fenced
-blocks and blockquotes before the work-order scan. Inside the repo's
-markdown nothing is stripped.
+Not the same rule as the PR-body gates. Detector B
+(`gates.pr_body_problems`) strips only HTML comments before it looks for a
+`WO-` token, and the validator's uncited-skip gate (`validator._unquoted`,
+ADR-0064) strips fenced blocks and blockquote lines before reading a token
+as a claim. Inside the repo's markdown nothing is stripped.

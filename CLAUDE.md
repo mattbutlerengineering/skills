@@ -65,7 +65,8 @@ command, the exit codes and what the output is never evidence for.
   reader/resolvers, `cost_ledger.py` cost-ledger shape), plus
   `human_gates.py` (ADR-0056 — what a gate is: its ledger name, its
   queue and passed labels, its digest heading, the label-event walk, and
-  the stay partition the digest and the miner divide between them;
+  the stay partition into passed, rejected and bypassed (ADR-0137),
+  which the digest and the miner read;
   ADR-0090 — the one timeline read, through the injected gh runner, and
   the open queues the digest and the dashboard render) and
   `plane_drift.py` (ADR-0060 — the ADR-0032 cross-plane drift rule the
