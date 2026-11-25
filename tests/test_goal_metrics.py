@@ -193,6 +193,37 @@ class EscapeRateTest(unittest.TestCase):
         self.assertIsNone(row["escape_rate"])
 
 
+REGISTER = """# Process register
+
+| Process | What it is | Metric | Last real catch | Status |
+|---|---|---|---|---|
+| fresh | x | quality | 2026-11-19, [#1](u): caught | keep |
+| boundary | x | quality | 2026-09-24, [#2](u): caught | keep |
+| stale | x | none stated | 2026-08-28, [#3](u): caught | sunset-candidate |
+| silent | x | none stated | none found | sunset-candidate |
+"""
+
+
+class SunsetFlagTest(unittest.TestCase):
+    def test_flags_rows_with_no_catch_in_sixty_days(self):
+        self.assertEqual(goal_metrics.sunset_flags(REGISTER, NOW),
+                         ["boundary", "stale", "silent"])
+
+    def test_a_catch_exactly_sixty_days_old_is_kept(self):
+        on_the_line = REGISTER.replace("2026-09-24", "2026-09-25")
+        self.assertEqual(goal_metrics.sunset_flags(on_the_line, NOW),
+                         ["stale", "silent"])
+
+    def test_none_found_flags_even_when_the_note_names_a_date(self):
+        text = REGISTER.replace(
+            "| silent | x | none stated | none found |",
+            "| silent | x | none stated | none found (cites 2026-11-20) |")
+        self.assertIn("silent", goal_metrics.sunset_flags(text, NOW))
+
+    def test_text_without_the_table_flags_nothing(self):
+        self.assertEqual(goal_metrics.sunset_flags("# nothing\n", NOW), [])
+
+
 def gh_answers(prs, issues=(), owner="owner"):
     return {
         ("repo", "view"): json.dumps({"owner": {"login": owner}}),
@@ -283,6 +314,29 @@ class MainTest(unittest.TestCase):
             "| Unattended share | 100.0% |",
             "| Overhead ratio | 0.0% (0 of 1 merged PRs) |",
         ])
+
+    def test_the_register_flags_ride_the_row_and_the_table(self):
+        fake = FakeGh(gh_answers([]))
+        with tempfile.TemporaryDirectory() as tmp:
+            register = Path(tmp) / "process-register.md"
+            register.write_text(REGISTER)
+            code, out = self.run_main(["--owner", "o", "--register",
+                                       str(register)], fake)
+            _, table = self.run_main(["--owner", "o", "--markdown",
+                                      "--register", str(register)], fake)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out.splitlines()[0])["sunset_flags"],
+                         ["boundary", "stale", "silent"])
+        self.assertIn("Sunset candidates (no real catch in 60 days):"
+                      " boundary, stale, silent.", table)
+
+    def test_a_missing_register_flags_nothing(self):
+        fake = FakeGh(gh_answers([]))
+        code, out = self.run_main(["--owner", "o", "--register",
+                                   "/nonexistent/register.md"], fake)
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out.splitlines()[0])["sunset_flags"],
+                         [])
 
     def test_a_failed_pr_read_is_a_problem_and_writes_nothing(self):
         fake = FakeGh(gh_answers([]), failing=["pr", "list"])

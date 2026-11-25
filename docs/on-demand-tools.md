@@ -65,6 +65,8 @@ pre-pass, deliberately **not** a gate:
   written on a failed or truncated read. The escape rate falls back to
   "a later `fix` PR touched the same shipped file" whenever a fix names no
   PR with `Fixes-PR: #N`, so it over-counts until that trailer is in use.
+  It also lists the `docs/process-register.md` rows with no real catch
+  in 60 days (`sunset_flags`, ADR-0135's sunset rule).
   An Owner touch is an Owner-login commit, review or comment; an agent
   that comments as the Owner's account counts as a touch. It is a
   measurement, never a gate; the weekly `cost-report.yml` run also

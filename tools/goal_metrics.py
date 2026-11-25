@@ -3,6 +3,7 @@
 
     python3 tools/goal_metrics.py [--days N] [--owner LOGIN] [--markdown]
                                   [--append docs/factory/goal-metrics.jsonl]
+                                  [--register docs/process-register.md]
 
 Prints one JSON row (or, with --markdown, a table for the weekly cost
 report issue), then the `goal: N problem(s)` summary; --append also adds
@@ -21,6 +22,9 @@ fails or comes back truncated, so a ledger row is always a whole window.
   days ago that a later merged PR names within HINDSIGHT days — a revert
   mentioning #N, or a `Fixes-PR: #N` line — or, when that fix names no
   PR at all, a `fix` PR touching one of the same shipped files.
+- sunset_flags: process-register rows whose "Last real catch" cell holds
+  no date, or one older than SUNSET_DAYS (ADR-0135's sunset rule). An
+  absent register flags nothing.
 """
 import argparse
 import json
@@ -36,6 +40,8 @@ from cli import CLI_FAILURES, detail, gh_read, gh_runner, report
 LABEL = "goal"
 WINDOW = 1000
 HINDSIGHT = 14
+SUNSET_DAYS = 60
+DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
 SHIPPED_PREFIXES = ("skills/", ".claude-plugin/", "factory/templates/")
 SHIPPED_FILES = ("docs/pipeline-protocol.md",)
 # No `commits`: gh nests commit authors under each page of 100 PRs, past
@@ -140,6 +146,33 @@ def compute(prs, issue_created, owner, now, days):
     }
 
 
+def sunset_flags(text, now):
+    """Process names in the register table whose last real catch is
+    missing or before now - SUNSET_DAYS, in table order."""
+    cutoff = (now - timedelta(days=SUNSET_DAYS)).strftime("%Y-%m-%d")
+    columns, flags = None, []
+    for line in text.splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if not line.lstrip().startswith("|"):
+            columns = None
+        elif columns is None:
+            columns = cells if "Last real catch" in cells else None
+        elif not set(line.strip()) <= set("|-: "):
+            catch = cells[columns.index("Last real catch")]
+            found = DATE.search(catch)
+            if (catch.startswith("none found") or not found
+                    or found.group() < cutoff):
+                flags.append(cells[columns.index("Process")])
+    return flags
+
+
+def read_flags(path, now):
+    try:
+        return sunset_flags(path.read_text(encoding="utf-8"), now)
+    except FileNotFoundError:
+        return []
+
+
 def percent(value):
     return "n/a" if value is None else f"{value * 100:.1f}%"
 
@@ -163,6 +196,9 @@ def markdown(row):
         f" {row['merged_prs']} merged PRs) |",
         "",
         f"Escaped product PRs: {escaped}.",
+        "",
+        "Sunset candidates (no real catch in 60 days): "
+        + (", ".join(row.get("sunset_flags") or []) or "none") + ".",
     ])
 
 
@@ -220,6 +256,8 @@ def main(argv=None, run=gh_runner, now=None):
     parser.add_argument("--owner")
     parser.add_argument("--append", type=Path)
     parser.add_argument("--markdown", action="store_true")
+    parser.add_argument("--register", type=Path,
+                        default=Path("docs/process-register.md"))
     args = parser.parse_args(argv)
     now = now or datetime.now(timezone.utc)
     owner, problems = ((args.owner, []) if args.owner
@@ -233,7 +271,8 @@ def main(argv=None, run=gh_runner, now=None):
                                      now - timedelta(days=args.days))
     if problems:
         return report(LABEL, problems)
-    metrics = compute(prs, created, owner, now, args.days)
+    metrics = {**compute(prs, created, owner, now, args.days),
+               "sunset_flags": read_flags(args.register, now)}
     row = json.dumps(metrics, sort_keys=True)
     print(markdown(metrics) if args.markdown else row)
     if args.append:
