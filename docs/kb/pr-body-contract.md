@@ -1,7 +1,7 @@
 ---
 summary: A PR body needs a WO id or a "No work order:" line plus Closes #N; B skips locally, only the gh pr create hook catches it early.
 sources: tools/gates.py, tools/knowledge_plane.py, tools/validator.py, tools/pr_body_preflight.py, .github/workflows/validator.yml
-verified: 6c01025664432c254a4f5730ef11e66e0cde072a
+verified: 714384bdf5ea5e2c68adc707750221211caf6cdf
 related: gates-scan-every-doc
 ---
 
@@ -13,7 +13,9 @@ silently** — `python3 tools/gates.py` passes on your machine and the
 `pull_request` run fails. It reads like a flaky check; it is not. Only
 the `pull_request` run (and a `workflow_dispatch` with `-f pr=<N>`)
 carries a body: `validator.yml`'s push run is `main` only, so a PR branch
-gets no push run and B never fires on `main`'s own pushes.
+gets no push run and B never fires on `main`'s own pushes. A
+`workflow_dispatch` with no `pr` (what the bot pushes to `main` send,
+ADR-0138) checks `main`'s tip and carries no body either, so B skips.
 
 One local catch exists: `pr_body_preflight.py`, a PreToolUse hook in
 `.claude/settings.json`, refuses a `gh pr create` whose body fails B
