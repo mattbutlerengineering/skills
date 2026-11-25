@@ -2,6 +2,7 @@
 the dispatch-plane row grammar, the run walk, and repo_root — asserted
 at the seam's own interface instead of once per caller suite.
 """
+import os
 import sys
 import tempfile
 import unittest
@@ -246,6 +247,30 @@ class TestRunDirs(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             self.assertEqual(run_dirs(Path(tmp)), [])
 
+    def test_an_unlistable_parent_is_named_and_the_rest_still_walk(self):
+        # #2180: a parent that cannot be listed goes into UNREADABLE as
+        # (parent, error); docs/ and the other parent's runs still walk.
+        # With no list passed the walk raises, as it always did.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root reads a chmod-000 directory anyway")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ("docs/features/a", "docs/fixes/z"):
+                (root / rel).mkdir(parents=True)
+            features = root / "docs/features"
+            features.chmod(0)
+            try:
+                unreadable = []
+                walked = run_dirs(root, unreadable)
+                with self.assertRaises(PermissionError):
+                    run_dirs(root)
+            finally:
+                features.chmod(0o755)
+            self.assertEqual(walked, [root / "docs", root / "docs/fixes/z"])
+            self.assertEqual([(path, str(err)) for path, err in unreadable],
+                             [(features, f"[Errno 13] Permission denied:"
+                                         f" '{features}'")])
+
 
 class TestActiveRuns(unittest.TestCase):
     """The protocol's active runs (an artifact present, not complete),
@@ -296,6 +321,31 @@ class TestActiveRuns(unittest.TestCase):
             self.assertEqual([(d.name, stage) for d, stage, _ in found],
                              [("locked", None), ("ok", "prd")])
             self.assertIsInstance(found[0][2], PermissionError)
+
+    def test_an_unlistable_parent_is_one_entry_beside_the_readable_runs(self):
+        # #2180: before, one unlistable parent collapsed the whole walk
+        # into a single docs entry and the product run was lost.
+        if hasattr(os, "geteuid") and os.geteuid() == 0:
+            self.skipTest("root reads a chmod-000 directory anyway")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for rel in ("docs/idea.md", "docs/features/a/idea.md",
+                        "docs/fixes/z/idea.md"):
+                (root / rel).parent.mkdir(parents=True, exist_ok=True)
+                (root / rel).write_text("x", encoding="utf-8")
+            features = root / "docs/features"
+            features.chmod(0)
+            try:
+                found = active_runs(root)
+            finally:
+                features.chmod(0o755)
+            self.assertEqual(
+                [(d.relative_to(root).as_posix(), stage,
+                  type(err).__name__ if err else None)
+                 for d, stage, err in found],
+                [("docs/features", None, "PermissionError"),
+                 ("docs", "prd", None),
+                 ("docs/fixes/z", "capture", None)])
 
 
 class TestBreakdownFiles(unittest.TestCase):

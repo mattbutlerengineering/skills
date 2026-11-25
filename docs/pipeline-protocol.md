@@ -19,6 +19,10 @@ Verify → Review → Ship → Operate
   refactor, or dependency upgrade, entering at a capture step. Artifacts
   live under `docs/fixes/<slug>/` (kebab-case slug).
 
+A run's kind is its folder, and its folder alone picks its orientation
+table: a `defect.md` in a product or feature run does not make it a
+maintenance run.
+
 **Run discovery:** candidate run directories are `docs/` plus every
 `docs/features/*/` and every `docs/fixes/*/`. A run is *complete* when
 `retro.md` exists and carries its population line (The Operate

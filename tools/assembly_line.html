@@ -2869,7 +2869,7 @@ function factory(THREE, model) {
   function stationCard(key) {
     const here = runsAt(key);
     const [name, line] = infoOf(key);
-    const oldest = here.slice(0, 5).map((run) => run.slug).join(", ");
+    const oldest = here.slice(0, 5).map((run) => run.slug || run.ref).join(", ");
     // The pile's age: how long its oldest crate has waited (runsAt sorts
     // oldest first). Not for the city or the bin — nothing waits there.
     const longest = here.length && key !== "completed" && key !== "bin" ? waitedDays(here[0]) : 0;

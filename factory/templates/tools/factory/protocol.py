@@ -417,13 +417,14 @@ def run_ref(root, run_dir):
 
 def is_maintenance_run(run_dir):
     """A maintenance run is recognized without a manifest: it lives under
-    docs/fixes/<slug>/ (the run-discovery rule) or already holds the
-    capture seed defect.md. Either signal suffices, so an empty fixes
-    directory orients to capture before any artifact exists."""
+    docs/fixes/<slug>/ (the run-discovery rule), so an empty fixes
+    directory orients to capture before any artifact exists. The folder
+    alone decides (#2180): a defect.md in a product or feature run does
+    not move it onto the maintenance ladder, so the ladder always agrees
+    with run_ref's kind."""
     run_dir = Path(run_dir)
-    return ((run_dir.parent.name == "fixes"
-             and run_dir.parent.parent.name == "docs")
-            or (run_dir / "defect.md").is_file())
+    return (run_dir.parent.name == "fixes"
+            and run_dir.parent.parent.name == "docs")
 
 
 def _re_entry_architect(run_dir):
