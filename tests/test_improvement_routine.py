@@ -12,8 +12,8 @@ PROTOCOL = Path(__file__).resolve().parents[1] / "docs" / "factory" \
 
 class TestTheDailyRoutineReadsTheToolsmithQueue(unittest.TestCase):
     """#818 part 2, decided by the Owner on 2026-10-14: the toolsmith
-    queue's only other reader is the retro-reflect routine, whose
-    trigger is deferred, so the daily routine reads it meanwhile."""
+    queue's only other reader was the retro-reflect routine, retired
+    2026-11-25 (#2359), so the daily routine reads it."""
 
     def text(self):
         return " ".join(PROTOCOL.read_text(encoding="utf-8").split())

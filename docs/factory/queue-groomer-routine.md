@@ -12,8 +12,7 @@ this file and the charter disagree, the charter wins.
 Its mission is grooming the ready queue: finding work-order issues
 (`wo:*`-labeled) that have gone stale or stuck, and keeping the seed
 inbox (`docs/backlog.md`) honest. It is not reflect-loop mining (the
-[daily improvement routine](improvement-routine.md) and the
-[weekly retro/reflect routine](retro-reflect-routine.md) own that), and
+[daily improvement routine](improvement-routine.md) owns that), and
 it does not duplicate the reconcile sweep (`sweeps.py reconcile`), which
 already files dispatch-plane/knowledge-plane disagreements (ADR-0032,
 ADR-0060) as intake issues.

@@ -20,7 +20,6 @@ _WEEKLY_LOOKUP = ("Find it by marker, in either form (§Markers on GitHub);"
 # protocol file -> the journal-lookup sentence its report section carries
 JOURNAL_LOOKUP = {
     "queue-groomer-routine.md": _WEEKLY_LOOKUP,
-    "retro-reflect-routine.md": _WEEKLY_LOOKUP,
     "doc-gardener-routine.md": _WEEKLY_LOOKUP,
     "merge-train-routine.md": _WEEKLY_LOOKUP,
     "hourly-improvement-routine.md": _WEEKLY_LOOKUP,
@@ -31,7 +30,6 @@ JOURNAL_LOOKUP = {
 }
 
 ROUTINES_WITH_TRIGGER = ("queue-groomer-routine.md",
-                         "retro-reflect-routine.md",
                          "doc-gardener-routine.md",
                          "merge-train-routine.md",
                          "hourly-improvement-routine.md")
