@@ -698,6 +698,24 @@ class TestBotPushesDispatchACheckOnMain(unittest.TestCase):
         steps = job_steps(deliver)
         self.assertEqual(steps.index(tip), steps.index(spend) + 1)
 
+    def test_the_pause_state_push_dispatches_a_check_on_main(self):
+        # The third bot push (ADR-0136): pause.json's as_of changes every
+        # run, so without this main's tip carried no `check` each Monday.
+        report = workflow_jobs((WORKFLOWS / "cost-report.yml").read_text(
+            encoding="utf-8"))["report"]
+        publish = step_named(report, "Publish the pause state for the routines")
+        self.assertIn("        id: publish\n", publish)
+        self.assertIn('echo "pushed=true" >> "$GITHUB_OUTPUT"',
+                      run_lines(publish)[-1])
+        tip = self.step("cost-report.yml", "report")
+        self.assertEqual(step_if(tip),
+                         "always() && steps.publish.outputs.pushed == 'true'")
+        self.assertEqual(run_lines(tip), ["gh workflow run validator.yml"])
+        self.assertEqual(step_block(tip, "env"),
+                         {"GH_TOKEN": "${{ secrets.GITHUB_TOKEN }}"})
+        steps = job_steps(report)
+        self.assertEqual(steps.index(tip), steps.index(publish) + 1)
+
     def test_the_gate_latency_push_dispatches_a_check_on_main(self):
         digest = workflow_jobs((WORKFLOWS / "gate-digest.yml").read_text(
             encoding="utf-8"))["digest"]

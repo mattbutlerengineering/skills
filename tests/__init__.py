@@ -16,9 +16,12 @@ if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
 
 # The suite is hermetic about the CI event. In a PR run the job's
-# GITHUB_EVENT_PATH names the real PR, and tests that run gates inside a
-# temp repo would otherwise judge that PR against a tree it never saw:
-# detector P diffs from the PR's base sha, which a temp repo does not
-# hold. Every test of an event-reading detector passes its own env.
-for _name in ("GITHUB_EVENT_PATH", "GITHUB_EVENT_NAME"):
+# GITHUB_EVENT_PATH names the real PR (FACTORY_EVENT_PATH on a validator
+# dispatch, which cli.read_event prefers), and tests that run gates
+# inside a temp repo would otherwise judge that PR against a tree it
+# never saw: detector P diffs from the PR's base sha, which a temp repo
+# does not hold. Every test of an event-reading detector passes its own
+# env; tests/test_suite_hermetic.py derives the names from cli.py.
+for _name in ("GITHUB_EVENT_PATH", "GITHUB_EVENT_NAME",
+              "FACTORY_EVENT_PATH"):
     os.environ.pop(_name, None)
