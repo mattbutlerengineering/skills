@@ -188,11 +188,13 @@ software that already shipped.
 
 - [ ] Run scale chosen deliberately (product / feature / maintenance)
 
-Finished runs stay in the tree: nothing yet marks a run closed or
-compacts it (#2058). Run artifacts are records, not living docs, and on a
-busy repo `docs/features/` and `docs/fixes/` soon hold most of the
-markdown under `docs/`. Keep your own formatters and markdown audits off
-them, so a docs-only change doesn't pay for every finished run:
+Finished runs stay in the tree unless you compact them: once the retro is
+committed, `operate` offers to collapse a feature or fix run into one
+`summary.md` and delete the rest, which git history keeps (#2058). Run
+artifacts are records, not living docs, and on a busy repo
+`docs/features/` and `docs/fixes/` soon hold most of the markdown under
+`docs/`, compacted or not. Keep your own formatters and markdown audits
+off them, so a docs-only change doesn't pay for every finished run:
 
 ```
 # .prettierignore, .markdownlintignore, or your audit script's skip list
