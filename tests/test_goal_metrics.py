@@ -263,6 +263,27 @@ class MainTest(unittest.TestCase):
         self.assertEqual(len(lines), 2)
         self.assertEqual(json.loads(lines[1])["overhead_ratio"], 1.0)
 
+    def test_markdown_prints_a_table_and_still_appends_json(self):
+        fake = FakeGh(gh_answers([pr(1, 2, ["skills/a/SKILL.md"],
+                                    created_days_ago=3)]))
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "goal-metrics.jsonl"
+            code, out = self.run_main(["--owner", "o", "--markdown",
+                                       "--append", str(ledger)], fake)
+            appended = json.loads(ledger.read_text())
+        self.assertEqual(code, 0)
+        self.assertEqual(appended["lead_time_hours_median"], 24.0)
+        self.assertEqual(out.splitlines()[:8], [
+            "## Goal metrics (ADR-0135), 28 days to 2026-11-24",
+            "",
+            "| Metric | Value |",
+            "| --- | --- |",
+            "| Lead time, median (product PRs) | 24.0 h |",
+            "| Escape rate | n/a |",
+            "| Unattended share | 100.0% |",
+            "| Overhead ratio | 0.0% (0 of 1 merged PRs) |",
+        ])
+
     def test_a_failed_pr_read_is_a_problem_and_writes_nothing(self):
         fake = FakeGh(gh_answers([]), failing=["pr", "list"])
         with tempfile.TemporaryDirectory() as tmp:

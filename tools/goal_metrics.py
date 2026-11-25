@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """goal_metrics: ADR-0135's four goal metrics over merged pull requests.
 
-    python3 tools/goal_metrics.py [--days N] [--owner LOGIN]
+    python3 tools/goal_metrics.py [--days N] [--owner LOGIN] [--markdown]
                                   [--append docs/factory/goal-metrics.jsonl]
 
-Prints one JSON row, then the `goal: N problem(s)` summary; --append also
-adds the row to the JSON-lines ledger. Nothing is written when a gh read
+Prints one JSON row (or, with --markdown, a table for the weekly cost
+report issue), then the `goal: N problem(s)` summary; --append also adds
+the JSON row to the JSON-lines ledger. Nothing is written when a gh read
 fails or comes back truncated, so a ledger row is always a whole window.
 
 - product PR: a merged PR touching a shipped path (SHIPPED_PREFIXES,
@@ -139,6 +140,32 @@ def compute(prs, issue_created, owner, now, days):
     }
 
 
+def percent(value):
+    return "n/a" if value is None else f"{value * 100:.1f}%"
+
+
+def markdown(row):
+    """The row as the table the weekly cost report issue carries."""
+    lead = row["lead_time_hours_median"]
+    escaped = ", ".join(f"#{n}" for n in row["escaped"]) or "none"
+    return "\n".join([
+        f"## Goal metrics (ADR-0135), {row['window_days']} days to"
+        f" {row['date']}",
+        "",
+        "| Metric | Value |",
+        "| --- | --- |",
+        "| Lead time, median (product PRs) | "
+        + ("n/a" if lead is None else f"{lead} h") + " |",
+        f"| Escape rate | {percent(row['escape_rate'])} |",
+        f"| Unattended share | {percent(row['unattended_share'])} |",
+        f"| Overhead ratio | {percent(row['overhead_ratio'])}"
+        f" ({row['merged_prs'] - row['product_prs']} of"
+        f" {row['merged_prs']} merged PRs) |",
+        "",
+        f"Escaped product PRs: {escaped}.",
+    ])
+
+
 def read_owner(run):
     read = gh_read(["repo", "view", "--json", "owner"], "gh repo view",
                    LABEL, run=run, expect=dict)
@@ -192,6 +219,7 @@ def main(argv=None, run=gh_runner, now=None):
     parser.add_argument("--days", type=int, default=28)
     parser.add_argument("--owner")
     parser.add_argument("--append", type=Path)
+    parser.add_argument("--markdown", action="store_true")
     args = parser.parse_args(argv)
     now = now or datetime.now(timezone.utc)
     owner, problems = ((args.owner, []) if args.owner
@@ -205,9 +233,9 @@ def main(argv=None, run=gh_runner, now=None):
                                      now - timedelta(days=args.days))
     if problems:
         return report(LABEL, problems)
-    row = json.dumps(compute(prs, created, owner, now, args.days),
-                     sort_keys=True)
-    print(row)
+    metrics = compute(prs, created, owner, now, args.days)
+    row = json.dumps(metrics, sort_keys=True)
+    print(markdown(metrics) if args.markdown else row)
     if args.append:
         with args.append.open("a", encoding="utf-8") as ledger:
             ledger.write(row + "\n")

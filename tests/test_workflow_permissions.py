@@ -68,12 +68,13 @@ EXPECTED = {
     },
     "cost-report.yml": {
         "report": ({"contents": "write", "issues": "write",
-                    "actions": "write"},
+                    "actions": "write", "pull-requests": "read"},
                    "files the weekly cost report with `gh issue create`,"
                    " commits docs/factory/pause.json, the pause state"
                    " the cloud routines read (ADR-0136), and dispatches"
                    " the validator so that push gets its check"
-                   " (ADR-0138)"),
+                   " (ADR-0138); reads merged PRs for the goal metrics"
+                   " (#2347)"),
     },
     "design.yml": {
         "web-quality": ({"contents": "read"}, "runs Playwright, writes nothing"),
