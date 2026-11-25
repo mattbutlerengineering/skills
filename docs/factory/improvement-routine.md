@@ -138,9 +138,15 @@ never work:
    not a permanent-state issue (a journal, digest, queue or cost report:
    #178, #181, #294, #586, #587, #590, #925, #930), not labelled
    `ready-for-human` or `needs-human`, not covered by an open PR (a body
-   that `Closes` it), and not blocked by an issue that is still open;
-   oldest first. Only if it fits the size
-   bound.
+   that `Closes` it), and not blocked by an issue that is still open.
+   Only if it fits the size bound.
+   Goal-ranked (ADR-0135): an issue with no `goal:*` label is not
+   ready (name it under Proposals). Among the rest, in order:
+   `goal:quality` on an escaped product defect; `goal:overhead` while
+   the newest `overhead_ratio` in `docs/factory/goal-metrics.jsonl` is
+   over 0.30; then `goal:speed`, `goal:quality` and `goal:autonomy`,
+   the label whose metric sits furthest from its ADR-0135 target first,
+   smallest first. Age only breaks ties.
 3. **A graduated reflect candidate** (§6): a candidate rule with two or
    more distinct correction events across the journal history. The edit
    lands in `factory/charters/<role>/CHARTER.md` or
@@ -148,6 +154,9 @@ never work:
    detector to a paragraph (charter, actions 2): when the rule is
    machine-checkable and the detector still fits the size bound, ship
    the detector and its failing-first test instead of prose.
+   Any rung-3 pick is a new process (ADR-0135 rung 4):
+   the same PR adds its `docs/process-register.md` row, naming the
+   metric it protects and the escape it would have caught.
 4. **Nothing fits** → propose-only day. A quiet day is a valid outcome;
    inventing work to fill the slot is how S-sized routines become
    unreviewable.

@@ -2,6 +2,7 @@
 merge: auto
 required_check: check
 hold_labels: [needs-review]
+priority: [security, goal:quality, goal:overhead, goal:speed, goal:autonomy]
 gate_paths:
   - "docs/adr/**"
   - "docs/design/**"
@@ -30,6 +31,10 @@ file changes only by a PR: its commit is the consent record.
   PR, whatever its author or branch: `required_check` present and
   green, an independent review passed (or the fast path below), no
   `gate_paths` file, no `hold_labels` label.
+- `priority` — ADR-0135's goal order; an issue carrying none of these
+  labels sorts after every one that does. ADR-0135's stricter rule (no
+  `goal:*` label, not ready) needs a profile filter the skill does not
+  have yet, so here it is an order, not a drop.
 - `required_check: check` — the validator workflow's gate job, which
   runs `make check`. A rollup with no `check` run is not green.
 - `gate_paths` — ADR-0087's defaults plus `factory/templates/**`,

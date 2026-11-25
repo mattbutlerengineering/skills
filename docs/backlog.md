@@ -1,4 +1,4 @@
-Seed inbox — advisory only, never orientation state; grammar and read moments in `docs/pipeline-protocol.md` ("Seed backlog (optional)", ADR-0029).
+Seed inbox — advisory only, never orientation state; grammar and read moments in `docs/pipeline-protocol.md` ("Seed backlog (optional)", ADR-0029). A seed is promoted to an issue only with a `goal:*` label naming the ADR-0135 metric it moves.
 
 - omp near-miss under-triggering: 8/16 near-miss cases under-trigger on omp vs Claude Code; tracked as near-miss micro recall 18/39 = 0.462 via `python3 trigger_eval.py --metrics evals/results/trigger-omp-2026-07-05.json --kind near-miss` (from: session:2026-07-05)
 - omp cannot traverse `skill://` references to the protocol doc — stage skills' step-1 read needs a packaging answer on the second harness (from: session:2026-07-05)
