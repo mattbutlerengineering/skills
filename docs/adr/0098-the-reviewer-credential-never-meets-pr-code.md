@@ -1,7 +1,13 @@
 # The reviewer's credential never meets the pull request's code
 
-- Status: provisional
+- Status: amended by ADR-0138 (check's second output, judged; provisional)
 - Date: 2026-10-10
+
+> Amended by ADR-0138 (2026-11-24): Decision 2's "a single output" is
+> now two. `check` also declares `judged`, the sha it checked out,
+> recorded before any PR code runs. It reaches only the `check-on-head`
+> job, which holds `checks: write`, runs no code, and posts check's
+> verdict onto that commit. The findings rules below are unchanged.
 
 Amends no record. ADR-0033's agent reviewer and ADR-0077's split of the
 assembler both stand. This ADR applies ADR-0077's rule to the next hop,

@@ -259,7 +259,9 @@ read the PRs that close its mirrored issue and give it the terminal state
   its repair route for a human to run, the dispatch shim
   `gh workflow run validator.yml -f pr=N`. The shim re-runs the whole
   validator for that PR (its check, review and label legs), not just
-  the label flip. A red PR of this queue is
+  the label flip, and posts the `check` verdict onto the PR's head
+  commit (ADR-0138). Without `-f pr` it checks the default branch's
+  tip instead. A red PR of this queue is
   still released in Phase 0 by
   [its own rule](#which-open-prs-are-this-queues).
 - **A merged PR** → leave it. The PR-merge leg writes `wo:merged`, and
