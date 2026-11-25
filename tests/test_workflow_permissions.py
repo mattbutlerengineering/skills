@@ -67,8 +67,10 @@ EXPECTED = {
         "replay": ({"contents": "read"}, "runs `make check` and nothing else"),
     },
     "cost-report.yml": {
-        "report": ({"contents": "read", "issues": "write"},
-                   "files the weekly cost report with `gh issue create`"),
+        "report": ({"contents": "write", "issues": "write"},
+                   "files the weekly cost report with `gh issue create`,"
+                   " and commits docs/factory/pause.json, the pause state"
+                   " the cloud routines read (ADR-0136)"),
     },
     "design.yml": {
         "web-quality": ({"contents": "read"}, "runs Playwright, writes nothing"),

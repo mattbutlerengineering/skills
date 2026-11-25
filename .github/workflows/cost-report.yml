@@ -4,9 +4,12 @@
 # update-manifest`, so a stamped product repo runs this same file — which is
 # why it names no commands of its own. The one step that needs judgment goes
 # through `make cost-report` (cost_report.py, unit-tested offline); this
-# workflow only MUTATES: it posts the report issue and, on a PAUSE verdict,
-# sets the FACTORY_PAUSED repo variable. Editing this file means re-running
-# update-manifest; detector E fails the build otherwise.
+# workflow only MUTATES: it posts the report issue, on a PAUSE verdict
+# sets the FACTORY_PAUSED repo variable, and commits the verdict as
+# docs/factory/pause.json for the cloud routines (ADR-0136). The assembler
+# also checks the cap itself at dispatch time (`make cost-check`), so this
+# weekly run is no longer the only judge of a month. Editing this file
+# means re-running update-manifest; detector E fails the build otherwise.
 #
 # FACTORY_PAUSED is a GitHub Actions repository VARIABLE (vars.*), the same
 # convention sweeps.yml's Sentry job (vars.SENTRY_ORG) and validator.yml
@@ -32,8 +35,11 @@ on:
     - cron: "17 7 * * 1"
   workflow_dispatch:
 
+# contents: write is for the one commit this workflow makes: the pause
+# state, docs/factory/pause.json (ADR-0136). A push by GITHUB_TOKEN does
+# not trigger other workflows, so the weekly commit cannot recurse into CI.
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 concurrency:
@@ -117,3 +123,24 @@ jobs:
           else
             echo "cost-report: no FACTORY_PAUSE_TOKEN — FACTORY_PAUSED left as-is"
           fi
+      # The cloud routines cannot read repo variables — `gh variable list`
+      # answers 403 through their proxy (#2261) — so the verdict is also
+      # committed as docs/factory/pause.json, the pause state they read
+      # with `cost_report.py pause-state` (ADR-0136). always() for the
+      # pause step's reason: the fail-closed verdicts carry pause=true and
+      # must reach the routines too. Needs no FACTORY_PAUSE_TOKEN: the
+      # job's own grant can commit. An unchanged file commits nothing.
+      - name: Publish the pause state for the routines
+        if: >-
+          always()
+          && steps.report.outputs.state != ''
+        env:
+          PAUSE_STATE: ${{ steps.report.outputs.state }}
+        run: |
+          printf '%s\n' "$PAUSE_STATE" > docs/factory/pause.json
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/factory/pause.json
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "chore(factory): pause state (cost-report)"
+          git push

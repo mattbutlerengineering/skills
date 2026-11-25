@@ -126,7 +126,8 @@ class TestOperateCompletesOnThePopulationLine(unittest.TestCase):
             self.assertEqual(next_stage(run), "operate")
             states = dict(stage_states(run))
             self.assertEqual(states["operate"], "current")
-            self.assertEqual(states["prd"], "ahead")
+            # The gap before current is missing, not ahead (#2281).
+            self.assertEqual(states["prd"], "missing")
 
     def test_a_populated_retro_still_outranks_an_earlier_gap(self):
         with tempfile.TemporaryDirectory() as tmp:

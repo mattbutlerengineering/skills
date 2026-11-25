@@ -65,11 +65,16 @@ ai-tooling suite where the rule is the same idea):
                      declared id is cited by a work-order row of its run's
                      breakdown, or carries a reasoned coverage waiver
                      (ADR-0072)
+  P EVAL-APPEND-ONLY — a PR rewrites, deletes or renames no existing
+                     record under evals/results/ or plugin-evals/records/;
+                     adding one is fine. The one detector that reads a
+                     diff (local git, base sha from the event payload;
+                     SKIP locally) (ADR-0139)
 
 The letter namespace does not end at I. Detector L (LABEL-SYNC) is
 network-side and lives in label_sync.py, driven by scheduled sweeps —
-network calls stay out of this offline gate. K, M, N and O are claimed
-above; a new detector takes the next free letter (P).
+network calls stay out of this offline gate. K, M, N, O and P are
+claimed above; a new detector takes the next free letter (Q).
 ROSTER below is the full roster, and what run_all dispatches from.
 
 `--selftest` runs the checkers against fixture trees and exits nonzero
@@ -94,7 +99,7 @@ from pathlib import Path
 import cost_ledger
 import factory_config
 import standards_index
-from cli import read_event, read_file, report
+from cli import CLI_FAILURES, detail, read_event, read_file, report, runner
 from cost_ledger import COST_LEDGER
 from knowledge_plane import (ADR_TOKEN, CLOSES_TOKEN, PLAIN_PATH, PRD_TOKEN,
                              WO_TOKEN,
@@ -465,6 +470,60 @@ def pr_body_problems(body):
         problems.append("B: PR body cites no work-order id")
     if not CLOSES_TOKEN.search(body):
         problems.append("B: PR body has no Closes #N link")
+    return problems
+
+
+# P's scope: the dated eval-run records CLAUDE.md's Eval honesty section
+# and evals/README.md call append-only (ADR-0139).
+EVAL_RECORD_DIRS = ("evals/results/", "plugin-evals/records/")
+# The git port P reads its diff through; tests and the selftest's
+# fixture repos use it too.
+git_runner = runner("git")
+
+
+def check_eval_append_only(root, env=None):
+    """P: a PR may add eval records but never rewrite, delete or rename
+    one (ADR-0139). The only detector that reads a diff rather than the
+    tree: `git diff <base>...HEAD` over EVAL_RECORD_DIRS, the base read
+    from the PR event as B reads its body. SKIPs silently outside a PR
+    run. A base the checkout does not hold (a shallow clone) is a
+    problem, never a pass: validator.yml fetches full history."""
+    if env is None:
+        env = os.environ
+    pr, error = pr_event(env)
+    if error:
+        return [f"P: {error}"]
+    if pr is None:
+        return []
+    base = pr.get("base")
+    sha = base.get("sha") if isinstance(base, dict) else None
+    if not isinstance(sha, str) or not sha:
+        return ["P: PR event carries no base sha"]
+    try:
+        out = git_runner(["diff", "-z", "--name-status", "-M",
+                          "--diff-filter=MDR", f"{sha}...HEAD", "--",
+                          *EVAL_RECORD_DIRS], cwd=root).stdout
+    except CLI_FAILURES as err:
+        return [f"P: cannot diff eval records against base {sha}: "
+                f"{detail(err)}"]
+    return eval_change_problems(out)
+
+
+def eval_change_problems(out):
+    """P's problem strings from `git diff -z --name-status` output: one
+    per rewritten (M), deleted (D) or renamed (R<score>) record."""
+    fields = out.split("\0")
+    problems = []
+    i = 0
+    while i < len(fields) and fields[i]:
+        code = fields[i][0]
+        if code == "R":
+            change = f"is renamed to {fields[i + 2]}"
+            path, i = fields[i + 1], i + 3
+        else:
+            change = "is rewritten" if code == "M" else "is deleted"
+            path, i = fields[i + 1], i + 2
+        problems.append(f"P: {path} {change}; an eval record is append-only")
     return problems
 
 
@@ -2004,15 +2063,16 @@ def check_capture_completeness(root):
 # here: L reads the repo's live label set through gh, which is why it
 # lives in label_sync.py and not here (the same posture that keeps every
 # ADR-0037 seam offline). K and M are claimed (ADR-0073), and N and O
-# (ADR-0071, ADR-0072) skipped them while that work was in flight. A new
-# detector takes the next free letter (P) and adds its row here — the
-# one edit run_all and tests/test_gates.py's TestRoster both read.
+# (ADR-0071, ADR-0072) skipped them while that work was in flight. P
+# (ADR-0139) reads the local clone's git history, which is offline too.
+# A new detector takes the next free letter (Q) and adds its row here —
+# the one edit run_all and tests/test_gates.py's TestRoster both read.
 #
 # `input` is what run_all hands the checker after `root`:
 #   root             — nothing more: E, F, J and M each read their own
 #                      seam (factory_config.py, the manifest, the label
 #                      taxonomy, the capture briefs) exactly once
-#   env              — the process environment: B reads the CI event
+#   env              — the process environment: B and P read the CI event
 #   parsed           — the one knowledge_plane.parse_run of this pass
 #   parsed+scannable — the same parse, which then must carry the
 #                      _scannable_files docs: C, D and I scan them, and
@@ -2051,6 +2111,8 @@ ROSTER = (
              check_needs_clarification, "parsed"),
     Detector("O", "PRD-COVERAGE", "gates.py", "offline",
              check_prd_coverage, "parsed"),
+    Detector("P", "EVAL-APPEND-ONLY", "gates.py", "offline",
+             check_eval_append_only, "env"),
 )
 
 # Issue #443 (the sequence's "contract" step) asked whether dropping the

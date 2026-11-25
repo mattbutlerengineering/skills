@@ -45,8 +45,12 @@ Check in order; the first hit sets the run mode.
 
 1. GitHub is unreachable — `gh auth status` fails and no GitHub MCP
    tool answers → record the failure in the session log and stop.
-2. `FACTORY_PAUSED` is `true` (`gh variable list`) → **report-only
-   mode**: survey and journal; no `update-branch`, no merge.
+2. `python3 tools/cost_report.py pause-state` exits nonzero — the
+   committed pause state (`docs/factory/pause.json`) says paused, or is
+   missing or unreadable, which fails closed (ADR-0136; `gh variable
+   list` answers 403 in the cloud, #2261) → **report-only mode**:
+   survey and journal; no `update-branch`, no merge. The journal quotes
+   the line the command printed.
 3. The queue profile is missing, or its `merge` key is not `auto` →
    **report-only mode**: the Owner's consent is the profile, and
    without it this routine merges nothing (ADR-0087).

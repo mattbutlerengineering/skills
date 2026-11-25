@@ -32,14 +32,14 @@ the canonical vocabulary.
 | [0009](0009-audience-you-first-publishable-always.md) | Audience: you first, publishable always | accepted |
 | [0010](0010-stage-skills-plus-thin-router.md) | Stage skills + thin router | accepted |
 | [0011](0011-interview-early-draft-late.md) | Interview early, draft late | accepted |
-| [0012](0012-lightweight-ledger.md) | Lightweight ledger | accepted |
+| [0012](0012-lightweight-ledger.md) | Lightweight ledger | amended by ADR-0140 |
 | [0013](0013-plugin-name-idea-to-prod.md) | Plugin name: idea-to-prod | accepted |
 | [0014](0014-mit-license.md) | License: MIT | accepted |
 | [0015](0015-templates-per-stage.md) | Templates per stage | accepted |
 | [0016](0016-operate-scope.md) | Operate scope | accepted |
 | [0017](0017-conditional-ux-frontmatter.md) | Conditional-UX mechanics | accepted |
 | [0018](0018-git-bootstrap.md) | Git bootstrap | accepted |
-| [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | accepted |
+| [0019](0019-trigger-and-output-evals.md) | Evals: routing discrimination + on-demand output grading | amended by ADR-0140 |
 | [0020](0020-hybrid-recall-policy.md) | Hybrid recall policy for skill descriptions | accepted |
 | [0021](0021-shared-protocol-module.md) | One shared protocol module alongside standalone scripts | amended by ADR-0052 |
 | [0022](0022-eval-schema-module.md) | One eval-schema module beside the protocol module | accepted |
@@ -54,7 +54,7 @@ the canonical vocabulary.
 | [0031](0031-omp-trigger-eval-adapter.md) | The trigger eval drives omp too; results are harness-marked | accepted |
 | [0032](0032-factory-dispatch-plane.md) | Factory dispatch plane: issues mirror breakdown rows one-way | superseded in part by ADR-0083 (the beads clause; amended by ADR-0035 and ADR-0134) |
 | [0033](0033-three-human-gates.md) | Three human gates: PRD, blueprint, merge | amended by ADR-0087 (and earlier by ADR-0036) |
-| [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0084 (and earlier by ADR-0041) |
+| [0034](0034-work-order-budgets-and-routing.md) | Work-order budgets and model routing | amended by ADR-0136 (the monthly breaker), ADR-0084 (and earlier by ADR-0041) |
 | [0035](0035-github-is-the-single-work-order-mirror.md) | GitHub issues are the single work-order tracker mirror | superseded in part by ADR-0083 (the beads carve-out) |
 | [0036](0036-agent-merge-under-independent-review.md) | Agent merges permitted under independent review | amended by ADR-0085 |
 | [0037](0037-factory-seam-modules.md) | Factory seam modules: knowledge_plane, cli, factory_config, cost_ledger | amended by ADR-0039 |
@@ -76,7 +76,7 @@ the canonical vocabulary.
 | [0053](0053-charter-replay-joins-the-harness-seam.md) | Charter replay joins the harness seam | accepted |
 | [0054](0054-front-door-routes-humans.md) | The front door routes humans, not files | accepted |
 | [0055](0055-deferred-stops-and-payload-charters.md) | The budget hook and payload charters stay deferred | accepted |
-| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0090 (and earlier by ADR-0074) |
+| [0056](0056-human-gates-module.md) | The three human gates get a module of their own | amended by ADR-0137 (and earlier by ADR-0090 and ADR-0074) |
 | [0057](0057-lifecycle-legs-agree-about-an-uncited-pr.md) | Both lifecycle legs treat an uncited PR the same way | amended by ADR-0064 |
 | [0058](0058-checkbox-regex-roster-is-two-owners.md) | The checkbox-regex roster is two owners, not three | accepted |
 | [0059](0059-restructure-is-blocked-by-nine-files.md) | The tools/factory restructure is blocked by nine files, not one | superseded in part by ADR-0091 (the blocker table and the provisional note) |
@@ -155,4 +155,8 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0136](0136-the-cap-is-checked-at-dispatch-and-the-pause-state-is-committed.md) | The cap is checked at dispatch, and the pause state is committed | accepted |
+| [0137](0137-a-forward-gate-skip-is-a-bypass-not-a-rejection.md) | A forward gate skip is a bypass, not a rejection | accepted |
 | [0138](0138-the-check-lives-on-the-commit-it-judges.md) | The check lives on the commit it judges | accepted |
+| [0139](0139-eval-records-are-append-only-in-ci.md) | Eval records are append-only, enforced in CI | accepted |
+| [0140](0140-a-factory-driven-run-that-reached-a-human-merged-pr-graduates-maturity.md) | A factory-driven run that reached a human-merged PR graduates maturity | accepted (Owner, 2026-11-24) |

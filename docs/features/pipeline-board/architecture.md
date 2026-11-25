@@ -105,7 +105,10 @@ staleness contract, so no coordination is needed).
 }
 ```
 
-- `state` ∈ `done | current | ahead | skipped`; each run's `ladder` is
+- `state` ∈ `done | current | ahead | missing | skipped` (`missing`
+  added by #2281: an incomplete stage before `current`, or anywhere in
+  a complete run — a gap passed over, where `ahead` is only ever after
+  `current`; the roster is `protocol.STAGE_STATES`); each run's `ladder` is
   its own (maintenance rows carry capture and honor `re-entry:`; feature
   rows honor the `ux:` conditional as `skipped`). The invariant "exactly
   one `current` per run, and it equals `next_stage`" is owned by

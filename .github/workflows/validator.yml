@@ -80,6 +80,9 @@ jobs:
           # default ref ('' falls through to it).
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.pr && format('refs/pull/{0}/head', inputs.pr) || '' }}
           persist-credentials: false
+          # Detector P diffs eval records against the PR's base sha
+          # (ADR-0139); a depth-1 clone does not hold that commit.
+          fetch-depth: 0
       # The commit this job judges, for check-on-head (ADR-0138). Recorded
       # before any PR code runs: a later step cannot rewrite an earlier
       # step's outputs, so the PR's code cannot redirect the verdict.

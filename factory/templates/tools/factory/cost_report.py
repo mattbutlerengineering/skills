@@ -19,25 +19,43 @@ report issue and, on a PAUSE verdict, sets the FACTORY_PAUSED repo
 variable (`gh variable set`, readable as `vars.FACTORY_PAUSED` by any
 workflow's `if:`, the same vars.* convention sweeps.yml's Sentry job and
 validator.yml's FACTORY_REVIEW_LOGIN already use) — both real gh
-mutations, so they stay in the YAML, never here.
+mutations, so they stay in the YAML, never here. It also commits the
+report's verdict as docs/factory/pause.json (ADR-0136): the cloud
+routines cannot read repo variables (#2261), so the pause state they
+read is that committed file.
 
   python3 tools/cost_report.py report
         Recompute spend from docs/factory/costs.jsonl, decide against
         factory.json's monthly_cap_usd, and write title/body/pause/reason
-        to $GITHUB_OUTPUT for the workflow's gh steps. Exits nonzero only
-        on a genuine misconfiguration (fails CLOSED: an unreadable ledger
-        or unresolvable cap decides PAUSE and still exits nonzero, so a
-        broken config can never silently wave spend through unpaused).
+        and the pause state (state, the JSON text of
+        docs/factory/pause.json) to $GITHUB_OUTPUT for the workflow's
+        steps. Exits nonzero only on a genuine misconfiguration (fails
+        CLOSED: an unreadable ledger or unresolvable cap decides PAUSE and
+        still exits nonzero, so a broken config can never silently wave
+        spend through unpaused).
+  python3 tools/cost_report.py check
+        The dispatch-time cap check (ADR-0136): the current UTC month's
+        spend against the cap, judged now. Exits nonzero on PAUSE, so the
+        assembler's dispatch job refuses before it claims an order.
+  python3 tools/cost_report.py pause-state
+        Read docs/factory/pause.json, the pause state the weekly report
+        last committed. Exits 0 only when it says not paused; paused, a
+        missing file or an unreadable one exits nonzero (fails CLOSED).
 """
 import os
 import sys
 from collections import namedtuple
 from datetime import datetime, timezone
+from pathlib import Path
 
 import cost_ledger
 import factory_config
-from cli import finite, report, write_outputs
+from cli import finite, prettier_json, read_file, report, write_outputs
 from knowledge_plane import repo_root
+
+# The committed pause state the cloud routines read (ADR-0136): written by
+# cost-report.yml from run_report's `state` output, read by pause_state.
+PAUSE_STATE_PATH = "docs/factory/pause.json"
 
 PAUSE = "PAUSE"
 # one-owner: budget_guard.CONTINUE (ADR-0061) — one word, two verdict sets:
@@ -183,22 +201,67 @@ def _utcnow():
 def run_report(root, clock=None, ledger_path=None):
     """(outputs, problems) for the `report` command: recompute spend,
     decide PAUSE/CONTINUE, and compose everything the workflow's gh steps
-    need — title, body, pause ('true'/'false'), reason — as $GITHUB_OUTPUT
-    values. The workflow, never this module, runs `gh issue create` and
-    `gh variable set FACTORY_PAUSED` (the compute/mutate boundary)."""
+    need — title, body, pause ('true'/'false'), reason, and state (the
+    JSON text of PAUSE_STATE_PATH, ADR-0136) — as $GITHUB_OUTPUT values.
+    The workflow, never this module, runs `gh issue create`, `gh variable
+    set FACTORY_PAUSED` and the commit of the pause state (the
+    compute/mutate boundary). state carries no trailing newline: a
+    multiline output's last line ends at the heredoc delimiter."""
     clock = clock or _utcnow
     as_of = clock().date().isoformat()
     month = as_of[:7]
     result = guard(root, ledger_path=ledger_path, month=month, today=as_of)
+    paused = result.verdict == PAUSE
     outputs = {
-        "pause": "true" if result.verdict == PAUSE else "false",
+        "pause": "true" if paused else "false",
         "title": report_title(as_of),
         "body": compose_report(result.totals, result.verdict, result.reason,
                                result.cap, as_of, month,
                                result.month_totals),
         "reason": result.reason,
+        "state": prettier_json({"paused": paused, "as_of": as_of,
+                                "reason": result.reason}).rstrip("\n"),
     }
     return outputs, result.problems
+
+
+def check(root, clock=None, ledger_path=None):
+    """(reason, problems): the dispatch-time cap check (ADR-0136, #2312).
+    guard for the current UTC month, judged at the moment the assembler
+    is about to spend, so a breach between two weekly reports is caught
+    on the next dispatch rather than on the next Monday. A PAUSE verdict
+    is a problem (its reason, then guard's own problems on a fail-closed
+    PAUSE) so the CLI exits nonzero."""
+    as_of = (clock or _utcnow)().date().isoformat()
+    result = guard(root, ledger_path=ledger_path, month=as_of[:7],
+                   today=as_of)
+    if result.verdict == PAUSE:
+        return result.reason, [result.reason] + result.problems
+    return result.reason, []
+
+
+def pause_state(root):
+    """(line, problems): the committed pause state (ADR-0136, #2261), as
+    the cloud routines read it. Not paused is the one answer with no
+    problem; paused, absent and unreadable are each a problem, so a
+    routine that cannot prove the factory is running treats it as
+    paused — fail closed, never the fail-open read of an unreadable
+    repo variable."""
+    closed = " — failing closed"
+    state, problem = read_file(Path(root) / PAUSE_STATE_PATH,
+                               PAUSE_STATE_PATH, dict)
+    if problem:
+        return None, [f"cr: {problem}{closed}"]
+    if state is None:
+        return None, [f"cr: no pause state at {PAUSE_STATE_PATH}{closed}"]
+    if not isinstance(state.get("paused"), bool):
+        return None, [f"cr: {PAUSE_STATE_PATH} has no boolean `paused`"
+                      f"{closed}"]
+    line = (f"(pause state as of {state.get('as_of', 'unknown')}):"
+            f" {state.get('reason', '')}").rstrip()
+    if state["paused"]:
+        return None, [f"cr: paused {line}"]
+    return f"cr: not paused {line}", []
 
 
 def main(argv, env=None, clock=None, root=None):
@@ -212,6 +275,14 @@ def main(argv, env=None, clock=None, root=None):
         write_outputs(env, outputs)
         if outputs.get("reason"):
             print(outputs["reason"])
+    elif argv == ["check"]:
+        reason, problems = check(root, clock=clock)
+        if reason and not problems:
+            print(reason)
+    elif argv == ["pause-state"]:
+        line, problems = pause_state(root)
+        if line:
+            print(line)
     else:
         print(__doc__.strip())
         return 2
