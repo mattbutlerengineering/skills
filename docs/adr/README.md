@@ -155,6 +155,7 @@ the canonical vocabulary.
 | [0132](0132-a-gate-row-is-keyed-on-its-stays-start.md) | A gate row is keyed on its stay's start | accepted |
 | [0133](0133-the-tracker-readers-list-only-work-order-issues.md) | The tracker readers list only work-order issues, and sweeps joins the human_gates.py row | provisional |
 | [0134](0134-an-org-owned-repo-names-its-factory-owner-login.md) | An organization-owned repo names its factory owner login | provisional |
+| [0135](0135-project-goal-and-prioritization.md) | Project goal: faster, higher quality, more autonomy — and it decides priority | accepted |
 | [0136](0136-the-cap-is-checked-at-dispatch-and-the-pause-state-is-committed.md) | The cap is checked at dispatch, and the pause state is committed | accepted |
 | [0137](0137-a-forward-gate-skip-is-a-bypass-not-a-rejection.md) | A forward gate skip is a bypass, not a rejection | accepted |
 | [0138](0138-the-check-lives-on-the-commit-it-judges.md) | The check lives on the commit it judges | accepted |
