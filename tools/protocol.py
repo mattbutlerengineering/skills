@@ -427,6 +427,20 @@ def is_maintenance_run(run_dir):
             and run_dir.parent.parent.name == "docs")
 
 
+# A completed feature or fix run the operate skill compacted (#2058):
+# its directory keeps summary.md (and prd.md or breakdown.md when they
+# carry typed ids) and nothing else, so no stage artifact can orient
+# it. The product run at docs/ is not covered: docs/ holds the
+# project's own docs, and a docs/summary.md there is not a compaction.
+COMPACTED_SUMMARY = "summary.md"
+
+
+def _compacted(run_dir):
+    return (run_dir.parent.name in ("features", "fixes")
+            and run_dir.parent.parent.name == "docs"
+            and (run_dir / COMPACTED_SUMMARY).is_file())
+
+
 def _re_entry_architect(run_dir):
     """Re-entry depth is decided at capture time and recorded in
     defect.md frontmatter (re-entry: implement | architect). Only an
@@ -487,12 +501,15 @@ def next_stage(run_dir):
     retro.md marks the whole run complete regardless of earlier gaps
     (the protocol's run-discovery rule and the router's step 6 both
     key on it); a retro.md without its population line is Operate not
-    yet complete, whatever lies before it (ADR-0102). Maintenance runs
-    walk their own rows (ADR-0025); every other run walks the
-    product/feature table."""
+    yet complete, whatever lies before it (ADR-0102). Without a retro, a
+    compacted feature or fix run (summary.md, #2058) is complete.
+    Maintenance runs walk their own rows (ADR-0025); every other run
+    walks the product/feature table."""
     run_dir = Path(run_dir)
     if (run_dir / "retro.md").is_file():
         return "complete" if _retro_populated(run_dir) else "operate"
+    if _compacted(run_dir):
+        return "complete"
     if is_maintenance_run(run_dir):
         rows = MAINTENANCE_STAGE_ARTIFACTS
         complete = _maintenance_stage_complete
@@ -537,7 +554,9 @@ def stage_states(run_dir):
     exists anyway reads "done" so a gapped run shows its gap. An
     incomplete stage before current — or anywhere in a complete run —
     was passed over, not yet reached: it reads "missing", never "ahead"
-    (#2281; only a retro.md can place a run past a gap, ADR-0102)."""
+    (#2281; only a retro.md can place a run past a gap, ADR-0102).
+    A compacted run (#2058) reads "done" throughout: its stage
+    artifacts are in git history, not the tree."""
     run_dir = Path(run_dir)
     if is_maintenance_run(run_dir):
         rows = MAINTENANCE_STAGE_ARTIFACTS
@@ -547,6 +566,8 @@ def stage_states(run_dir):
         rows = STAGE_ARTIFACTS
         complete = _stage_complete
         skipped = _stage_skipped
+    if _compacted(run_dir) and not (run_dir / "retro.md").is_file():
+        return [(stage, "done") for stage, _ in rows]
     current = next_stage(run_dir)  # "complete" matches no row
     # Past current, an incomplete stage is ahead; before it (and
     # throughout a complete run, which matches no row) it is missing.

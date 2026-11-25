@@ -26,7 +26,8 @@ maintenance run.
 **Run discovery:** candidate run directories are `docs/` plus every
 `docs/features/*/` and every `docs/fixes/*/`. A run is *complete* when
 `retro.md` exists and carries its population line (The Operate
-population, below); *active* when it has at least one artifact and is
+population, below), or when it was compacted to `summary.md` (below the
+orientation table); *active* when it has at least one artifact and is
 not complete. If the user named a feature or fix, use (or create) its directory.
 If exactly one run is active, use it. Otherwise, list the candidates and ask
 which one.
@@ -126,7 +127,11 @@ which artifacts exist in the run directory:
 **Next stage = the first stage in order that is not complete.** An
 existing `retro.md` settles it first: populated (or predating the line)
 means the run is complete, unpopulated means Operate, whatever earlier
-stage is missing (ADR-0102, The Operate population below).
+stage is missing (ADR-0102, The Operate population below). Without a
+`retro.md`, a feature or fix run directory holding `summary.md` is
+complete too: it is a finished run that `operate` compacted, its stage
+artifacts deleted and kept in git history (#2058). The product run at
+`docs/` is never compacted, so a `docs/summary.md` decides nothing.
 
 ### Commit at the stage boundary
 
