@@ -4171,6 +4171,10 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
             # report step composed and commits it for the cloud routines
             # (the make target computes, the YAML mutates)
             """printf '%s\\n' "$PAUSE_STATE" > docs/factory/pause.json""",
+            # that push starts no workflow (GITHUB_TOKEN), so the new
+            # tip's `check` is dispatched by name (ADR-0138), as
+            # gate-digest does
+            "gh workflow run validator.yml",
         ),
         "npx-branch.yml": (
             # this-repo-only, never mirrored, like sweeps: the build tool
