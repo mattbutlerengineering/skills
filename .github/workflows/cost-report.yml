@@ -41,6 +41,7 @@ on:
 permissions:
   contents: write
   issues: write
+  actions: write
 
 concurrency:
   group: cost-report
@@ -131,6 +132,7 @@ jobs:
       # must reach the routines too. Needs no FACTORY_PAUSE_TOKEN: the
       # job's own grant can commit. An unchanged file commits nothing.
       - name: Publish the pause state for the routines
+        id: publish
         if: >-
           always()
           && steps.report.outputs.state != ''
@@ -144,3 +146,12 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "chore(factory): pause state (cost-report)"
           git push
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+      # The push above starts no workflow (GITHUB_TOKEN), so this gives
+      # the new tip its `check` (ADR-0138). No --ref: the dispatch runs
+      # on the default branch, which is where the push landed.
+      - name: Check the default branch's new tip
+        if: always() && steps.publish.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run validator.yml
