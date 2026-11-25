@@ -67,8 +67,9 @@ pre-pass, deliberately **not** a gate:
   PR with `Fixes-PR: #N`, so it over-counts until that trailer is in use.
   An Owner touch is an Owner-login commit, review or comment; an agent
   that comments as the Owner's account counts as a touch. It is a
-  measurement, never a gate. `python3 tools/factory.py goal-metrics` is
-  the same tool.
+  measurement, never a gate; the weekly `cost-report.yml` run also
+  comments it on the report issue and commits the row (#2347).
+  `python3 tools/factory.py goal-metrics` is the same tool.
 - `python3 tools/size_band_calibration.py` — each S/M/L band's past cost
   error against its budget, from the cost ledger joined at read time to
   the breakdown row's `size:`, beside its cost and re-plan rate. Free,

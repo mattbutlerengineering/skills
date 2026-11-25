@@ -675,6 +675,34 @@ class TestEveryConsumerOfTheReportStatesItsGate(unittest.TestCase):
         self.assertIn("git push", block)
 
 
+class TestGoalMetricsStep(unittest.TestCase):
+    """#2347: the weekly run comments ADR-0135's goal metrics on the
+    report issue and commits the ledger row. The workflow is mirrored
+    verbatim into stamped repos, which ship no goal_metrics.py, so the
+    step is guarded on the tool's presence."""
+
+    WORKFLOW = REPO_ROOT / ".github" / "workflows" / "cost-report.yml"
+
+    def block(self, name):
+        return step_block(self.WORKFLOW.read_text(encoding="utf-8"), name)
+
+    def test_the_post_step_records_the_issue_url(self):
+        self.assertIn('url=$(gh issue create', self.block(
+            "Post the weekly cost report issue"))
+
+    def test_the_goal_step_is_guarded_and_comments_on_the_issue(self):
+        block = self.block("Comment the goal metrics on the report issue")
+        self.assertIn("hashFiles('tools/goal_metrics.py') != ''", block)
+        self.assertIn("steps.post.outputs.url != ''", block)
+        self.assertIn("--markdown --append docs/factory/goal-metrics.jsonl",
+                      block)
+        self.assertIn("gh issue comment", block)
+
+    def test_the_publish_step_commits_the_ledger_when_present(self):
+        block = self.block("Publish the pause state for the routines")
+        self.assertIn("docs/factory/goal-metrics.jsonl", block)
+
+
 class TestWorkflowOutputLockstep(unittest.TestCase):
     """The $GITHUB_OUTPUT seam, cost-report side: run_report's output keys
     and cost-report.yml's steps.report.outputs.<name> references are a

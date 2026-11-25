@@ -4159,7 +4159,14 @@ class TestWorkflowRunStepInvariant(unittest.TestCase):
         "cost-report.yml": (
             # the compute/mutate boundary (workflow header comment): gh
             # mutations stay in YAML, never in a make target
-            'gh issue create --title "$REPORT_TITLE" --body "$REPORT_BODY"',
+            'url=$(gh issue create --title "$REPORT_TITLE" --body'
+            ' "$REPORT_BODY")',
+            # the goal metrics (#2347): a root-only tool, so no make target
+            # (the Makefile is mirrored and stamped repos lack the tool);
+            # the step's hashFiles guard skips it in a stamped repo, and
+            # the tool's only write is the --append ledger row
+            'python3 tools/goal_metrics.py --markdown --append'
+            ' docs/factory/goal-metrics.jsonl > "$RUNNER_TEMP/goal.md"',
             # the breach leg: names the missing-token cause, then flips
             # FACTORY_PAUSED on
             'if [ -z "${GH_TOKEN}" ]; then',

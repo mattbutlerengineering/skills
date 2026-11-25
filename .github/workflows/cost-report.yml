@@ -38,10 +38,12 @@ on:
 # contents: write is for the one commit this workflow makes: the pause
 # state, docs/factory/pause.json (ADR-0136). A push by GITHUB_TOKEN does
 # not trigger other workflows, so the weekly commit cannot recurse into CI.
+# pull-requests: read is for the goal-metrics step's merged-PR listing.
 permissions:
   contents: write
   issues: write
   actions: write
+  pull-requests: read
 
 concurrency:
   group: cost-report
@@ -73,6 +75,7 @@ jobs:
       # evidence a report was composed, and a crash before write_outputs
       # skips this step instead of asking gh to create an empty issue.
       - name: Post the weekly cost report issue
+        id: post
         if: >-
           always()
           && steps.report.outputs.title != ''
@@ -80,7 +83,25 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPORT_TITLE: ${{ steps.report.outputs.title }}
           REPORT_BODY: ${{ steps.report.outputs.body }}
-        run: gh issue create --title "$REPORT_TITLE" --body "$REPORT_BODY"
+        run: |
+          url=$(gh issue create --title "$REPORT_TITLE" --body "$REPORT_BODY")
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      # ADR-0135's goal metrics, commented on the report issue and appended
+      # to docs/factory/goal-metrics.jsonl (#2347); the publish step below
+      # commits the row. A stamped repo ships no goal_metrics.py, so the
+      # hashFiles guard skips the step there. A failed metrics read fails
+      # this step and appends nothing; the pause steps still run.
+      - name: Comment the goal metrics on the report issue
+        if: >-
+          always()
+          && steps.post.outputs.url != ''
+          && hashFiles('tools/goal_metrics.py') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_URL: ${{ steps.post.outputs.url }}
+        run: |
+          python3 tools/goal_metrics.py --markdown --append docs/factory/goal-metrics.jsonl > "$RUNNER_TEMP/goal.md"
+          gh issue comment "$REPORT_URL" --body-file "$RUNNER_TEMP/goal.md"
       # A cap breach that cannot be enforced is a safety failure, not a
       # missing optional feature — so this names the cause and fails loudly
       # rather than skipping gracefully (unlike the Sentry sweep's vars.*
@@ -143,8 +164,11 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/factory/pause.json
+          if [ -f docs/factory/goal-metrics.jsonl ]; then
+            git add docs/factory/goal-metrics.jsonl
+          fi
           if git diff --cached --quiet; then exit 0; fi
-          git commit -m "chore(factory): pause state (cost-report)"
+          git commit -m "chore(factory): pause state and goal metrics (cost-report)"
           git push
           echo "pushed=true" >> "$GITHUB_OUTPUT"
       # The push above starts no workflow (GITHUB_TOKEN), so this gives
