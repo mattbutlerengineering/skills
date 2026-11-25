@@ -1,6 +1,6 @@
 # CODEOWNERS mirrors through product_codeowners, not identity
 
-- Status: accepted
+- Status: superseded in part by ADR-0141
 - Date: 2026-09-21
 
 Amends ADR-0050. Its Decision said "The transform is identity for the 19

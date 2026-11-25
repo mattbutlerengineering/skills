@@ -150,7 +150,7 @@ reports exactly that, and it is the one thing to fix before the next CI run:
 
 After editing anything under `factory/templates/`, or any root file
 listed in `factory_init.MIRRORS` (the root tools mirrored into the
-payload, the workflows, CODEOWNERS and the Makefile):
+payload, the workflows and the Makefile):
 
     python3 tools/factory_init.py update-manifest
 

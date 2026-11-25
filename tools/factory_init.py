@@ -5,8 +5,8 @@ and regenerate the checksum manifest that pins it (PRD-0001; ADR-0032).
 Conventions match lint.py/gates.py: functions return label-prefixed
 problem strings; the CLI prints them and exits nonzero.
 
-  update-manifest   refresh the mirrors (root tools, workflows,
-                    CODEOWNERS, and the Makefile — see MIRRORS) from the
+  update-manifest   refresh the mirrors (root tools, workflows, and
+                    the Makefile — see MIRRORS) from the
                     repo root into factory/templates/, writing each file
                     through its MIRRORS transform, then rewrite
                     factory/manifest.json (plugin name + version from
@@ -143,73 +143,14 @@ def product_makefile(text):
 OWNER_PLACEHOLDER = "@<owner>"
 
 
-# The product-repo CODEOWNERS header, authored here for the same reason
-# PRODUCT_MAKEFILE_HEADER is: the root file's comment is true about this
-# repo, and the stamped twin has to say something else. It names the
-# three-human-gates decision instead of citing a number — the seed files
-# that decision under its own numbering, and a bare token would point a
-# stamped repo at an ADR it does not have.
-PRODUCT_CODEOWNERS_HEADER = (
-    "# Code owners — stamped by factory-init. SUBSTITUTE THE"
-    " PLACEHOLDER:\n"
-    f"# replace every `{OWNER_PLACEHOLDER}` below with a GitHub handle or"
-    " team that is a\n"
-    "# collaborator on THIS repo.\n"
-    "#\n"
-    "# Until you do, the merge gate is inert. Required code-owner"
-    " review is what\n"
-    "# makes the merged PR the approval record (the three-human-gates"
-    " decision,\n"
-    "# in docs/adr/). GitHub ignores a CODEOWNERS entry naming someone"
-    " who is\n"
-    "# not a collaborator here, and it does not tell you that it did.\n"
-    "#\n"
-    "# The explicit doc paths are the first two gates' surfaces; the"
-    " fallback\n"
-    "# keeps every merge owner-reviewed.\n")
-
-
-# A CODEOWNERS owner: a whitespace-delimited token that STARTS with @.
-# An email address is also a legal owner, and its local part must survive.
-_OWNER_TOKEN = re.compile(r"(^|\s)@\S+", re.MULTILINE)
-
-
-def product_codeowners(text):
-    """CODEOWNERS' MIRRORS transform: the root file as its product-repo
-    twin. Swap the root header comment for the product one, and rewrite
-    every owner to OWNER_PLACEHOLDER.
-
-    The root names THIS repo's owner. A stamped repo that inherits it has
-    a merge gate GitHub silently ignores — the failure the seeded
-    blueprint, docs/setup.md and doctor's step 8 all warn about, and the
-    reason detector E leaves this file out of the pristine set. They all
-    say the stamp ships a placeholder; this is what makes that true.
-
-    Only the LEADING comment block is dropped — the root's header, the
-    one part that is prose about this repo. A comment further down
-    annotates a rule, and dropping it would lose the payload something
-    the root said, silently. The block is found by walking comment lines
-    from the top rather than partitioning on the first blank line the way
-    product_makefile does, so a root file with no header, or one whose
-    header stops using a blank line, still lands complete — ADR-0050
-    names that dependence as the fragile part.
-    """
-    lines = text.splitlines()
-    start = 0
-    while start < len(lines) and lines[start].lstrip().startswith("#"):
-        start += 1
-    rules = _OWNER_TOKEN.sub(rf"\1{OWNER_PLACEHOLDER}",
-                             "\n".join(lines[start:]))
-    return PRODUCT_CODEOWNERS_HEADER + rules.strip("\n") + "\n"
-
-
 # Root files mirrored into the payload as (repo-root path, path under
 # factory/templates/, transform) triples, so a stamped product repo runs
 # the same tools and the same CI as this one — one source of truth, never
 # a hand-maintained second copy. The transform is identity for every
-# byte-for-byte mirror; the Makefile and .github/CODEOWNERS are the two
-# twins that genuinely differ per repo, and product_makefile and
-# product_codeowners above are the whole translation — a new make target
+# byte-for-byte mirror; the Makefile is the one twin that genuinely
+# differs per repo, and product_makefile above is the whole translation
+# (.github/CODEOWNERS is an authored payload file with no root twin,
+# ADR-0141) — a new make target
 # is a root-Makefile edit plus update-manifest, never a hand-sync.
 # gates.py imports its sibling protocol, and its --selftest delegates to
 # its sibling gates_selftest.py (#784); label_sync.py is the
@@ -238,11 +179,7 @@ def product_codeowners(text):
 # that respelling is derived from this table rather than from a second
 # list that could fall behind it. validator.yml is
 # path-agnostic (it runs `make` targets), which is what lets it be mirrored
-# byte-for-byte instead of forked per repo. .github/CODEOWNERS is the
-# human-gate surface (ADR-0033) and the one other twin that genuinely
-# differs per repo: the root file names this repo's code owner, so it
-# mirrors through product_codeowners, which swaps the header and blanks
-# the owner to a placeholder the stamped repo substitutes. conductor.py
+# byte-for-byte instead of forked per repo. conductor.py
 # and its capability siblings are the Conductor's batch tool (PRD-0013),
 # run by the conduct skill against a stamped repo (#678); they ship
 # together because each imports conductor.py's row grammar, and every
@@ -292,8 +229,6 @@ MIRRORS = (
      ".github/workflows/cost-report.yml", identity),
     (".github/workflows/gate-digest.yml",
      ".github/workflows/gate-digest.yml", identity),
-    (".github/CODEOWNERS",
-     ".github/CODEOWNERS", product_codeowners),
     ("Makefile", "Makefile", product_makefile),
 )
 

@@ -87,7 +87,7 @@ the canonical vocabulary.
 | [0064](0064-a-quoted-token-is-not-a-claim.md) | A quoted work-order token is not a claim | provisional |
 | [0065](0065-the-frontmatter-split-and-what-it-unblocks.md) | The frontmatter split, and what it does and does not unblock | superseded in part by ADR-0091 (the narrowed blocker and the split as a restructure step) |
 | [0066](0066-no-seam-for-ghs-silence.md) | No seam for gh's silence; the rule is shared, the meaning is local | provisional |
-| [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | accepted |
+| [0067](0067-codeowners-mirrors-through-product-codeowners.md) | CODEOWNERS mirrors through product_codeowners, not identity | superseded in part by ADR-0141 |
 | [0068](0068-parse-run-widens-the-knowledge-plane-walk.md) | parse_run widens the knowledge-plane walk (expand phase) | amended by ADR-0094 (every run-artifact and ADR-index read guarded, reported by D) |
 | [0069](0069-autonomy-per-gate-wait-hour.md) | Autonomy per human-hour: accepted orders per gate-wait hour | superseded in part by ADR-0080 |
 | [0070](0070-github-merge-queue-composes-with-agent-merge.md) | Adopt GitHub's native merge queue, composing with agent-merge | accepted |
@@ -161,3 +161,4 @@ the canonical vocabulary.
 | [0138](0138-the-check-lives-on-the-commit-it-judges.md) | The check lives on the commit it judges | accepted |
 | [0139](0139-eval-records-are-append-only-in-ci.md) | Eval records are append-only, enforced in CI | accepted |
 | [0140](0140-a-factory-driven-run-that-reached-a-human-merged-pr-graduates-maturity.md) | A factory-driven run that reached a human-merged PR graduates maturity | accepted (Owner, 2026-11-24) |
+| [0141](0141-this-repo-carries-no-codeowners.md) | This repo carries no CODEOWNERS; the stamped one is authored | accepted |
