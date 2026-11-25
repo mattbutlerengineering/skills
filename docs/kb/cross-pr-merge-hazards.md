@@ -1,7 +1,7 @@
 ---
 summary: Two PRs can each pass CI and fail together; per-PR CI cannot see it — test the pair with merge-tree before merging in sequence.
 sources: .github/workflows/validator.yml, docs/adr/0082-the-pipeline-writes-adrs-at-its-stages.md
-verified: e5178728cc30bff3aa8ef07a5ebc5906cb1a2271
+verified: 714384bdf5ea5e2c68adc707750221211caf6cdf
 related: main-unprotected, manifest-regen
 ---
 
