@@ -52,7 +52,6 @@ exists: docs/output-evals.md
 exists: docs/factory/doc-gardener-routine.md
 exists: docs/factory/improvement-routine.md
 exists: docs/factory/queue-groomer-routine.md
-exists: docs/factory/retro-reflect-routine.md
 exists: evals/README.md
 exists: tools/gates.py
 exists: tools/lint.py

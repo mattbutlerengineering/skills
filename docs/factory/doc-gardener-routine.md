@@ -12,8 +12,7 @@ list. Where this file and the charter disagree, the charter wins.
 Its mission is documentation hygiene in the gaps the offline detectors
 leave: stale cross-references, drifted indexes, and `LEDGER.md` upkeep.
 It is not reflect-loop mining (the
-[daily improvement routine](improvement-routine.md) and the
-[weekly retro/reflect routine](retro-reflect-routine.md)) and not queue
+[daily improvement routine](improvement-routine.md)) and not queue
 grooming (the [weekly queue-groomer routine](queue-groomer-routine.md)).
 
 Two facts frame every run:

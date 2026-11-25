@@ -65,7 +65,6 @@ How to read it:
 | Hourly improvement routine | One S-sized fix per hour, issue to merge (journal #925) | none stated | 2026-11-22, [#2321](https://github.com/mattbutlerengineering/skills/pull/2321): a kb page misdescribed detector B, corrected | keep |
 | Merge-train routine | Phase 0 verdicts and a serial merge train every 4 hours (journal #930) | speed | none found (its holds repeat detector failures; no finding of its own) | sunset-candidate |
 | Queue-groomer routine | Weekly backlog and claim hygiene (journal #590) | none stated | 2026-10-07, [#589](https://github.com/mattbutlerengineering/skills/pull/589): 8 resolved seeds still open in the backlog | keep |
-| Retro/reflect routine | Weekly correction-stream review (journal #587) | none stated | none found (all 9 runs propose-only) | sunset-candidate |
 | Doc-gardener routine | Weekly doc-rot fix (journal #586) | none stated | 2026-11-13, [#1769](https://github.com/mattbutlerengineering/skills/pull/1769): CLAUDE.md's routine-trigger list was false | keep |
 | implement-queue review gate | A distinct reviewer scores each queue PR (`tools/reviewer_verdict.py`) | quality | 2026-11-15, findings on #1829 filed as [#1833](https://github.com/mattbutlerengineering/skills/issues/1833), fixed by [#1847](https://github.com/mattbutlerengineering/skills/pull/1847) | keep |
 | Post-wave regression review | An independent agent reviews a wave's merges | quality | 2026-11-21, [#2268](https://github.com/mattbutlerengineering/skills/issues/2268): two regressions, fixed by [#2269](https://github.com/mattbutlerengineering/skills/pull/2269) | keep |
@@ -73,3 +72,8 @@ How to read it:
 | Human gates (`tools/human_gates.py`) | PRD, blueprint and merge gates on work-order labels | quality | none found (no issue ever carried a rejection label) | sunset-candidate |
 | CODEOWNERS | Owner review on every path | quality | none found (no PR has a changes-requested review) | sunset-candidate |
 | kb page re-verification | A stale kb page is re-read against its sources | none stated | 2026-11-22, [#2321](https://github.com/mattbutlerengineering/skills/pull/2321): a wrong claim about which gate strips fences, corrected | keep |
+
+## Retired
+
+- 2026-11-25, Retro/reflect routine (journal #587): no real catch in 60
+  days, all 9 runs propose-only (#2359).

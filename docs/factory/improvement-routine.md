@@ -136,7 +136,7 @@ never work:
 2. **A ready queue item.** Eligible: an open issue that is not a work
    order (no `wo:*` label — those move only through the dispatch plane),
    not a permanent-state issue (a journal, digest, queue or cost report:
-   #178, #181, #294, #586, #587, #590, #925, #930), not labelled
+   #178, #181, #294, #586, #590, #925, #930), not labelled
    `ready-for-human` or `needs-human`, not covered by an open PR (a body
    that `Closes` it), and not blocked by an issue that is still open.
    Only if it fits the size bound.
@@ -312,9 +312,8 @@ of those must update prompt and playbook together.
 ## Decisions
 
 **2026-10-14: the daily routine reads the toolsmith queue, by owner
-decision** (#818). The queue's other reader, the
-[retro-reflect routine](retro-reflect-routine.md), has no trigger (its
-deferral stands), so until it runs the daily routine reads the queue
+decision** (#818). The queue's other reader, the retro/reflect
+routine, was retired on 2026-11-25 (#2359), so the daily routine reads the queue
 (§2 item 10, §6) within its existing powers: queue entries are
 correction events like any other, and the queue itself stays
 `rejection_mining.py`'s to write.
