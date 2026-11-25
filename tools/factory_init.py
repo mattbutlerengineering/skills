@@ -292,8 +292,6 @@ MIRRORS = (
      ".github/workflows/cost-report.yml", identity),
     (".github/workflows/gate-digest.yml",
      ".github/workflows/gate-digest.yml", identity),
-    (".github/workflows/toolsmith-mine.yml",
-     ".github/workflows/toolsmith-mine.yml", identity),
     (".github/CODEOWNERS",
      ".github/CODEOWNERS", product_codeowners),
     ("Makefile", "Makefile", product_makefile),

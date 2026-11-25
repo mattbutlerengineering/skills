@@ -60,7 +60,6 @@ How to read it:
 | `npx-branch.yml` | Rebuilds the `npx` install branch on release | none stated | none found (publishes; not a check) | sunset-candidate |
 | `pages.yml` | Publishes the assembly line page | none stated | none found (publishes; not a check) | sunset-candidate |
 | `sweeps.yml` reconcile | Files plane-drift intake between breakdown rows and issues | none stated | 2026-11-09, [#1142](https://github.com/mattbutlerengineering/skills/issues/1142): eleven mirror labels out of step, reconciled | keep |
-| `toolsmith-mine.yml` | Weekly rejection mining into #294 | none stated | none found (#294 last updated 2026-08-21) | sunset-candidate |
 | Daily improvement routine | One evidenced process fix a day (journal #181) | none stated | 2026-11-18, [#2054](https://github.com/mattbutlerengineering/skills/issues/2054) filed, fixed by [#2055](https://github.com/mattbutlerengineering/skills/pull/2055) | keep |
 | Hourly improvement routine | One S-sized fix per hour, issue to merge (journal #925) | none stated | 2026-11-22, [#2321](https://github.com/mattbutlerengineering/skills/pull/2321): a kb page misdescribed detector B, corrected | keep |
 | Merge-train routine | Phase 0 verdicts and a serial merge train every 4 hours (journal #930) | speed | none found (its holds repeat detector failures; no finding of its own) | sunset-candidate |
@@ -77,3 +76,5 @@ How to read it:
 
 - 2026-11-25, Retro/reflect routine (journal #587): no real catch in 60
   days, all 9 runs propose-only (#2359).
+- 2026-11-25, `toolsmith-mine.yml` and its queue (#294): no real catch in
+  60 days, the queue untouched since 2026-08-21 (#2360).

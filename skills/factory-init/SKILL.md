@@ -55,7 +55,7 @@ mirrors are never hand-edited — they are re-stamped or re-generated.
      the test suite; it is exactly what CI must run.
    - `.github/factory.json` — budgets, routing, WIP cap, monthly cap.
    - `.github/workflows/` — the validator, assembler, design,
-     cost-report, gate-digest, and toolsmith-mine workflows.
+     cost-report, and gate-digest workflows.
    - `.github/labels.json` + `.github/CODEOWNERS` — the label taxonomy
      and the code-owner gate.
    - `tools/factory/` — the detector suite and the tools the workflows

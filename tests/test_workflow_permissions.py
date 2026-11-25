@@ -108,12 +108,6 @@ EXPECTED = {
         "sentry": ({"contents": "read", "issues": "write"},
                    "files one intake issue per unresolved error"),
     },
-    "toolsmith-mine.yml": {
-        "mine": ({"contents": "read", "issues": "write",
-                  "pull-requests": "read"},
-                 "reads the PR listing it harvests (#297) and posts the"
-                 " queue issue"),
-    },
     "validator.yml": {
         "check": ({"contents": "read", "pull-requests": "read"},
                   "runs `make check`; reads the dispatched PR to synthesize"

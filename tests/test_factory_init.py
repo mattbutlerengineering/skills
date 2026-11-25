@@ -42,7 +42,6 @@ EXPECTED_RELS = {
     "templates/.github/workflows/design.yml",
     "templates/.github/workflows/cost-report.yml",
     "templates/.github/workflows/gate-digest.yml",
-    "templates/.github/workflows/toolsmith-mine.yml",
     "templates/Makefile",
     "templates/factory.json",
     "templates/tools/factory/gates.py",
@@ -272,7 +271,7 @@ class TestPayloadToolsImport(unittest.TestCase):
     TestRealTreeMirrors pins that each mirrored file matches its root
     twin, and the acceptance stamp drives `make check` — but `check`
     names only some of the targets, so a mirrored tool reached by any
-    other target (`toolsmith-mine`) had nothing importing it. That is
+    other target (`toolsmith-mine`, retired by #2360) had nothing importing it. That is
     exactly how rejection_mining.py shipped for days importing
     `sweeps`, a module MIRRORS does not carry: the root import resolved,
     the payload import could not, and the failure waited for a

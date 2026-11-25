@@ -330,8 +330,8 @@ where it goes, and file nothing yourself:
   Model and pricing choices stay the Owner's; never edit them.
 - A metric that moved the wrong way and that the Owner wants chased
   becomes a plain issue with a `type:*` label, never a work order.
-- Rework the batch saw reaches the toolsmith queue through
-  `rejection_mining.py`'s weekly harvest, never by hand.
+- Rework the batch saw reaches the toolsmith queue only through
+  `rejection_mining.py mine`, never by hand.
 
 In a session with no Owner present, print the two readings and stop.
 

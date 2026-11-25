@@ -10,30 +10,20 @@ PROTOCOL = Path(__file__).resolve().parents[1] / "docs" / "factory" \
     / "improvement-routine.md"
 
 
-class TestTheDailyRoutineReadsTheToolsmithQueue(unittest.TestCase):
-    """#818 part 2, decided by the Owner on 2026-10-14: the toolsmith
-    queue's only other reader was the retro-reflect routine, retired
-    2026-11-25 (#2359), so the daily routine reads it."""
+class TestTheToolsmithQueueIsRetired(unittest.TestCase):
+    """#2360, chosen by the Owner on 2026-11-25 under ADR-0135: the
+    toolsmith-mine workflow is gone, so the routine stops reading the
+    frozen queue and the decision says why."""
 
     def text(self):
         return " ".join(PROTOCOL.read_text(encoding="utf-8").split())
 
-    def test_orient_finds_the_queue_by_its_marker(self):
-        self.assertIn("The toolsmith queue: the open issue whose body"
-                      " starts with `<!-- factory-toolsmith-queue -->`",
-                      self.text())
+    def test_orient_no_longer_reads_the_queue(self):
+        self.assertNotIn("factory-toolsmith-queue", self.text())
 
-    def test_reflect_counts_queue_entries_and_never_writes_the_queue(self):
-        text = self.text()
-        self.assertIn("Every toolsmith-queue entry inside the window",
-                      text)
-        self.assertIn("never edits or comments on the toolsmith queue",
-                      text)
-
-    def test_the_decision_is_recorded_with_its_date(self):
-        self.assertIn("**2026-10-14: the daily routine reads the"
-                      " toolsmith queue, by owner decision** (#818)",
-                      self.text())
+    def test_the_retirement_is_recorded_with_its_date(self):
+        self.assertIn("**2026-11-25: the toolsmith queue is retired**"
+                      " (#2360)", self.text())
 
 
 if __name__ == "__main__":
