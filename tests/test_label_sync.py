@@ -25,8 +25,9 @@ import cli_contract  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TEMPLATE = REPO_ROOT / "factory" / "templates" / ".github" / "labels.json"
 
-# The full 29-label work-order taxonomy, pinned by name: 9 wo:*, 3 size:*,
-# 3 risk:*, 5 type:*, 4 source:*, 1 found:*, pipeline-intake, 3 flags.
+# The full 33-label work-order taxonomy, pinned by name: 9 wo:*, 3 size:*,
+# 3 risk:*, 5 type:*, 4 goal:* (ADR-0135), 4 source:*, 1 found:*,
+# pipeline-intake, 3 flags.
 EXPECTED_NAMES = {
     "wo:draft", "wo:prd-approved", "wo:blueprint-approved",
     "wo:ready-for-agent", "wo:in-progress", "wo:needs-review",
@@ -35,6 +36,7 @@ EXPECTED_NAMES = {
     "risk:low", "risk:med", "risk:high",
     "type:feature", "type:defect", "type:chore", "type:support",
     "type:sweep",
+    "goal:speed", "goal:quality", "goal:autonomy", "goal:overhead",
     "source:human", "source:sentry", "source:validator", "source:sweep",
     "found:consumer",
     "pipeline-intake",
@@ -57,9 +59,9 @@ def gh(listing, **kwargs):
 
 
 class TestTaxonomyTemplate(unittest.TestCase):
-    def test_template_parses_with_exactly_the_29_names(self):
+    def test_template_parses_with_exactly_the_33_names(self):
         labels = taxonomy()
-        self.assertEqual(len(labels), 29)
+        self.assertEqual(len(labels), 33)
         self.assertEqual({label["name"] for label in labels}, EXPECTED_NAMES)
         for label in labels:
             self.assertEqual(sorted(label), ["color", "description", "name"],
@@ -280,7 +282,7 @@ class TestPlan(unittest.TestCase):
         problems = label_sync.plan([], desired)
         self.assertEqual(problems, [f"L: missing label {label['name']}"
                                     for label in desired])
-        self.assertEqual(len(problems), 29)
+        self.assertEqual(len(problems), 33)
 
     def test_tampered_color_yields_exact_mismatch_line(self):
         desired = taxonomy()
@@ -542,9 +544,9 @@ class TestCli(cli_contract.CliContract, cli_contract.ReportContract,
         code, out = self.run_cli([], gh([]))
         self.assertEqual(code, 1)
         lines = out.splitlines()
-        self.assertEqual(len(lines), 30)
+        self.assertEqual(len(lines), 34)
         self.assertEqual(lines[0], "L: missing label wo:draft")
-        self.assertEqual(lines[-1], "label-sync: 29 problem(s)")
+        self.assertEqual(lines[-1], "label-sync: 33 problem(s)")
 
 
 

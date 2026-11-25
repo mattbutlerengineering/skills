@@ -3,7 +3,7 @@
   "version": "0.29.0",
   "files": {
     "templates/.github/CODEOWNERS": "ba6ab48054414914bd38f2c82365a89c1400ca0d5e39e9d7288832b9d3834192",
-    "templates/.github/labels.json": "324ca3fa9b9bc12479433e602816946ea39a992d176acc7f79a0f07933db315e",
+    "templates/.github/labels.json": "7a3221aa72574fe32715d5aa9bcad485602908d912e9c4c52ecfc7746e7ea474",
     "templates/.github/workflows/assembler.yml": "39fe2803efa5bbf406c6a1073efa0d47a28ee65e63a62ac004205a7dd3bd7522",
     "templates/.github/workflows/cost-report.yml": "a2c46bca994fae4216ed3930e11b42275fa69c5fd2a25113752061dcc10037a2",
     "templates/.github/workflows/design.yml": "dfa731390f6631b9ee5ac202fb21f0eb5efc758c9ee26f21cee4566e0b6e35d7",

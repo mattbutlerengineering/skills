@@ -128,11 +128,20 @@ pick is report material:
    queue or cost report), not labelled `ready-for-human`,
    `needs-human` or any of the profile's `hold_labels`, not blocked by
    an open issue, not covered by an open PR, and not one whose own
-   text asks for Owner design or Owner spend consent; oldest first.
-   Only if it fits the size bound, and only one labelled `ready`, the
-   one state a driver may claim from (§5's claim step).
-3. **A process gap with evidence.** The sources, in order, each
-   reproduced in this run before it counts:
+   text asks for Owner design or Owner spend consent. Only if it fits
+   the size bound, and only one labelled `ready`, the one state a
+   driver may claim from (§5's claim step).
+   Goal-ranked (ADR-0135): an issue with no `goal:*` label is not
+   ready (name it under Proposals). Among the rest, in order:
+   `goal:quality` on an escaped product defect; `goal:overhead` while
+   the newest `overhead_ratio` in `docs/factory/goal-metrics.jsonl` is
+   over 0.30; then `goal:speed`, `goal:quality` and `goal:autonomy`,
+   the label whose metric sits furthest from its ADR-0135 target first,
+   smallest first. Age only breaks ties.
+3. **A process gap with evidence.** It is a new process (ADR-0135
+   rung 4): the same PR adds its `docs/process-register.md` row,
+   naming the metric it protects and the escape it would have caught.
+   The sources, in order, each reproduced in this run before it counts:
    - *An unenforced stated rule.* A rule written in `CLAUDE.md`, a
      `docs/factory/*-routine.md` protocol, the queue profile, a
      charter under `factory/charters/`, or a skill's `SKILL.md`, that
