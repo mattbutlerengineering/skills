@@ -152,8 +152,7 @@ installed plugin. Equal versions are not a problem. A difference is one
 6. **The Makefile carries its full target set.** `check`, `review`,
    `pr-event`, the four lifecycle targets (`wo-merged`, `wo-in-progress`,
    `wo-needs-review`, `wo-failed`), `wo-record`, `assembler`, `find-pr`,
-   `cost-report`, `cost-check`, `gate-digest`, `toolsmith-mine`,
-   `web-quality`. Without `cost-check` the assembler's dispatch job fails
+   `cost-report`, `cost-check`, `gate-digest`, `web-quality`. Without `cost-check` the assembler's dispatch job fails
    on every ready label (ADR-0136). A missing
    lifecycle target is a hole in the work-order state machine that nothing
    else reports: without `wo-failed`, for instance, a dispatched run that
@@ -163,9 +162,9 @@ installed plugin. Equal versions are not a problem. A difference is one
    a validator dispatched against a PR number writes no event, so every
    PR-shaped leg reads nothing and skips.
 
-7. **The six workflows are present and call the factory through `make`.**
+7. **The five workflows are present and call the factory through `make`.**
    `validator.yml`, `assembler.yml`, `design.yml`, `cost-report.yml`,
-   `gate-digest.yml`, `toolsmith-mine.yml`. The drift to look for is
+   `gate-digest.yml`. The drift to look for is
    narrow and specific: a `run:`
    step invoking `python3 tools/factory/...` directly instead of a make
    target. The target set is the contract CI and a local `make check` share,

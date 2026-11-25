@@ -3,7 +3,7 @@ CI's detector B reads this body (it skips locally): it needs a work-order
 id or a "No work order" line (colon, then a non-empty reason), and one closing
 keyword per issue. Left as they are, the two lines below FAIL the check —
 on purpose, so an unfilled template cannot merge. Never close a permanent
-issue (#178, #181, #294, #586, #590, #925, #930) to satisfy it.
+issue (#178, #181, #586, #590, #925, #930) to satisfy it.
 Grammar and traps: docs/kb/pr-body-contract.md.
 -->
 No work order:

@@ -100,12 +100,6 @@ Read, in order:
    that kept the pass out of `make check`. The tool exits nonzero
    whenever it finds anything, so a nonzero exit here is normal and is
    not a failure of the run.
-10. The toolsmith queue: the open issue whose body starts with
-    `<!-- factory-toolsmith-queue -->`, found by marker like the gate
-    digest. `rejection_mining.py` rewrites it weekly: gate rejections,
-    change-requested reviews, and Conductor review rework, each
-    correction stamped with its time. Read-only intel, consumed in §6.
-    Missing → note it under Health and carry on.
 
 ## 3 Health sweep
 
@@ -136,7 +130,7 @@ never work:
 2. **A ready queue item.** Eligible: an open issue that is not a work
    order (no `wo:*` label — those move only through the dispatch plane),
    not a permanent-state issue (a journal, digest, queue or cost report:
-   #178, #181, #294, #586, #590, #925, #930), not labelled
+   #178, #181, #586, #590, #925, #930), not labelled
    `ready-for-human` or `needs-human`, not covered by an open PR (a body
    that `Closes` it), and not blocked by an issue that is still open.
    Only if it fits the size bound.
@@ -219,11 +213,6 @@ Harvest the correction stream since last-scan:
   `architecture.md`, `docs/design/**`) — these are gate 1/2 rejections
   (ADR-0033).
 - Issues labeled `wo:failed`, `needs-human`, or `budget-exhausted`.
-- Every toolsmith-queue entry inside the window (§2 item 10): each
-  correction whose timestamp falls after last-scan is one correction
-  event, quoted as the queue states it, with the queue issue's
-  permalink. A queue line and a harvested comment that record the same
-  rejection are one event, not two.
 
 Classify each candidate rule as the [operate](../../skills/operate/SKILL.md)
 skill's environment retrospective does: **mechanical** (a deterministic
@@ -241,10 +230,6 @@ Rules, all from the toolsmith charter:
 - **Escalate, never apply.** A pattern implying a gate change, scope
   change, or autonomy graduation is human-only (ADR-0033); it goes
   under Proposals, and nowhere else.
-- **Read the queue, never write it.** The routine never edits or
-  comments on the toolsmith queue: `rejection_mining.py` owns its body.
-  A queue entry reaches a PR only the way any correction does, as
-  evidence for a candidate that clears the count (§4 rung 3).
 
 ## 7 Report and journal
 
@@ -311,9 +296,7 @@ of those must update prompt and playbook together.
 
 ## Decisions
 
-**2026-10-14: the daily routine reads the toolsmith queue, by owner
-decision** (#818). The queue's other reader, the retro/reflect
-routine, was retired on 2026-11-25 (#2359), so the daily routine reads the queue
-(§2 item 10, §6) within its existing powers: queue entries are
-correction events like any other, and the queue itself stays
-`rejection_mining.py`'s to write.
+**2026-11-25: the toolsmith queue is retired** (#2360). The weekly
+`toolsmith-mine` workflow that wrote it had no real catch in 60 days
+(`docs/process-register.md`), so the 2026-10-14 decision to read it
+(#818) lapses: §6 harvests corrections from their sources directly.

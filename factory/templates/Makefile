@@ -9,7 +9,6 @@
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
 .PHONY: wo-record assembler find-pr cost-report cost-check gate-digest
-.PHONY: toolsmith-mine
 .PHONY: web-quality pr-event
 
 # Set by the validator workflow's review job; defaults keep `make review`
@@ -81,9 +80,6 @@ cost-check:
 
 gate-digest:
 	python3 tools/factory/gate_digest.py daily
-
-toolsmith-mine:
-	python3 tools/factory/rejection_mining.py mine
 
 # The design pipeline's job body (.github/workflows/design.yml; ADR-0033
 # gate 2), run when a PR touches docs/design/**. Playwright drives the UI

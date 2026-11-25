@@ -75,15 +75,15 @@ gate paths added by hand. A kept `docs/adr/README.md` decides which seed ADRs
 land: one it has no index row for is skipped and reported as
 `factory-init: skipped <path>`, so detector D finds no unindexed seed.
 
-105 files land: the 52-file payload installed to its destinations, plus the
+103 files land: the 51-file payload installed to its destinations, plus the
 pristine mirror it was stamped from. `factory/manifest.json` is the authority.
 
 | Group | Count | What |
 |-------|-------|------|
-| `factory/` | 53 | the manifest and the pristine mirror the stamped detectors check themselves against |
+| `factory/` | 52 | the manifest and the pristine mirror the stamped detectors check themselves against |
 | `tools/factory/` | 32 | the detector suite, the tools the workflows call, the Conductor's batch tool, the trace view, and a `.gitignore` for their bytecode |
 | `docs/adr/` | 8 | the seeded ADR set, the convention, and the template |
-| `.github/workflows/` | 6 | validator, assembler, design, cost-report, gate-digest, toolsmith-mine |
+| `.github/workflows/` | 5 | validator, assembler, design, cost-report, gate-digest |
 | `.github/` | 3 | `factory.json` (budgets, routing bands, WIP cap, monthly cap), `labels.json` (the 33-label taxonomy), `CODEOWNERS` (the code-owner gate) |
 | `docs/design/` | 2 | the design-system seed and its template |
 | `Makefile` | 1 | `make check` = detectors + selftest + tests, exactly what CI runs |
