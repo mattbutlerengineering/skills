@@ -10,7 +10,10 @@
 # committing the gate-latency rows gate_digest.py appended to
 # docs/factory/costs.jsonl — stays here, gated on the `changed` step
 # output. A push by GITHUB_TOKEN does not trigger other workflows, so the
-# daily ledger commit cannot recurse into CI.
+# daily ledger commit cannot recurse into CI — and main's new tip would
+# carry no `check`, so the step after the push dispatches the validator
+# with no `pr` to check that tip (ADR-0138). The validator pushes
+# nothing, so the dispatch cannot recurse either.
 #
 # Editing this file means re-running update-manifest; detector E fails
 # the build otherwise.
@@ -27,6 +30,8 @@ on:
 permissions:
   contents: write
   issues: write
+  # The validator dispatch after the ledger push (ADR-0138).
+  actions: write
 
 concurrency:
   group: gate-digest
@@ -57,3 +62,11 @@ jobs:
           git add docs/factory/costs.jsonl
           git commit -m "chore(factory): gate-latency rows (gate-digest)"
           git push
+      # The push above starts no workflow (GITHUB_TOKEN), so this gives
+      # the new tip its `check` (ADR-0138). No --ref: the dispatch runs
+      # on the default branch, which is where the push landed.
+      - name: Check the default branch's new tip
+        if: steps.digest.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run validator.yml

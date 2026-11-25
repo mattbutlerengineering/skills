@@ -47,8 +47,12 @@ Check in order; the first hit sets the run mode.
 
 1. GitHub is unreachable — `gh auth status` fails and no GitHub MCP
    tool answers → record the failure in the session log and stop.
-2. `FACTORY_PAUSED` is `true` (`gh variable list`) → **propose-only
-   mode**: orient, consolidate and journal; no branch, no issue, no PR.
+2. `python3 tools/cost_report.py pause-state` exits nonzero — the
+   committed pause state (`docs/factory/pause.json`) says paused, or is
+   missing or unreadable, which fails closed (ADR-0136; `gh variable
+   list` answers 403 in the cloud, #2261) → **propose-only mode**:
+   orient, consolidate and journal; no branch, no issue, no PR. The
+   journal quotes the line the command printed.
 3. An open PR authored by this routine exists — head branch prefixed
    `routine-retro/`, or body starting `<!-- retro-reflect-routine -->` →
    **no-new-PR mode**. Unaddressed review comments on it are this

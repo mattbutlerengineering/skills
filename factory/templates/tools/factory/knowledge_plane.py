@@ -318,16 +318,37 @@ def row_pre_ledger(line):
 
 # A row's own declared metadata. `size:` is the cost band (factory_config
 # resolves it to a dollar budget) and `blocked by:` is the dependency edge
-# the ROW comment above refers to as "later tokens". Both are clause-scoped
-# so the trailing `(PRD-...)` and `(tracker: #N)` markers can never be read
-# as part of them.
+# the ROW comment above refers to as "later tokens". A blocked-by clause
+# ends at its first parenthetical unless a list separator follows it
+# (_clause), so the trailing `(PRD-...)` and `(tracker: #N)` markers and
+# the prose after them are never read as part of it, and a note on one
+# blocker (`WO-0001 (the API), WO-0003`) never hides the next.
 DONE_ROW = re.compile(r"^\s*[-*+]\s+\[x\]", re.IGNORECASE)
 SIZE = re.compile(r"\bsize:\s*([SML])\b")
-BLOCKED_BY = re.compile(r"\bblocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
+BLOCKED_BY = re.compile(r"\bblocked by:[ \t]*([^\n]*)", re.IGNORECASE)
 # The same edge written as the decompose template writes it: a sub-bullet
 # under the row (`  - Blocked by: WO-0001`).
 BLOCKED_BY_BULLET = re.compile(
-    r"(?m)^\s*[-*+]\s+blocked by:[ \t]*([^(\n]*)", re.IGNORECASE)
+    r"(?m)^\s*[-*+]\s+blocked by:[ \t]*([^\n]*)", re.IGNORECASE)
+# What, right after a closed parenthetical, continues the blocker list.
+_LIST_CONTINUES = re.compile(r"\s*(?:[,;&]|and\b)")
+
+
+def _clause(text):
+    """The blocked-by clause in `text` (everything after `blocked by:`
+    on its line): up to the first parenthetical, resuming after it only
+    when a list separator follows. A parenthetical names nothing, even a
+    work order, and an unclosed one ends the clause."""
+    parts = []
+    while True:
+        head, paren, tail = text.partition("(")
+        parts.append(head)
+        close = tail.find(")")
+        if not paren or close < 0:
+            return " ".join(parts)
+        text = tail[close + 1:]
+        if not _LIST_CONTINUES.match(text):
+            return " ".join(parts)
 
 
 def row_size(line):
@@ -370,7 +391,7 @@ def _blocked_clauses(text):
     first, _, rest = text.partition("\n")
     clauses = [m.group(1) for m in BLOCKED_BY.finditer(first)][:1]
     clauses += [m.group(1) for m in BLOCKED_BY_BULLET.finditer(rest)]
-    return clauses
+    return [_clause(clause) for clause in clauses]
 
 
 def row_blockers(line):

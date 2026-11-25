@@ -261,6 +261,11 @@ own environment and reach a key the Owner's session holds outside it (a
 macOS keychain entry, a key loaded in the SSH agent), and a shell
 profile that exports a token puts it back in the Worker's shell.
 
+A Worker is a headless run bounded by `--allowedTools`, not a
+worktree-isolated agent, so the brief `conductor.py run` writes carries
+its own `## Bash shapes` section: the variant that
+`../implement-queue/references/worker-bash-shapes.md` names. Never hand-write a Worker prompt.
+
 ### 5. Drive the merge turns the answers cover
 
 For each `ready` entry whose step is `merge`, one at a time:

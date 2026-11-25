@@ -56,7 +56,7 @@ Hooks (each a `## <name>` section with the exact command or rule):
 | `fast-path` | none: every PR is reviewed (with no `verdict` hook, every PR off the fast path is held unreviewed, [gate step 4](references/gate.md)) |
 | `verdict` | none: a missing hook is an `error` verdict, never a pass (fail closed) |
 | `reviewers` | one universal reviewer using [the reviewer contract](references/reviewer-contract.md); no specialists |
-| `merge-command` | `gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>` |
+| `merge-command` | `gh pr merge <N> --repo <owner>/<repo> --auto --squash --match-head-commit <sha>`, then the branch delete below |
 | `update-branch` | `gh pr update-branch <N>` |
 | `changed-files` | `gh api repos/{owner}/{repo}/pulls/<N>/files --paginate`: every `filename` plus every `previous_filename`; the number of file entries (a rename is one) must equal `gh api repos/{owner}/{repo}/pulls/<N> --jq .changed_files`, else fail closed |
 | `lock` | none: one session at a time is the only lock |
@@ -68,6 +68,13 @@ a head read at merge time. A merge refused because the PR's head is no
 longer `<sha>` is a moved head, not a failure to retry: the PR goes back
 through the gate. The pin guards the moment the merge is requested; a
 push after `--auto` is enabled is Phase 3's to catch.
+
+The default carries no `--delete-branch`: run from a worktree, `gh`
+fails deleting the local branch that worktree holds (#2319). Delete the
+remote branch only once `gh pr view <N> --repo <owner>/<repo> --json
+state` reports `MERGED`, with `gh api -X DELETE
+repos/<owner>/<repo>/git/refs/heads/<branch>`; while the PR is not yet
+`MERGED`, leave the branch and repeat the step when it is.
 
 **Cloud sessions.** Each hook's REST and MCP twin:
 [cloud-sessions.md](references/cloud-sessions.md).

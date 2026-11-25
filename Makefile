@@ -13,7 +13,8 @@
 # the twin; tests/test_gates.py::TestLockstep pins the command sets.
 
 .PHONY: check review wo-merged wo-in-progress wo-needs-review wo-failed
-.PHONY: wo-record assembler find-pr cost-report gate-digest toolsmith-mine
+.PHONY: wo-record assembler find-pr cost-report cost-check gate-digest
+.PHONY: toolsmith-mine
 .PHONY: web-quality pr-event
 
 # Set by the validator workflow's review job; defaults keep `make review`
@@ -79,6 +80,11 @@ find-pr:
 
 cost-report:
 	python3 tools/cost_report.py report
+
+# The assembler's dispatch-time cap check (ADR-0136): exits nonzero once
+# the current month's spend has reached factory.json's monthly cap.
+cost-check:
+	python3 tools/cost_report.py check
 
 gate-digest:
 	python3 tools/gate_digest.py daily

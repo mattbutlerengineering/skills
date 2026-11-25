@@ -371,11 +371,11 @@ class TestHumanTurns(Tree):
     """Human corrections and answered questions, mined only from
     top-level interactive transcripts, under their own key."""
 
-    def turns(self, talk, name=None, **kwargs):
+    def turns(self, talk, name=None, key="human_turns", **kwargs):
         self.save(talk, name=name)
         result, problems = self.harvest(**kwargs)
         self.assertEqual(problems, [])
-        return result["human_turns"]
+        return result[key]
 
     def test_a_correction_after_an_agent_action(self):
         talk = (Talk().human("fix the build")
@@ -417,7 +417,9 @@ class TestHumanTurns(Tree):
                 .tool("AskUserQuestion",
                       {"questions": [{"question": "Which branch?"}]},
                       "User has answered your questions: release"))
-        self.assertEqual(self.turns(talk), [{
+        # #2319: filed apart from human_turns, in the same shape.
+        self.assertEqual(self.turns(talk), [])
+        self.assertEqual(self.turns(talk, key="question_answers"), [{
             "kind": "answer", "signal": "question-tool",
             "human": "User has answered your questions: release",
             "agent": "AskUserQuestion: Which branch?",
@@ -430,7 +432,7 @@ class TestHumanTurns(Tree):
                 .tool("AskUserQuestion", {"questions": [{"question": "Q"}]},
                       f'Your questions have been answered: "{question}"='
                       '"release/2.x". You can now continue.'))
-        turn, = self.turns(talk)
+        turn, = self.turns(talk, key="question_answers")
         self.assertEqual(turn["human"], 'release/2.x". You can now continue.')
 
     def test_compaction_summaries_are_not_answers(self):
@@ -457,6 +459,7 @@ class TestHumanTurns(Tree):
                       {"questions": [{"question": "Which branch?"}]},
                       "Exit code 1\ntool failed", error=True))
         self.assertEqual(self.turns(talk), [])
+        self.assertEqual(self.turns(talk, key="question_answers"), [])
 
     def test_approvals_are_not_answers(self):
         for reply in ("go ahead", "OK.", "Yes!", "sounds good"):
@@ -529,8 +532,10 @@ class TestHumanTurns(Tree):
         result, problems = self.harvest()
         self.assertEqual(problems, [])
         self.assertEqual(sorted(result), ["arcs", "human_turns",
+                                          "question_answers",
                                           "recurring_errors", "scanned"])
         self.assertEqual(result["human_turns"], [])
+        self.assertEqual(result["question_answers"], [])
         self.assertEqual(result["scanned"], {
             "transcripts": 1, "skipped_lines": 0,
             "dirs": [str(self.dir)]})
@@ -852,6 +857,162 @@ class TestMain(Tree):
         self.assertEqual(out.splitlines(), [
             "harvest: --days must be a positive whole number, got '\u00b2'",
             "harvest: 1 problem(s)"])
+
+
+
+WT = "/work/acme.app/.claude/worktrees"
+
+
+class TestIssue2319(Tree):
+    """Issue #2319: the harvest's output, read directly."""
+
+    def run_main(self, argv):
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = kb.main(argv)
+        return code, out.getvalue()
+
+    def test_the_example_keeps_the_failing_argument(self):
+        command = (f"cd {REPO} && gh pr merge 12 --squash --delete-branch")
+        for sid in ("s1", "s2"):
+            self.save(Session(sid).bash(
+                command, "Exit code 1\nfailed to delete local branch",
+                error=True), age_days=1)
+        group, = self.harvest(days=7)[0]["recurring_errors"]
+        self.assertEqual(group["example"],
+                         "gh pr merge 12 --squash --delete-branch")
+
+    def test_a_long_example_is_capped(self):
+        for sid in ("s1", "s2"):
+            self.save(Session(sid).bash(
+                "grep -n " + "x" * 300, "Exit code 2\nboom", error=True),
+                age_days=1)
+        group, = self.harvest(days=7)[0]["recurring_errors"]
+        self.assertEqual(len(group["example"]), kb_harvest.EXCERPT)
+
+    def test_an_example_names_its_worktree_as_the_error_does(self):
+        for sid, tree in (("s1", "agent-a791373b3e117121f"),
+                          ("s2", "agent-aecbc41883465d1f6")):
+            self.save(Session(sid).bash(
+                f"pnpm --dir {WT}/{tree}/apps/h build",
+                f"Exit code 1\nno such dir {WT}/{tree}", error=True),
+                age_days=1)
+        group, = self.harvest(days=7)[0]["recurring_errors"]
+        self.assertEqual(group["example"],
+                         f"pnpm --dir {WT}/agent-<sha>/apps/h build")
+        self.assertIn("agent-<sha>", group["error"])
+
+    def test_an_arc_check_names_its_worktree_as_the_error_does(self):
+        for sid, tree in (("s1", "agent-a791373b3e117121f"),
+                          ("s2", "agent-aecbc41883465d1f6")):
+            command = f"pnpm --dir {WT}/{tree}/apps/h test"
+            self.save(Session(sid).bash(command, "Exit code 1\nboom",
+                                        error=True)
+                      .edit(f"{WT}/{tree}/apps/h/a.ts")
+                      .bash(command, "ok"), age_days=1)
+        checks = [arc["check"] for arc in self.harvest(days=7)[0]["arcs"]]
+        self.assertEqual(checks, [f"pnpm --dir {WT}/agent-<sha>/apps/h"] * 2)
+
+    def test_question_tool_answers_have_their_own_key(self):
+        self.save(Talk().human("ship it")
+                  .tool("AskUserQuestion",
+                        {"questions": [{"question": "Which branch?"}]},
+                        "User has answered your questions: release")
+                  .say("Cutting it from main?")
+                  .human("No, from release."))
+        result, problems = self.harvest()
+        self.assertEqual(problems, [])
+        self.assertEqual([(t["kind"], t["signal"])
+                          for t in result["human_turns"]],
+                         [("correction", "correction-wording")])
+        self.assertEqual([(t["kind"], t["signal"], t["agent"])
+                          for t in result["question_answers"]],
+                         [("answer", "question-tool",
+                           "AskUserQuestion: Which branch?")])
+
+    def summary_fixture(self):
+        for sid in ("s1", "s2"):
+            self.save(Session(sid)
+                      .bash("pnpm build", "Exit code 1\nmodule x not built",
+                            error=True)
+                      .bash("make check", "Exit code 2\nlint: 1 problem(s)",
+                            error=True)
+                      .bash("make check", "Exit code 2\nlint: 1 problem(s)",
+                            error=True)
+                      .edit(f"{REPO}/a.py")
+                      .bash("make check", "ok"), age_days=1)
+        (self.projects / f"{self.slug}--claude-worktrees-w1").mkdir()
+        self.save(Talk("s3").human("go")
+                  .tool("AskUserQuestion",
+                        {"questions": [{"question": "Which?"}]},
+                        "User has answered your questions: a")
+                  .say("Done.").human("No, revert that."), age_days=1)
+
+    def test_summary_ranks_errors_and_checks_and_counts_dirs(self):
+        self.summary_fixture()
+        code, out = self.run_main(["harvest", REPO, "--days", "7",
+                                   "--summary", "--projects-dir",
+                                   str(self.projects)])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "harvest: 3 transcript(s) in 2 project dir(s),"
+            " 0 skipped line(s)",
+            "recurring errors, most frequent first:",
+            "  4 in 2 session(s): Bash: lint: N problem(s)"
+            " (e.g. make check)",
+            "  2 in 2 session(s): Bash: module x not built"
+            " (e.g. pnpm build)",
+            "checks with the most failed attempts before a pass:",
+            "  4 attempt(s) over 2 arc(s): make check",
+            "human turns: 1 correction(s), 0 free-text answer(s);"
+            " 1 question-tool answer(s), listed apart",
+            "harvest: 0 problem(s)"])
+
+    def test_summary_says_none_when_there_is_nothing(self):
+        self.save(Session().bash("ls", "a"))
+        code, out = self.run_main(["harvest", REPO, "--summary",
+                                   "--projects-dir", str(self.projects)])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.splitlines(), [
+            "harvest: 1 transcript(s) in 1 project dir(s),"
+            " 0 skipped line(s)",
+            "recurring errors, most frequent first:",
+            "  none",
+            "checks with the most failed attempts before a pass:",
+            "  none",
+            "human turns: 0 correction(s), 0 free-text answer(s);"
+            " 0 question-tool answer(s), listed apart",
+            "harvest: 0 problem(s)"])
+
+    def test_summary_ends_with_an_unread_transcripts_problems(self):
+        self.save(Session("good").bash("ls", "a"))
+        (self.dir / "bad.jsonl").write_bytes(b'{"type": "caf\xc3')
+        code, out = self.run_main(["harvest", REPO, "--days", "1",
+                                   "--summary", "--projects-dir",
+                                   str(self.projects)])
+        self.assertEqual(code, 1)
+        lines = out.splitlines()
+        self.assertEqual(lines[0], "harvest: 1 transcript(s) in 1 project"
+                                   " dir(s), 0 skipped line(s)")
+        self.assertIn("bad.jsonl", lines[-2])
+        self.assertEqual(lines[-1], "harvest: 1 problem(s)")
+
+    def test_summary_lists_at_most_the_top_n(self):
+        for n in range(kb_harvest.SUMMARY_TOP + 2):
+            for sid in ("s1", "s2"):
+                self.save(Session(f"{sid}-{n}").bash(
+                    f"tool{n} run", f"Exit code 1\nerror kind {'q' * n}",
+                    error=True), age_days=1)
+        code, out = self.run_main(["harvest", REPO, "--days", "7",
+                                   "--summary", "--projects-dir",
+                                   str(self.projects)])
+        listed = [line for line in out.splitlines()
+                  if line.startswith("  2 in 2 session(s)")]
+        self.assertEqual(len(listed), kb_harvest.SUMMARY_TOP)
+
+    def test_usage_names_the_summary_flag(self):
+        self.assertIn("[--summary]", kb_harvest.USAGE)
+        self.assertIn("[--summary]", kb.USAGE)
 
 
 if __name__ == "__main__":

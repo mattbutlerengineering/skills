@@ -59,3 +59,6 @@ Every worker prompt carries:
    from an existing vulnerability (item 6), change nothing the issue does
    not ask for: a case you find outside its ask is named in the PR body,
    not implemented.
+13. Copy the worker Bash shapes block verbatim into the prompt of every
+   worktree-isolated worker; one file owns it:
+   [worker-bash-shapes.md](worker-bash-shapes.md).

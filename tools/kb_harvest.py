@@ -13,9 +13,19 @@ Three shapes are mined:
   normalized, seen two or more times across the scanned transcripts.
 - **human turns**: in a top-level transcript, a human turn that
   corrects the agent turn before it (its opening words), or answers an
-  agent question (a text turn ending in `?`, or the question tool),
-  under its own `human_turns` key. Approvals, plain instructions,
-  harness-injected turns and subagent transcripts yield none.
+  agent question (a text turn ending in `?`), under its own
+  `human_turns` key. An answer through the question tool goes under
+  `question_answers` instead, in the same shape: those answers are
+  many and would bury the corrections (#2319). Approvals, plain
+  instructions, harness-injected turns and subagent transcripts yield
+  none.
+
+A worktree's name (`agent-<hex>`) reads `agent-<sha>` in an arc's
+`check` and a recurring error's `example`, as in its normalized
+`error`, so one check run from many worktrees is one row. `--summary`
+prints a ranked plain-text digest instead of the JSON: the recurring
+errors by count, the checks by failed attempts, the human-turn counts,
+and the project directories as a count.
 
 On `--memory` it also lists the harness's auto-memory entries for the
 repo (`memory/` beside the main checkout's transcripts), each paired by
@@ -39,7 +49,7 @@ Run from a linked worktree, the root resolves to the main checkout (the
 parent of git's common dir) first, so the same transcripts are found.
 
   python3 tools/kb.py harvest [root] [--days N] [--session ID]
-                        [--projects-dir DIR] [--memory]
+                        [--projects-dir DIR] [--memory] [--summary]
 
 No flag scans the newest top-level session; --days N scans every
 transcript, subagents included, modified in the last N days.
@@ -98,6 +108,9 @@ SEGMENT = re.compile(r"&&|\|\||;|\|")
 ENV_ASSIGN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=\S*$")
 SHA = re.compile(r"\b[0-9a-f]{7,40}\b")
 DIGITS = re.compile(r"\d+")
+# A Claude Code worktree's name, the part of a path that differs per run.
+WORKTREE = re.compile(r"\bagent-[0-9a-f]{7,40}\b")
+SUMMARY_TOP = 10
 
 
 def slug(path):
@@ -168,14 +181,37 @@ def select(dirs, days, session, now):
     return sorted(top, key=lambda p: p.stat().st_mtime)[-1:]
 
 
-def check_key(command):
-    """A command's identity across retries: its first segment that is
-    not a `cd`, without env assignments, cut to three words."""
+def _command_words(command):
+    """The words of command's first segment that is not a `cd`, without
+    env assignments; None when every segment is one."""
     for segment in SEGMENT.split(command):
         words = [w for w in segment.split() if not ENV_ASSIGN.match(w)]
         if words and words[0] not in ("cd", "export", "set", "source"):
-            return " ".join(words[:3])
-    return command.strip()[:EXCERPT]
+            return words
+    return None
+
+
+def unworktree(text):
+    """text with every worktree name read as `agent-<sha>`."""
+    return WORKTREE.sub("agent-<sha>", text)
+
+
+def check_key(command):
+    """A command's identity across retries: its first segment that is
+    not a `cd`, without env assignments, cut to three words, its
+    worktree name normalized."""
+    words = _command_words(command)
+    if words is None:
+        return unworktree(command.strip()[:EXCERPT])
+    return unworktree(" ".join(words[:3]))
+
+
+def example(command):
+    """What a recurring error shows of its command: the whole first
+    segment check_key picks, capped, so the failing argument shows."""
+    words = _command_words(command)
+    text = " ".join(words) if words else " ".join(command.split())
+    return unworktree(text)[:EXCERPT]
 
 
 def _text(content):
@@ -248,7 +284,7 @@ def _result(use, item, record):
     command = inputs.get("command", "") if name == "Bash" else ""
     if failed:
         yield "error", {"tool": name, "error": excerpt(text),
-                        "example": check_key(command) if command else name,
+                        "example": example(command) if command else name,
                         "session": session}
     if command:
         yield "bash", {"check": check_key(command), "failed": failed,
@@ -348,9 +384,11 @@ def _words(items):
 
 
 def human_turns(records):
-    """Corrections and answered questions in one top-level transcript.
-    A human turn counts only after an agent turn, which it consumes, so
-    two human turns in a row yield at most one candidate."""
+    """Corrections and answered questions in one top-level transcript,
+    question-tool answers among them (`signal: question-tool`; mine
+    files those apart). A human turn counts only after an agent turn,
+    which it consumes, so two human turns in a row yield at most one
+    candidate."""
     found, agent, asked = [], None, {}
 
     def turn(kind, signal, human, said, record):
@@ -440,10 +478,13 @@ def mine(paths):
         errors += [detail for kind, detail in stream if kind == "error"]
         if not Path(path).name.startswith("agent-"):
             turns += human_turns(records)
+    asked = [t for t in turns if t["signal"] == "question-tool"]
     return {"scanned": {"transcripts": len(paths) - len(problems),
                         "skipped_lines": skipped},
             "arcs": found, "recurring_errors": recurring(errors),
-            "human_turns": turns}, problems
+            "human_turns": [t for t in turns
+                            if t["signal"] != "question-tool"],
+            "question_answers": asked}, problems
 
 
 def _block(text):
@@ -588,7 +629,42 @@ def harvest(root, projects=None, days=None, session=None, now=None,
 
 
 USAGE = ("usage: python3 tools/kb.py harvest [root] [--days N]"
-         " [--session ID] [--projects-dir DIR] [--memory]")
+         " [--session ID] [--projects-dir DIR] [--memory] [--summary]")
+
+
+def _checks(found):
+    """[(check, attempts, arcs)] over the arcs, most attempts first."""
+    groups = {}
+    for arc in found:
+        attempts, count = groups.get(arc["check"], (0, 0))
+        groups[arc["check"]] = (attempts + arc["attempts"], count + 1)
+    return sorted(((check, a, n) for check, (a, n) in groups.items()),
+                  key=lambda row: (-row[1], -row[2], row[0]))
+
+
+def summary(result, top=SUMMARY_TOP):
+    """The plain-text digest of a harvest result, as lines: the
+    recurring errors by count and the checks by failed attempts, top
+    `top` of each, the human-turn counts, and the project directories
+    as a count rather than a list."""
+    scanned = result["scanned"]
+    lines = [f"{LABEL}: {scanned['transcripts']} transcript(s) in"
+             f" {len(scanned.get('dirs', []))} project dir(s),"
+             f" {scanned['skipped_lines']} skipped line(s)",
+             "recurring errors, most frequent first:"]
+    lines += [f"  {g['count']} in {g['sessions']} session(s):"
+              f" {g['tool']}: {g['error']} (e.g. {g['example']})"
+              for g in result["recurring_errors"][:top]] or ["  none"]
+    lines.append("checks with the most failed attempts before a pass:")
+    lines += [f"  {attempts} attempt(s) over {count} arc(s): {check}"
+              for check, attempts, count in _checks(result["arcs"])[:top]] \
+        or ["  none"]
+    kinds = [t["kind"] for t in result["human_turns"]]
+    lines.append(f"human turns: {kinds.count('correction')} correction(s),"
+                 f" {kinds.count('answer')} free-text answer(s);"
+                 f" {len(result['question_answers'])} question-tool"
+                 " answer(s), listed apart")
+    return lines
 
 
 def _options(argv):
@@ -600,6 +676,8 @@ def _options(argv):
         arg = rest.pop(0)
         if arg == "--memory":
             options["memory"] = True
+        elif arg == "--summary":
+            options["summary"] = True
         elif arg in flags and rest:
             options[flags[arg]] = rest.pop(0)
         elif arg.startswith("-"):
@@ -620,7 +698,8 @@ def _options(argv):
 
 
 def main(argv, kb_dir=None):
-    """`kb.py harvest ...`: candidates as JSON, or problem strings.
+    """`kb.py harvest ...`: candidates as JSON (on --summary, the
+    plain-text digest and the problem count), or problem strings.
     kb_dir is the page directory kb.py owns, for memory pairing."""
     if argv in (["-h"], ["--help"]):
         print(USAGE)
@@ -631,8 +710,13 @@ def main(argv, kb_dir=None):
         return 2
     if problems:
         return cli.report(LABEL, problems)
+    brief = options.pop("summary", False)
     result, problems = harvest(root, kb_dir=kb_dir, **options)
     if problems and result is None:
+        return cli.report(LABEL, problems)
+    if brief:
+        for line in summary(result):
+            print(line)
         return cli.report(LABEL, problems)
     if problems:
         # One unreadable transcript (often the session still being

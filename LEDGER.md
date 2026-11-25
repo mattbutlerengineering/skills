@@ -4,7 +4,9 @@ Maturity vocabulary: **draft** (written, never exercised) → **used-once**
 (exercised in at least one real run) → **battle-tested** (exercised across
 multiple runs; rough edges worn off). Evidence is one line naming the run(s)
 that justify the maturity. A skill graduates past draft only via a real run —
-never by review.
+never by review. A run the factory drove itself counts when it reached a
+PR its own record shows a human merged; the evidence names the run and
+the PR (ADR-0140).
 
 Trigger-eval results inform description quality but never graduate maturity
 (see ADR-0019). Counts are routing cases passed, from the linked recorded run.
@@ -22,8 +24,8 @@ Trigger-eval results inform description quality but never graduate maturity
 | review | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 7/8 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | ship | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 5/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | operate | used-once | feature:seed-backlog dogfood run (issue #7), closed 2026-07-06 | 4/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
-| capture | draft | — | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
-| autorun | draft | — | 3/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| capture | used-once | maintenance:the-reviewer-token-runs-agent-code (docs/fixes/the-reviewer-token-runs-agent-code/), PR #923 merged by the Owner 2026-10-15 (ADR-0140) | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
+| autorun | used-once | maintenance:the-reviewer-token-runs-agent-code (docs/fixes/the-reviewer-token-runs-agent-code/autorun-brief.md), PR #923 merged by the Owner 2026-10-15 (ADR-0140) | 3/5 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | factory-init | draft | — | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | doctor | draft | — | 7/7 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |
 | animated-diagram | draft | — | 3/4 — [2026-10-10](evals/results/trigger-2026-10-10-3.json) |

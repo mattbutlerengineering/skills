@@ -115,7 +115,7 @@ Interactive sessions do produce them. Run `kb.py harvest` (newest
 session) or `kb.py harvest --days N`, then read `references/ingest.md`'s
 harvest section. The tool prints candidate arcs, recurring errors and
 `human_turns` (a human correcting the agent, or answering its question)
-as JSON. Add `--memory` to also list entries from the harness's
+as JSON; `--summary` prints a ranked plain-text digest instead. Add `--memory` to also list entries from the harness's
 auto-memory for this repo, where the harness keeps one, each beside the
 page it may duplicate; entries scoped to the user are only counted.
 Turning a candidate into a claim is judgement, and the step 2 rules

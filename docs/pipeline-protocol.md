@@ -145,9 +145,12 @@ The commit is a boundary step, not the completion predicate. The
 tables here still read the working tree, so `next` sees a stage the
 user has finished and not yet committed. An unattended run has nobody
 watching that tree: `autorun` advances past a stage only once the
-stage's artifact is committed — `git status --porcelain -- <artifact>`
-prints nothing, which means tracked and unchanged since its commit —
-and otherwise stops, naming the artifact.
+stage's artifact is committed — `git ls-files --error-unmatch --
+<artifact>` succeeds (tracked) and `git status --porcelain
+--untracked-files=all --ignored -- <artifact>` prints nothing
+(unchanged since its commit; the two flags stop a gitignored or
+untracked file from printing nothing too) — and otherwise stops, naming
+the artifact.
 
 ### The UX Design conditional
 

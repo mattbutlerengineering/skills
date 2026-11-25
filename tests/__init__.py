@@ -7,9 +7,18 @@ package (`python3 -m unittest tests.<module>`, which run_tests.py spawns
 per module, or `python3 -m unittest discover -s tests -t .`) runs this
 first; a test that is run another way still carries its own insert.
 """
+import os
 import sys
 from pathlib import Path
 
 _TOOLS = str(Path(__file__).resolve().parent.parent / "tools")
 if _TOOLS not in sys.path:
     sys.path.insert(0, _TOOLS)
+
+# The suite is hermetic about the CI event. In a PR run the job's
+# GITHUB_EVENT_PATH names the real PR, and tests that run gates inside a
+# temp repo would otherwise judge that PR against a tree it never saw:
+# detector P diffs from the PR's base sha, which a temp repo does not
+# hold. Every test of an event-reading detector passes its own env.
+for _name in ("GITHUB_EVENT_PATH", "GITHUB_EVENT_NAME"):
+    os.environ.pop(_name, None)

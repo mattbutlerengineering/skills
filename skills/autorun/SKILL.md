@@ -62,7 +62,9 @@ table says when `conduct` or `implement-queue` fits instead.
    "Commit at the stage boundary" section), subject
    `docs(<slug>): autorun — brief`: a resume in a fresh checkout has
    nothing else to read. The brief is not an artifact: it never counts
-   toward orientation or active-run discovery.
+   toward orientation or active-run discovery. A `stop-after: <stage>`
+   line naming a stage that is not on the run's own ladder (`prd` on a
+   maintenance run) is refused here, before any dispatch.
 
    Before the first stage, run the protocol's "Open pull requests first"
    pre-flight once. The brief never answers a merge: a green pull request
@@ -89,12 +91,18 @@ table says when `conduct` or `implement-queue` fits instead.
      assumptions live); otherwise — any question with no skill-supplied
      default, including every evidentiary question — stop and surface,
      never guess; produce the stage artifact per the skill; never fabricate
-     verification evidence — run the real commands.
+     verification evidence — run the real commands;
+   - when it is dispatched with `isolation: "worktree"`, the Bash shapes.
+     Copy the worker Bash shapes block verbatim into the prompt of every
+     worktree-isolated worker; one file owns it:
+     `../implement-queue/references/worker-bash-shapes.md`.
 
 4. **Gate between stages.** When the subagent returns, confirm the stage
    artifact exists, is complete per the protocol, and is committed on
    the run's branch (the protocol's "Commit at the stage boundary"
-   section: `git status --porcelain -- <artifact>` prints nothing)
+   section: `git ls-files --error-unmatch -- <artifact>` succeeds and
+   `git status --porcelain --untracked-files=all --ignored -- <artifact>`
+   prints nothing)
    before advancing. An absent, incomplete or uncommitted artifact
    after dispatch is a failed stage: never advance past it, and name
    the artifact (`<run directory>/<file>`) and what it lacks when
@@ -117,16 +125,21 @@ table says when `conduct` or `implement-queue` fits instead.
    run stays at Ship until the merge is written back. And regardless of
    what the brief
    authorizes, never release unattended past unfixed critical review
-   findings — stop and surface instead. Run operate only as the brief's
-   `operate:` section says: after its `wait`, once its `minimum-signal`
-   exists, or not at all on `skip` — a protocol-sanctioned skip, recorded
-   in the report, that leaves the run active until someone has feedback.
-   A brief with no `operate:` section does not run operate; say so. A
-   `stop-after: <stage>` line in
-   `autorun-brief.md` ends the loop earlier: stop once that stage's
-   artifact or recorded skip exists, without starting the next stage,
-   and go to step 6. A spec Worker uses it to drive a run up to a human
-   gate and stop there.
+   findings — stop and surface instead. Run operate only when
+   orientation returns operate — a prepared Ship ends the loop whatever
+   the `operate:` section says (operate refuses a release still waiting
+   on its merge) — and then only as the brief's `operate:` section
+   says: after its `wait`, once its `minimum-signal` exists, or not at
+   all on `skip` — a protocol-sanctioned skip, recorded in the report,
+   that leaves the run active until someone has feedback. A brief with
+   no `operate:` section does not run operate; say so. A
+   `stop-after: <stage>` line in `autorun-brief.md` ends the loop
+   earlier: stop once the protocol's stage states (`stage_states`)
+   report that stage `done` or `skipped` — not merely once its file
+   exists (`breakdown.md` exists long before Implement is done) —
+   without starting the next stage, and go to step 6. A `stop-after:`
+   stage off the run's ladder never gets this far: step 1 refuses it. A
+   spec Worker uses it to drive a run up to a human gate and stop there.
 
 6. **Report.** Stage by stage: the artifact produced, its `assumptions:`
    entries, verification evidence, anything flagged for human review —
