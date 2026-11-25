@@ -87,8 +87,8 @@ command, the exit codes and what the output is never evidence for.
 - **Factory templates are checksum-pinned**: after any edit under
   `factory/templates/**` or to any root file in `factory_init.MIRRORS`
   (the authority on what is mirrored into the payload — root tools,
-  workflows, CODEOWNERS, and the Makefile, each through its entry's
-  transform per ADR-0050), run `python3 tools/factory_init.py update-manifest`
+  workflows, and the Makefile, each through its entry's transform per
+  ADR-0050; the stamped CODEOWNERS is authored, ADR-0141), run `python3 tools/factory_init.py update-manifest`
   and commit the manifest with the change. Detector E gates
   manifest↔payload; `tests/test_factory_init.py` pins payload↔root.
 - **Dispatch mirrors one-way** (ADR-0032): never create a `WO-####` issue

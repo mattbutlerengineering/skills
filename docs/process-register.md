@@ -69,7 +69,6 @@ How to read it:
 | Post-wave regression review | An independent agent reviews a wave's merges | quality | 2026-11-21, [#2268](https://github.com/mattbutlerengineering/skills/issues/2268): two regressions, fixed by [#2269](https://github.com/mattbutlerengineering/skills/pull/2269) | keep |
 | Pairwise merge test | merge-tree chain simulation before merging a wave (`docs/kb/cross-pr-merge-hazards.md`) | quality | none found (the kb page cites 2026-10-07 without a PR or issue link) | sunset-candidate |
 | Human gates (`tools/human_gates.py`) | PRD, blueprint and merge gates on work-order labels | quality | none found (no issue ever carried a rejection label) | sunset-candidate |
-| CODEOWNERS | Owner review on every path | quality | none found (no PR has a changes-requested review) | sunset-candidate |
 | kb page re-verification | A stale kb page is re-read against its sources | none stated | 2026-11-22, [#2321](https://github.com/mattbutlerengineering/skills/pull/2321): a wrong claim about which gate strips fences, corrected | keep |
 
 ## Retired
@@ -78,3 +77,6 @@ How to read it:
   days, all 9 runs propose-only (#2359).
 - 2026-11-25, `toolsmith-mine.yml` and its queue (#294): no real catch in
   60 days, the queue untouched since 2026-08-21 (#2360).
+- 2026-11-25, this repo's `.github/CODEOWNERS`: no real catch, and main
+  is unprotected, so it enforced nothing. The stamped template stays for
+  consumers (ADR-0141, #2361).

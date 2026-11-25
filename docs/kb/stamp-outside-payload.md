@@ -11,7 +11,7 @@ related: manifest-regen
 and `factory/`: the executable payload and the pristine mirror. Everything
 else the stamp lands belongs to the product repo:
 
-- `.github/CODEOWNERS`, written through `product_codeowners`
+- `.github/CODEOWNERS`, an authored payload file with no root twin (ADR-0141)
 - the `Makefile`, written through `product_makefile`
 - `.github/factory.json` (`INSTALL_MAP`, derived from
   `factory_config.ARTIFACT_HOMES`) and `.github/labels.json`
