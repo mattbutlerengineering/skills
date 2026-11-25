@@ -67,7 +67,7 @@ def _history(run_dir, ladder, status, fallback_day):
     """Station arrivals in belt order. The run enters its first station
     on that station's artifact date and reaches each later station on
     the date of the artifact that completed the station before it.
-    Skipped and done-ahead stages are never visited. A missing date
+    Skipped, missing and done-ahead stages are never visited. A missing date
     takes the previous arrival's day; a day earlier than the previous
     arrival is raised to it; a run with no dates at all enters on
     fallback_day. Every such arrival, and every arrival sharing its day

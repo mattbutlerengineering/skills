@@ -132,7 +132,7 @@ not a source until a run records that it reports `previous_filename`.
 
 ## merge-command
 
-    gh pr merge <N> --auto --squash --delete-branch --match-head-commit <sha>
+    gh pr merge <N> --repo mattbutlerengineering/skills --auto --squash --match-head-commit <sha>
 
 The skill's default, stated because it needs a session permission the
 Owner grants outside this repo. `<sha>` is the gated head (the skill's
@@ -170,8 +170,10 @@ A twin merge still owes both obligations below:
   step 5), read through the `preflight` twin. Red `main` stops the
   train.
 
-`--delete-branch` has left the remote branch behind in this repo (#1636),
-so delete it yourself once `gh pr view <N> --json
+The command carries no `--delete-branch`: run from a worktree it fails
+deleting the local branch that worktree holds (#2319), and it has left
+the remote branch behind in this repo (#1636). So delete the remote
+branch yourself once `gh pr view <N> --json
 state,headRefName,headRefOid,isCrossRepository` reports `MERGED`. If the
 PR is not yet `MERGED` (the merge has not landed yet), do nothing
 now and repeat this step when it is. Delete only when all of these hold,
