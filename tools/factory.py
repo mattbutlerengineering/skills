@@ -54,6 +54,7 @@ VERBS = {
     "fast-path": ("fast_path", "argv"),
     "gate-digest": ("gate_digest", "argv"),
     "gates": ("gates", "argv"),
+    "goal-metrics": ("goal_metrics", "argv"),
     "handoff": ("handoff", "argv"),
     "kb": ("kb", "argv"),
     "label-sync": ("label_sync", "argv"),

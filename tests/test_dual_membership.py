@@ -29,14 +29,16 @@ TOOLS = "tools"
 # added npx_bundle to the cli.py row; ADR-0124 added assembly_line to the
 # cli.py, knowledge_plane.py and protocol.py rows; ADR-0126 added
 # kb_harvest to the protocol.py row; ADR-0128 added reap_worktrees to the
-# cli.py row; ADR-0133 added sweeps to the human_gates.py row). The
+# cli.py row; ADR-0133 added sweeps to the human_gates.py row; ADR-0135
+# added goal_metrics to the cli.py row). The
 # pairs land one per item as the module grows its imports.
 ROOT_ONLY_IMPORTS_MIRRORED = frozenset(
     {(tool, "cli") for tool in (
         "adr_status", "assembly_line", "board", "charter_recorded", "charter_replay",
         "dashboard", "decompose_grade", "decompose_lessons",
         "decompose_signals", "eval_schema", "eval_trends",
-        "factory_init", "fast_path", "kb", "kb_drift", "kb_harvest",
+        "factory_init", "fast_path", "goal_metrics", "kb", "kb_drift",
+        "kb_harvest",
         "launch_demo", "lint", "md_claims", "npx_bundle", "one_owner",
         "plane_drift", "pr_body_preflight", "reap_worktrees",
         "size_band_calibration", "sweeps", "trigger_eval", "voice_grade",
