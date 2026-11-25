@@ -1,0 +1,139 @@
+#!/usr/bin/env bash
+#
+# Safe Prisma migration deployment script
+#
+# This script:
+# 1. Checks for pending migrations
+# 2. Creates a database backup (optional)
+# 3. Applies migrations with proper error handling
+# 4. Verifies the final state
+#
+# Usage:
+#   ./migration-script.sh                    # Apply migrations
+#   ./migration-script.sh --backup           # Backup first, then apply
+#   ./migration-script.sh --dry-run          # Check status only
+#   ./migration-script.sh --help             # This usage; any other argument exits 2
+#
+# Required environment:
+#   DATABASE_URL - Production database connection string
+
+set -euo pipefail
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+# Parse arguments
+BACKUP=false
+DRY_RUN=false
+
+usage() {
+  sed -n '11,18p' "$0" | sed 's/^# \{0,1\}//'
+}
+
+# An unknown argument stops the script: a mistyped --dry-run must never
+# fall through to a production deploy.
+for arg in "$@"; do
+  case $arg in
+    --backup)
+      BACKUP=true
+      ;;
+    --dry-run)
+      DRY_RUN=true
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "unknown argument: $arg (expected --backup, --dry-run or --help)" >&2
+      exit 2
+      ;;
+  esac
+done
+
+# Verify DATABASE_URL is set
+if [ -z "${DATABASE_URL:-}" ]; then
+  echo -e "${RED}Error: DATABASE_URL environment variable is not set${NC}"
+  exit 1
+fi
+
+echo -e "${GREEN}=== Prisma Migration Deployment ===${NC}"
+echo ""
+
+# Check current migration status
+echo "Checking migration status..."
+STATUS=$(npx prisma migrate status 2>&1) || true
+
+# A here-string, not `echo | grep -q`: under pipefail, grep -q exiting
+# on its first match can SIGPIPE the echo and fail the test.
+if grep -q "Database schema is up to date" <<<"$STATUS"; then
+  echo -e "${GREEN}No pending migrations. Database is up to date.${NC}"
+  exit 0
+fi
+
+# Neither up to date nor pending is an error (unreachable database, bad
+# credentials), never a guess: stop before a dry run reports success or a
+# deploy starts. Mirrors check-pending.sh's exit 2.
+if ! grep -q "not yet been applied" <<<"$STATUS"; then
+  echo -e "${RED}Error checking migration status:${NC}"
+  echo "$STATUS"
+  exit 2
+fi
+
+echo "$STATUS"
+echo ""
+
+# If dry run, exit here
+if [ "$DRY_RUN" = true ]; then
+  echo -e "${YELLOW}Dry run complete. Use without --dry-run to apply migrations.${NC}"
+  exit 0
+fi
+
+# Optional backup
+if [ "$BACKUP" = true ]; then
+  echo -e "${YELLOW}Creating database backup...${NC}"
+  BACKUP_FILE="backup_$(date +%Y%m%d_%H%M%S).sql"
+
+  # pg_dump takes the connection URL directly; adjust for non-Postgres
+  # providers. A backup that was asked for and failed stops the deploy.
+  if pg_dump "$DATABASE_URL" > "$BACKUP_FILE"; then
+    echo -e "${GREEN}Backup created: $BACKUP_FILE${NC}"
+  else
+    echo -e "${RED}Backup failed. Aborting before any migration runs.${NC}"
+    exit 1
+  fi
+  echo ""
+fi
+
+# Apply migrations
+echo -e "${YELLOW}Applying migrations...${NC}"
+if npx prisma migrate deploy; then
+  echo ""
+  echo -e "${GREEN}Migrations applied successfully!${NC}"
+else
+  echo ""
+  echo -e "${RED}Migration failed!${NC}"
+  echo ""
+  echo "To troubleshoot:"
+  echo "  1. Check the error message above"
+  echo "  2. Run: npx prisma migrate status"
+  echo "  3. If partially applied, fix manually then run:"
+  echo "     npx prisma migrate resolve --applied <migration_name>"
+  echo ""
+  if [ "$BACKUP" = true ] && [ -f "$BACKUP_FILE" ]; then
+    echo "To restore from backup:"
+    echo "  psql \"\$DATABASE_URL\" < $BACKUP_FILE"
+  fi
+  exit 1
+fi
+
+# Verify final state
+echo ""
+echo "Verifying migration status..."
+npx prisma migrate status
+
+echo ""
+echo -e "${GREEN}=== Migration deployment complete ===${NC}"
