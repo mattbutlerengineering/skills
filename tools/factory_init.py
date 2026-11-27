@@ -377,9 +377,11 @@ def numbered_adr_skips(copies, target):
     ADRs under one number (gates C) and an unindexed one (gates D), so
     stamp and update skip it; main reports each."""
     held = {}
-    adr_dir = target / "docs" / "adr"
-    for path in sorted(adr_dir.glob("[0-9][0-9][0-9][0-9]-*.md")):
-        held.setdefault(path.name[:4], path.name)
+    # Every ADR name detector C reads (ADR-0001-x.md, 001-x.md as well as
+    # 0001-x.md), through the same parse, keyed at its 4-digit number.
+    for path in sorted(Path(path).name for path, _ in
+                       gates.parse_run(target)["adr_files"]):
+        held.setdefault(gates.adr_file_number(path)[0], path)
     skips = {}
     for _, dest in copies:
         match = (_ADR_NUMBER.match(dest.name)

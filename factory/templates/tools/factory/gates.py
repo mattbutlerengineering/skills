@@ -133,6 +133,9 @@ HTML_COMMENT = re.compile(r"<!--.*?-->|^ {0,3}<!--.*\Z",
 # Read outside fences only — a `<!--` quoted in fenced evidence is output.
 LINE_COMMENT = re.compile(r"<!--.*?-->")
 BLOCK_COMMENT_OPEN = re.compile(r"^ {0,3}<!--")
+# A code span, masked before a mid-line `<!--` is looked for: a `<!--`
+# inside one is literal however the paragraph goes on.
+CODE_SPAN = re.compile(r"`[^`\n]*`")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
@@ -1304,12 +1307,14 @@ def _blank_html_comments(lines):
     so its content — a fence, a heading, a verdict, a "not run" — is not
     what a reader sees and must not count for H, M or O (fail-open
     otherwise). A block comment (BLOCK_COMMENT_OPEN) runs to the line
-    holding `-->`, whose remainder is read on; a mid-line `<!--` with no
-    `-->` on its line is literal text, the HTML_COMMENT rule."""
+    holding `-->`, whose remainder is read on. A mid-line `<!--` (outside
+    a code span) hides through a `-->` on a later line of its paragraph,
+    as GitHub's inline raw HTML does; with no `-->` before a blank line
+    or a fence it is literal text."""
     out = []
     opener = None  # the line that opened the fence we are in
     in_comment = False
-    for line in lines:
+    for index, line in enumerate(lines):
         if opener is not None:
             if _closes_fence(opener, line):
                 opener = None
@@ -1331,8 +1336,27 @@ def _blank_html_comments(lines):
         if block:
             in_comment = True
             line = ""
+        else:
+            start = _mid_line_comment(line, lines[index + 1:])
+            if start >= 0:
+                in_comment = True
+                line = line[:start]
         out.append(line)
     return out
+
+
+def _mid_line_comment(line, after):
+    """Where LINE's mid-line `<!--` opens a comment that a later line of
+    its paragraph (AFTER, up to a blank line or a fence) closes, else -1."""
+    start = CODE_SPAN.sub(lambda m: " " * len(m.group()), line).find("<!--")
+    if start < 0:
+        return -1
+    for later in after:
+        if not later.strip() or _opens_fence(later):
+            return -1
+        if "-->" in later:
+            return start
+    return -1
 
 
 def _walk_sections(lines, body_start):

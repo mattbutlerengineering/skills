@@ -81,6 +81,24 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
         text = FM + "# V\n\n## AC1\n\nSee `<!--` here.\n- Result: PASS\n"
         self.assertEqual(gates.evidence_problems(text), [claim(10, "AC1")])
 
+    def test_a_mid_line_opener_closed_later_in_its_paragraph_hides(self):
+        # GitHub hides an inline comment that spans lines of one
+        # paragraph, as B's HTML_COMMENT does; H read the verdict in it.
+        text = (FM + "# V\n\n## AC1\n\nEvidence pending <!--\n"
+                "- Result: PASS\n-->\n")
+        self.assertEqual(gates.evidence_problems(text), [BACKSTOP])
+
+    def test_a_blank_line_ends_a_mid_line_opener_paragraph(self):
+        # The paragraph ends at the blank line, so the `<!--` stays text.
+        text = (FM + "# V\n\n## AC1\n\nSee <!-- here.\n\n"
+                "- Result: PASS\n\n-->\n")
+        self.assertEqual(gates.evidence_problems(text), [claim(11, "AC1")])
+
+    def test_an_opener_in_a_code_span_stays_literal_before_a_close(self):
+        text = (FM + "# V\n\n## AC1\n\nSee `<!--` here.\n"
+                "- Result: PASS\nthen `-->`.\n")
+        self.assertEqual(gates.evidence_problems(text), [claim(10, "AC1")])
+
     def test_text_after_a_comment_close_is_still_read(self):
         text = (FM + "# V\n\n## AC1\n\n<!--\nhidden\n--> - Result: PASS\n")
         self.assertEqual(gates.evidence_problems(text), [claim(11, "AC1")])

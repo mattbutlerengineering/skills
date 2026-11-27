@@ -335,6 +335,19 @@ class TestSmallestText(unittest.TestCase):
                     embed=400.0)
         self.assertAlmostEqual(r.smallest_px, 4.0)
 
+    def test_an_important_declaration_beats_a_later_one_in_its_block(self):
+        # Both picks took the block's last declaration, so 4px text read
+        # as 30px and tiny text went unseen.
+        for body in ('<style>text{font-size:4px !important;'
+                     ' font-size:30px}</style><text>x</text>',
+                     '<text style="font-size:4px !important;'
+                     ' font-size:30px">x</text>',
+                     '<style>text{font:4px serif !important;'
+                     ' font-size:30px}</style><text>x</text>'):
+            with self.subTest(body=body):
+                self.assertAlmostEqual(
+                    reading(body, embed=400.0).smallest_px, 4.0)
+
     def test_deep_nesting_is_not_quadratic(self):
         depth = 20000
         body = ('<text font-size="9">' + "<a>" * depth + "x"
