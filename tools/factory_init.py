@@ -507,9 +507,23 @@ def _stamp(source, target, keepable, tools_only=False):
     for src, dest in copies:
         if dest in existing:
             continue
-        (target / dest).parent.mkdir(parents=True, exist_ok=True)
-        (target / dest).write_bytes(_content(src, dest, records))
+        problem = _land(target, dest, _content(src, dest, records))
+        if problem:
+            return [], [problem]
     return sorted(dest.as_posix() for dest in existing), []
+
+
+def _land(target, dest, data):
+    """Write DATA at target/dest, creating its directory: None, or the
+    one problem naming the destination when the OS refuses (a read-only
+    file or directory, a full disk) — never a traceback past main."""
+    try:
+        (target / dest).parent.mkdir(parents=True, exist_ok=True)
+        (target / dest).write_bytes(data)
+    except OSError as err:
+        return (f"factory-init: cannot write {dest.as_posix()}:"
+                f" {err.strerror or err}")
+    return None
 
 
 def stamp(source, target, tools_only=False):
@@ -734,7 +748,11 @@ def update(source, target, tools_only=False):
     if problems:
         return [], [], problems
     for rel in retired_files(source, target):
-        (target / rel).unlink()
+        try:
+            (target / rel).unlink()
+        except OSError as err:
+            return [], [], [f"factory-init: cannot remove {rel}:"
+                            f" {err.strerror or err}"]
     skips = adr_seed_skips(copies, target, not tools_only)
     records = own_adrs(target)
     written, kept = [], []
@@ -746,8 +764,9 @@ def update(source, target, tools_only=False):
             if path.read_bytes() != payload_bytes(src):
                 kept.append(dest.as_posix())
             continue
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(_content(src, dest, records))
+        problem = _land(target, dest, _content(src, dest, records))
+        if problem:
+            return written, sorted(kept), [problem]
         written.append(dest.as_posix())
     return (written, sorted(kept),
             [] if tools_only else missing_make_targets(target))
