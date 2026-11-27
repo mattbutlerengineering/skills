@@ -676,6 +676,22 @@ class TestGitFacts(unittest.TestCase):
             "- [ ] **WO-0171** next", "- [ ] **WO-0172** later",
             "* [ ] **WO-0173** star", "+ [ ] **WO-0175** plus"], []))
 
+    def test_an_open_sub_task_keeps_its_checked_row_pending(self):
+        # #2367: protocol counts nested and bare boxes, so `next` still
+        # says implement; the row owning the open box is the work, and
+        # the build is briefed with it.
+        path = "docs/features/x/breakdown.md"
+        git = self.git(f"{path}\n", shows={
+            f"conductor/b1-12:{path}":
+                "- [x] **WO-0170** done\n  - [ ] sub-task open\n"
+                "  - [ ] another open\n- [x] **WO-0171** all done\n"
+                "  - [x] sub-task done\n- [x] **WO-0172** fenced\n"
+                "  ```\n  - [ ] quoted\n  ```\n- [ ]\n"
+                "Notes:\n  - [ ] an open box under no row\n"})
+        self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"), ([
+            "- [x] **WO-0170** done", "- [ ]",
+            "- [ ] an open box under no row"], []))
+
     def test_an_unchecked_row_quoted_in_a_fence_is_not_work(self):
         path = "docs/fixes/x/defect.md"
         git = self.git(f"{path}\n", shows={
