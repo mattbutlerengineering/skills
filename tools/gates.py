@@ -136,11 +136,13 @@ BLOCK_COMMENT_OPEN = re.compile(r"^ {0,3}<!--")
 # A code span, masked before a mid-line `<!--` is looked for: a `<!--`
 # inside one is literal however the paragraph goes on.
 CODE_SPAN = re.compile(r"`[^`\n]*`")
-# A line that starts a new block ends the paragraph a mid-line `<!--`
-# opened, so the opener stays literal: an ATX heading, a list item or a
-# block quote (CommonMark).
-BLOCK_START = re.compile(r"^ {0,3}(?:#{1,6}(?:\s|$)|[-*+](?:\s|$)"
-                         r"|\d{1,9}[.)](?:\s|$)|>)")
+# A line that interrupts a paragraph ends the one a mid-line `<!--`
+# opened, so the opener stays literal (CommonMark, as GitHub renders
+# it): an ATX heading, a non-empty bullet item, a non-empty ordered item
+# starting at 1, or a block quote. An ordered item from 2, an empty
+# item, and a `>` line inside a quoted paragraph do not interrupt it.
+BLOCK_START = re.compile(r"^ {0,3}(?:#{1,6}(?:\s|$)|[-*+][ \t]+\S"
+                         r"|0{0,8}1[.)][ \t]+\S|>)")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
@@ -1357,7 +1359,10 @@ def _mid_line_comment(line, after):
     start = CODE_SPAN.sub(lambda m: " " * len(m.group()), line).find("<!--")
     if start < 0:
         return -1
+    quoted = line.lstrip().startswith(">")
     for later in after:
+        if quoted and later.lstrip().startswith(">"):
+            later = later.lstrip()[1:]  # the quoted paragraph goes on
         if (not later.strip() or _opens_fence(later)
                 or BLOCK_START.match(later)):
             return -1

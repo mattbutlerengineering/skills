@@ -700,6 +700,19 @@ class TestGitFacts(unittest.TestCase):
         self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"),
                          (["- [x] **WO-0170** done"], []))
 
+    def test_a_sibling_row_after_a_blank_line_is_its_own_work(self):
+        # Regression from #2382: skipping blank lines attached a sibling
+        # item (indented less than the parent's content) and a box after
+        # a top-level fence to the previous checked row.
+        path = "docs/features/x/breakdown.md"
+        git = self.git(f"{path}\n", shows={
+            f"conductor/b1-12:{path}":
+                "- [x] **WO-0170** done\n\n - [ ] **WO-0171** next\n"
+                "- [x] **WO-0172** done\n\n```\nlog\n```\n\n"
+                "    - [ ] example box\n"})
+        self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"), ([
+            " - [ ] **WO-0171** next", "- [ ] example box"], []))
+
     def test_an_unchecked_row_quoted_in_a_fence_is_not_work(self):
         path = "docs/fixes/x/defect.md"
         git = self.git(f"{path}\n", shows={

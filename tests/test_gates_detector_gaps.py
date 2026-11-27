@@ -107,6 +107,21 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
         self.assertEqual(gates.evidence_problems(text),
                          [claim(10, "AC1", "PASS, a --> b")])
 
+    def test_only_lines_that_interrupt_a_paragraph_end_the_look_ahead(self):
+        # Regression from #2382, each case checked against GitHub's own
+        # renderer: a quoted continuation, an ordered item not starting at
+        # 1 and an empty item do NOT interrupt a paragraph, so the comment
+        # stays hidden and its "not run" or verdict is not read.
+        for body in ("Looks good.\n\n> Reviewer note <!-- draft:\n"
+                     "> the suite was not run yet -->\n",
+                     "Looks good, see <!-- draft:\n"
+                     "2. the suite was not run yet -->\n",
+                     "Ran it <!-- x\n1.\nResult: PASS\n-->\n",
+                     "Ran it <!-- x\n*\nResult: PASS\n-->\n"):
+            with self.subTest(body=body):
+                self.assertEqual(gates.evidence_problems(
+                    FM + "# V\n\n## AC1\n\n" + body), [BACKSTOP])
+
     def test_an_opener_in_a_code_span_stays_literal_before_a_close(self):
         text = (FM + "# V\n\n## AC1\n\nSee `<!--` here.\n"
                 "- Result: PASS\nthen `-->`.\n")
