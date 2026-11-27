@@ -499,6 +499,21 @@ class TestWriteSnapshot(unittest.TestCase):
         self.assertTrue(self.results.is_dir())
         self.assertEqual(path, self.results / "charter-2026-07-02.json")
 
+    def test_a_dangling_symlink_holds_its_name_and_never_spins(self):
+        # results_path asked exists(), False for a dangling link, while
+        # the exclusive create fails on it: the writer retried one name
+        # forever.
+        import threading
+        self.results.mkdir(parents=True)
+        os.symlink(self.tmp / "gone", self.results / "charter-2026-07-02.json")
+        found = []
+        worker = threading.Thread(target=lambda: found.append(
+            eval_schema.write_snapshot(self.output, self.results,
+                                       "charter")), daemon=True)
+        worker.start()
+        worker.join(5)
+        self.assertEqual(found, [self.results / "charter-2026-07-02-2.json"])
+
     def test_the_bytes_on_disk_are_indented_json_with_a_final_newline(self):
         path = eval_schema.write_snapshot(self.output, self.results,
                                           "charter")
