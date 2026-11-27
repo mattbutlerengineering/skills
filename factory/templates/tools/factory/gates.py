@@ -144,6 +144,16 @@ CODE_SPAN = re.compile(r"`[^`\n]*`")
 # quoted paragraph's own `>` continuation do not interrupt it.
 BLOCK_START = re.compile(r"^ {0,3}(?:#{1,6}(?:\s|$)|[-*+][ \t]+\S"
                          r"|0{0,8}1[.)][ \t]+\S|>|-[ \t]*$|=+[ \t]*$)")
+# An HTML block that may interrupt a paragraph (CommonMark types 2 and
+# 6): a line-start comment, or a block-level tag opening or closing.
+HTML_BLOCK_START = re.compile(
+    r"^ {0,3}(?:<!--|</?(?:address|article|aside|base|basefont|blockquote"
+    r"|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt"
+    r"|fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head"
+    r"|header|hr|html|iframe|legend|li|link|main|menu|menuitem|nav"
+    r"|noframes|ol|optgroup|option|p|param|search|section|summary|table"
+    r"|tbody|td|tfoot|th|thead|title|tr|track|ul)(?:[ \t>]|/>|$))",
+    re.IGNORECASE)
 # One block-quote marker with its optional following space or tab.
 QUOTE_MARKER = re.compile(r"^ {0,3}>[ \t]?")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
@@ -1380,7 +1390,7 @@ def _mid_line_comment(line, after):
         # follows them (a lazy line with fewer markers is tested as is).
         later = _quote_depth(later, depth)[1]
         if (not later.strip() or _opens_fence(later)
-                or BLOCK_START.match(later)):
+                or BLOCK_START.match(later) or HTML_BLOCK_START.match(later)):
             return -1
         if "-->" in later:
             return start

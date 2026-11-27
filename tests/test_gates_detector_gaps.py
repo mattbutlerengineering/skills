@@ -143,6 +143,24 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
                 "> > not run yet -->\n")
         self.assertEqual(gates.evidence_problems(text), [BACKSTOP])
 
+    def test_an_html_block_start_ends_a_mid_line_openers_paragraph(self):
+        # CommonMark HTML blocks of type 2 (a line-start `<!--`) and type 6
+        # (a block-level tag) interrupt a paragraph, so the mid-line opener
+        # stays literal; an inline tag (type 7) does not. Each checked
+        # against GitHub's renderer.
+        def repro(middle):
+            return [s["lines"] for s in gates.capture_sections(
+                FM + "# Defect\n\n## Repro\n\nsteps <!-- SECRET\n"
+                + middle + "\nmore -->\n") if s["title"] == "Repro"][0]
+        self.assertEqual(repro("<!-- y"), ["", "steps <!-- SECRET", "", ""])
+        for tag in ("<div>", "</section>", "<table class=x>"):
+            with self.subTest(tag=tag):
+                self.assertEqual(repro(tag), ["", "steps <!-- SECRET", tag,
+                                              "more -->"])
+        for inline in ("<span>", "<divx>"):
+            with self.subTest(inline=inline):
+                self.assertEqual(repro(inline), ["", "steps ", "", ""])
+
     def test_an_opener_in_a_code_span_stays_literal_before_a_close(self):
         text = (FM + "# V\n\n## AC1\n\nSee `<!--` here.\n"
                 "- Result: PASS\nthen `-->`.\n")
