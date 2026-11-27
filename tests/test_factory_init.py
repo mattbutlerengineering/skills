@@ -932,6 +932,29 @@ class TestUpdate(unittest.TestCase):
             self.assertEqual(code, 1)
             self.assertEqual(out.splitlines()[-1], "factory-init: 1 problem(s)")
 
+    def test_a_makefile_that_is_not_utf8_is_a_problem_not_a_traceback(self):
+        # missing_make_targets read the repo's own Makefile with a bare
+        # read_text: one latin-1 byte raised UnicodeDecodeError past main.
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            with (target / "Makefile").open("ab") as handle:
+                handle.write(b"# caf\xe9\n")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "factory-init: cannot read Makefile: "), problems)
+
+    def test_an_own_workflow_that_is_not_utf8_is_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            (target / ".github/workflows/mine.yml").write_bytes(
+                b"name: caf\xe9\n")
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "factory-init: cannot read .github/workflows/mine.yml: "),
+                problems)
+
     def test_the_executable_payload_is_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
             source, target = self.stamped(tmp)
