@@ -150,6 +150,16 @@ class EscapeRateTest(unittest.TestCase):
         ])
         self.assertEqual(row["escaped"], [1])
 
+    def test_a_revert_of_a_longer_number_is_not_an_escape(self):
+        row = compute([
+            pr(1, 20, ["skills/a/SKILL.md"]),
+            pr(12, 20, ["skills/b/SKILL.md"]),
+            pr(123, 25, ["tools/x.py"]),
+            pr(200, 18, ["tools/x.py"], title='Revert "feat: x (#123)"',
+               body="Reverts #123"),
+        ])
+        self.assertEqual(row["escaped"], [])
+
     def test_a_fixes_pr_trailer_is_an_escape(self):
         row = compute([
             pr(1, 20, ["skills/a/SKILL.md"]),
@@ -219,6 +229,18 @@ class SunsetFlagTest(unittest.TestCase):
             "| silent | x | none stated | none found |",
             "| silent | x | none stated | none found (cites 2026-11-20) |")
         self.assertIn("silent", goal_metrics.sunset_flags(text, NOW))
+
+    def test_a_short_row_is_unreadable_not_a_crash(self):
+        with self.assertRaisesRegex(ValueError, r"\| short \|"):
+            goal_metrics.sunset_flags(
+                "| Process | Last real catch |\n|---|---|\n| short |\n",
+                NOW)
+
+    def test_a_table_with_no_process_column_is_unreadable(self):
+        with self.assertRaisesRegex(ValueError, "no Process column"):
+            goal_metrics.sunset_flags(
+                "| Name | Last real catch |\n|---|---|\n| x | none |\n",
+                NOW)
 
     def test_text_without_the_table_flags_nothing(self):
         self.assertEqual(goal_metrics.sunset_flags("# nothing\n", NOW), [])
@@ -337,6 +359,24 @@ class MainTest(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out.splitlines()[0])["sunset_flags"],
                          [])
+
+    def test_an_unreadable_register_is_a_problem_and_writes_nothing(self):
+        fake = FakeGh(gh_answers([]))
+        with tempfile.TemporaryDirectory() as tmp:
+            register = Path(tmp) / "process-register.md"
+            register.write_text(
+                "| Process | Last real catch |\n|---|---|\n| short |\n")
+            ledger = Path(tmp) / "goal-metrics.jsonl"
+            code, out = self.run_main(["--owner", "o", "--register",
+                                       str(register), "--append",
+                                       str(ledger)], fake)
+            self.assertFalse(ledger.exists())
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            f"goal: cannot read {register}: row '| short |' has no"
+            " Last real catch cell",
+            "goal: 1 problem(s)",
+        ])
 
     def test_a_failed_pr_read_is_a_problem_and_writes_nothing(self):
         fake = FakeGh(gh_answers([]), failing=["pr", "list"])

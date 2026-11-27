@@ -236,7 +236,7 @@ def _font_rules(root):
         if prelude.startswith("@"):
             skipped += 1
             continue
-        value, important = decls[-1]
+        value, important = _winning(decls)
         readable = True
         for sel in prelude.split(","):
             m = SELECTOR_RE.match(sel.strip())
@@ -250,6 +250,12 @@ def _font_rules(root):
         skipped += not readable
 
 
+def _winning(decls):
+    """The (value, important) that wins among one block's declarations:
+    the last !important one, else the last, as CSS has it."""
+    return ([d for d in decls if d[1]] or decls)[-1]
+
+
 def _declared(node, rules):
     """The font-size declaration that applies to this element itself, in
     precedence inline style, <style> rule, attribute — except that an
@@ -261,8 +267,8 @@ def _declared(node, rules):
     hits = [r for r in rules if r[3] in (None, tag)
             and r[4] in (None, *classes)]
     best = max(hits) if hits else None
-    if inline and (inline[-1][1] or best is None or not best[0]):
-        return inline[-1][0]
+    if inline and (_winning(inline)[1] or best is None or not best[0]):
+        return _winning(inline)[0]
     if best is not None:
         return best[5]
     value = node.get("font-size")

@@ -88,6 +88,24 @@ class TestStampOverTheRepoOwnADRs(SeedIndexCase):
                       "postgres.md in this repo)", out)
         self.assert_gates_clean()
 
+    def test_an_adr_prefixed_or_3_digit_name_holds_its_number_too(self):
+        # The held-number scan read only NNNN-*.md, while detector C reads
+        # every ADR_FILE name: the seed 0001 landed beside the repo's own
+        # ADR-0001 and C failed the stamped repo.
+        for name in ("ADR-0001-use-postgres.md", "001-use-postgres.md"):
+            with self.subTest(name=name):
+                self.target = self.tmp / name
+                (self.target / ".git").mkdir(parents=True)
+                self.write(f"docs/adr/{name}", adr("Use Postgres"))
+                self.assertEqual(self.cli("stamp", str(self.target)), [
+                    "factory-init: skipped docs/adr/0001-decisions-are-"
+                    f"recorded-here.md (its number is already {name} in"
+                    " this repo)",
+                    "factory-init: 0 problem(s)"])
+                self.assertFalse((self.target / "docs/adr/0001-decisions-"
+                                  "are-recorded-here.md").exists())
+                self.assert_gates_clean()
+
     def test_with_no_adr_of_its_own_the_seed_index_lands_verbatim(self):
         self.cli("stamp", str(self.target))
         self.assertEqual((self.target / "docs/adr/README.md").read_bytes(),
