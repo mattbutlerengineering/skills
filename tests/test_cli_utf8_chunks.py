@@ -1,5 +1,6 @@
 """Audit defect #1854: EventStream decodes incrementally, so a multi-byte
 character split across an 8 KiB read is not turned into U+FFFD."""
+import select
 import subprocess
 import sys
 import unittest
@@ -16,6 +17,11 @@ class TestChunkBoundary(unittest.TestCase):
         process = subprocess.Popen([sys.executable, "-c", code],
                                    stdout=subprocess.PIPE)
         try:
+            # The budget starts once the child has written: counted from
+            # the spawn, a cold start under load outlasts it and the
+            # stream reads empty (the #446 rule ReadinessGatedClock keeps).
+            ready, _, _ = select.select([process.stdout], [], [], 120)
+            self.assertTrue(ready, "the child never wrote")
             events = list(cli.EventStream(process, timeout=10))
         finally:
             process.kill()

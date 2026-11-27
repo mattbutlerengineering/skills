@@ -13,6 +13,7 @@ actual output shape, so drift breaks CI instead of silently corrupting
 eval results.
 """
 import json
+import select
 import subprocess
 import sys
 import unittest
@@ -136,6 +137,11 @@ class TestLivePipeAdapter(unittest.TestCase):
         process = subprocess.Popen([sys.executable, "-c", script],
                                    stdout=subprocess.PIPE)
         try:
+            # The budget starts once the child has written, not at the
+            # spawn: a cold start under load outlasts any budget counted
+            # from spawn (#446).
+            ready, _, _ = select.select([process.stdout], [], [], 120)
+            self.assertTrue(ready, "the child never wrote")
             self.assertEqual(
                 detect_omp_fired(cli.EventStream(process, timeout=10),
                                  NAMES),
