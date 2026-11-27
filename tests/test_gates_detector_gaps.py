@@ -122,6 +122,27 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
                 self.assertEqual(gates.evidence_problems(
                     FM + "# V\n\n## AC1\n\n" + body), [BACKSTOP])
 
+    def test_a_setext_underline_or_quoted_block_shows_the_verdict(self):
+        # Regressions from #2384's review, each checked against GitHub's
+        # renderer: a lone `-` or `===` underlines a setext heading, and a
+        # quoted list item behind `>` plus its optional space starts a
+        # block, so the `<!--` stays literal and the verdict is visible.
+        for body in ("Ran it <!-- x\n-\nResult: PASS -->\n",
+                     "Ran it <!-- x\n===\nResult: PASS -->\n",
+                     "> Ran it <!-- x\n>    - Result: PASS -->\n",
+                     "> Ran it <!-- x\n>\t- Result: PASS -->\n"):
+            with self.subTest(body=body):
+                problems = gates.evidence_problems(
+                    FM + "# V\n\n## AC1\n\n" + body)
+                self.assertNotEqual(problems, [BACKSTOP], problems)
+                self.assertIn("asserts PASS", problems[0][1])
+
+    def test_a_depth_two_quote_continues_its_own_paragraph(self):
+        # GitHub hides the comment through `> >` continuation lines.
+        text = (FM + "# V\n\n## AC1\n\n> > Ran it <!-- x\n"
+                "> > not run yet -->\n")
+        self.assertEqual(gates.evidence_problems(text), [BACKSTOP])
+
     def test_an_opener_in_a_code_span_stays_literal_before_a_close(self):
         text = (FM + "# V\n\n## AC1\n\nSee `<!--` here.\n"
                 "- Result: PASS\nthen `-->`.\n")

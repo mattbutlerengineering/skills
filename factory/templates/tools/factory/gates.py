@@ -139,10 +139,13 @@ CODE_SPAN = re.compile(r"`[^`\n]*`")
 # A line that interrupts a paragraph ends the one a mid-line `<!--`
 # opened, so the opener stays literal (CommonMark, as GitHub renders
 # it): an ATX heading, a non-empty bullet item, a non-empty ordered item
-# starting at 1, or a block quote. An ordered item from 2, an empty
-# item, and a `>` line inside a quoted paragraph do not interrupt it.
+# starting at 1, a block quote, or a setext underline (a lone `-`, or
+# `=`s). An ordered item from 2, an empty `+`/`*`/`1.` item, and a
+# quoted paragraph's own `>` continuation do not interrupt it.
 BLOCK_START = re.compile(r"^ {0,3}(?:#{1,6}(?:\s|$)|[-*+][ \t]+\S"
-                         r"|0{0,8}1[.)][ \t]+\S|>)")
+                         r"|0{0,8}1[.)][ \t]+\S|>|-[ \t]*$|=+[ \t]*$)")
+# One block-quote marker with its optional following space or tab.
+QUOTE_MARKER = re.compile(r"^ {0,3}>[ \t]?")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
@@ -1352,6 +1355,18 @@ def _blank_html_comments(lines):
     return out
 
 
+def _quote_depth(line, limit=None):
+    """(markers stripped, the rest): LINE's leading block-quote markers,
+    up to LIMIT of them, each with its optional following space."""
+    depth = 0
+    while limit is None or depth < limit:
+        marker = QUOTE_MARKER.match(line)
+        if not marker:
+            break
+        line, depth = line[marker.end():], depth + 1
+    return depth, line
+
+
 def _mid_line_comment(line, after):
     """Where LINE's mid-line `<!--` opens a comment that a later line of
     its paragraph (AFTER, up to a blank line, a fence or a line starting
@@ -1359,10 +1374,11 @@ def _mid_line_comment(line, after):
     start = CODE_SPAN.sub(lambda m: " " * len(m.group()), line).find("<!--")
     if start < 0:
         return -1
-    quoted = line.lstrip().startswith(">")
+    depth = _quote_depth(line)[0]
     for later in after:
-        if quoted and later.lstrip().startswith(">"):
-            later = later.lstrip()[1:]  # the quoted paragraph goes on
+        # The quoted paragraph goes on behind its own markers: test what
+        # follows them (a lazy line with fewer markers is tested as is).
+        later = _quote_depth(later, depth)[1]
         if (not later.strip() or _opens_fence(later)
                 or BLOCK_START.match(later)):
             return -1
