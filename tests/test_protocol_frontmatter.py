@@ -402,6 +402,7 @@ class TestOneFenceDefinition(unittest.TestCase):
     second definition anywhere in tracked Python fails this count."""
 
     def test_the_exact_count_map(self):
+        import gates
         counts = {}
         for rel, source in _tracked_non_test_python():
             found = fence_definitions(source)
@@ -412,6 +413,11 @@ class TestOneFenceDefinition(unittest.TestCase):
             "factory/templates/tools/factory/protocol.py": [r"^---\s*$"],
             # Not a fence: the markdown table separator row lint skips.
             "tools/lint.py": ["---"],
+            # Not a fence: a markdown thematic break, which lets an HTML
+            # block open on the next line (gates.THEMATIC_BREAK).
+            "tools/gates.py": [gates.THEMATIC_BREAK.pattern],
+            "factory/templates/tools/factory/gates.py": [
+                gates.THEMATIC_BREAK.pattern],
         })
 
     def test_the_detector_sees_each_copy_shape(self):
