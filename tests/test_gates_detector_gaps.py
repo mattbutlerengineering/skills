@@ -85,7 +85,7 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
         # GitHub hides an inline comment that spans lines of one
         # paragraph, as B's HTML_COMMENT does; H read the verdict in it.
         text = (FM + "# V\n\n## AC1\n\nEvidence pending <!--\n"
-                "- Result: PASS\n-->\n")
+                "Result: PASS\n-->\n")
         self.assertEqual(gates.evidence_problems(text), [BACKSTOP])
 
     def test_a_blank_line_ends_a_mid_line_opener_paragraph(self):
@@ -93,6 +93,19 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
         text = (FM + "# V\n\n## AC1\n\nSee <!-- here.\n\n"
                 "- Result: PASS\n\n-->\n")
         self.assertEqual(gates.evidence_problems(text), [claim(11, "AC1")])
+
+    def test_a_heading_or_list_item_ends_a_mid_line_openers_paragraph(self):
+        # Regression from #2369: only a blank line or a fence ended the
+        # look-ahead, so a later heading and its verdict were blanked
+        # through a prose `-->`, and H failed open.
+        text = (FM + "# V\n\n## AC1\n\nRan it <!-- link pending\n"
+                "## AC2\n- Result: FAIL (input --> output)\n")
+        self.assertEqual(gates.evidence_problems(text),
+                         [claim(11, "AC2", "FAIL (input --> output)")])
+        text = (FM + "# V\n\n## AC1\n\n- step one <!-- todo\n"
+                "- Result: PASS, a --> b\n")
+        self.assertEqual(gates.evidence_problems(text),
+                         [claim(10, "AC1", "PASS, a --> b")])
 
     def test_an_opener_in_a_code_span_stays_literal_before_a_close(self):
         text = (FM + "# V\n\n## AC1\n\nSee `<!--` here.\n"

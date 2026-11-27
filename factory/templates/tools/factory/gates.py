@@ -136,6 +136,11 @@ BLOCK_COMMENT_OPEN = re.compile(r"^ {0,3}<!--")
 # A code span, masked before a mid-line `<!--` is looked for: a `<!--`
 # inside one is literal however the paragraph goes on.
 CODE_SPAN = re.compile(r"`[^`\n]*`")
+# A line that starts a new block ends the paragraph a mid-line `<!--`
+# opened, so the opener stays literal: an ATX heading, a list item or a
+# block quote (CommonMark).
+BLOCK_START = re.compile(r"^ {0,3}(?:#{1,6}(?:\s|$)|[-*+](?:\s|$)"
+                         r"|\d{1,9}[.)](?:\s|$)|>)")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
                                re.IGNORECASE)
 
@@ -1347,12 +1352,14 @@ def _blank_html_comments(lines):
 
 def _mid_line_comment(line, after):
     """Where LINE's mid-line `<!--` opens a comment that a later line of
-    its paragraph (AFTER, up to a blank line or a fence) closes, else -1."""
+    its paragraph (AFTER, up to a blank line, a fence or a line starting
+    another block) closes, else -1."""
     start = CODE_SPAN.sub(lambda m: " " * len(m.group()), line).find("<!--")
     if start < 0:
         return -1
     for later in after:
-        if not later.strip() or _opens_fence(later):
+        if (not later.strip() or _opens_fence(later)
+                or BLOCK_START.match(later)):
             return -1
         if "-->" in later:
             return start

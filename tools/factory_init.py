@@ -378,10 +378,15 @@ def numbered_adr_skips(copies, target):
     stamp and update skip it; main reports each."""
     held = {}
     # Every ADR name detector C reads (ADR-0001-x.md, 001-x.md as well as
-    # 0001-x.md), through the same parse, keyed at its 4-digit number.
-    for path in sorted(Path(path).name for path, _ in
-                       gates.parse_run(target)["adr_files"]):
-        held.setdefault(gates.adr_file_number(path)[0], path)
+    # 0001-x.md), keyed at its 4-digit number — by NAME, through the one
+    # filename grammar (knowledge_plane.adr_paths' own, reached through
+    # gates: a direct import would grow ADR-0091's pinned set), so a file
+    # that does not decode still holds its number.
+    adr_dir = target / "docs" / "adr"
+    for path in sorted(adr_dir.glob("*.md")) if adr_dir.is_dir() else []:
+        numbered = gates.adr_file_number(path.name)
+        if numbered:
+            held.setdefault(numbered[0], path.name)
     skips = {}
     for _, dest in copies:
         match = (_ADR_NUMBER.match(dest.name)
