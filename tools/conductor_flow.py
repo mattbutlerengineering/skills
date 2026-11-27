@@ -899,20 +899,35 @@ def unchecked_rows(git, branch):
         # A row quoted in a fence (a defect's evidence) is not work:
         # protocol.checkbox_progress skips it too, so the protocol and
         # this routing agree on implement vs verify.
-        rows += _pending(line for _, line in unfenced(out.splitlines()))
+        lines = out.splitlines()
+        rows += _pending(unfenced(lines), lines)
     return rows, []
 
 
-def _pending(lines):
-    """The rows in LINES that still need work: a top-level open box
-    (a row, or a bare `- [ ]`), or the top-level row an indented open
-    box sits under, listed once; an indented open box under no row is
-    listed itself, since protocol counts it all the same."""
-    rows, parent = [], None
-    for line in lines:
+_LIST_MARKER = re.compile(r"^\s*(?:[-*+]|\d{1,9}[.)])[ \t]+")
+
+
+def _pending(numbered, lines):
+    """The rows in NUMBERED ((lineno, line) outside fences) that still
+    need work: a top-level open box (a row, or a bare `- [ ]`), or the
+    top-level row an open box nested under it sits in, listed once; a
+    nested open box under no row is listed itself, since protocol counts
+    it all the same. A line indented less than the parent row's content
+    is a sibling, not a sub-task; a loose list's blank line keeps the
+    parent, and so does a fence indented into the row's content, while
+    one below that column ends it. LINES is the whole text, for the
+    skipped fence's opener (NUMBERED counts from 1)."""
+    rows, parent, last = [], None, None
+    for lineno, line in numbered:
+        if (last is not None and lineno != last + 1 and parent is not None
+                and _indent(lines[last]) < _content_indent(parent)):
+            parent = None  # a fence below the row's content ended it
+        last = lineno
         if not line.strip():
-            continue  # a loose list's blank line stays inside the row
-        if not line[:1].isspace():
+            continue
+        width = _indent(line)
+        nested = parent is not None and width >= _content_indent(parent)
+        if not nested and (width == 0 or parent is not None):
             parent = line if parse_row(line) else None
             if open_box(line):
                 rows.append(line)
@@ -921,6 +936,19 @@ def _pending(lines):
             if pending not in rows:
                 rows.append(pending)
     return rows
+
+
+def _indent(line):
+    """LINE's leading whitespace in columns, a tab to the next stop of 4
+    (CommonMark)."""
+    expanded = line.expandtabs(4)
+    return len(expanded) - len(expanded.lstrip())
+
+
+def _content_indent(row):
+    """The column a row's own content starts at: past its bullet."""
+    marker = _LIST_MARKER.match(row)
+    return len(marker.group(0)) if marker else 2
 
 
 def branch_facts(git, batch, items):

@@ -700,6 +700,34 @@ class TestGitFacts(unittest.TestCase):
         self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"),
                          (["- [x] **WO-0170** done"], []))
 
+    def test_a_sibling_row_after_a_blank_line_is_its_own_work(self):
+        # Regression from #2382: skipping blank lines attached a sibling
+        # item (indented less than the parent's content) and a box after
+        # a top-level fence to the previous checked row.
+        path = "docs/features/x/breakdown.md"
+        git = self.git(f"{path}\n", shows={
+            f"conductor/b1-12:{path}":
+                "- [x] **WO-0170** done\n\n - [ ] **WO-0171** next\n"
+                "- [x] **WO-0172** done\n\n```\nlog\n```\n\n"
+                "    - [ ] example box\n"})
+        self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"), ([
+            " - [ ] **WO-0171** next", "- [ ] example box"], []))
+
+    def test_tab_sub_tasks_and_a_fence_inside_the_item_keep_the_row(self):
+        # Regressions from #2384's review: a tab counted one column, so
+        # tab-indented sub-tasks became siblings; and a fence inside the
+        # item (indented to its content) ended the parent row.
+        path = "docs/features/x/breakdown.md"
+        git = self.git(f"{path}\n", shows={
+            f"conductor/b1-12:{path}":
+                "- [x] **WO-0170** a\n\t- [ ] sub1\n\t- [ ] sub2\n"
+                "- [x] **WO-0171** b\n  ```\n  code\n  ```\n"
+                "  - [ ] sub3\n- [x] **WO-0172** c\n```\nx\n```\n"
+                "  - [ ] orphan\n"})
+        self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"), ([
+            "- [x] **WO-0170** a", "- [x] **WO-0171** b",
+            "- [ ] orphan"], []))
+
     def test_an_unchecked_row_quoted_in_a_fence_is_not_work(self):
         path = "docs/fixes/x/defect.md"
         git = self.git(f"{path}\n", shows={
