@@ -736,10 +736,17 @@ def main(argv=None):
     }
 
     (print_control_report if args.control else print_report)(output)
-    if args.record:
-        path = record(output, ROOT / "evals" / "results")
-        print(f"recorded: {path.relative_to(ROOT)}", file=sys.stderr)
+    # Printed before the record: a snapshot that cannot be written must
+    # not take the paid run's output down with it.
     print(json.dumps(output, indent=2))
+    if args.record:
+        try:
+            path = record(output, ROOT / "evals" / "results")
+        except OSError as err:
+            print(f"error: cannot record the results: {err}",
+                  file=sys.stderr)
+            return 1
+        print(f"recorded: {path.relative_to(ROOT)}", file=sys.stderr)
     summary = output["summary"]
     if args.control:
         return 0 if summary["sensitive"] == summary["total"] else 1
