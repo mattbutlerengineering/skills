@@ -161,6 +161,35 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
             with self.subTest(inline=inline):
                 self.assertEqual(repro(inline), ["", "steps ", "", ""])
 
+    def test_inside_an_html_block_the_comment_runs_through_tags(self):
+        # Regression from #2386: a block-level tag ends a PARAGRAPH, but a
+        # mid-line `<!--` already inside an HTML block is raw HTML and
+        # hides through any tag to its `-->`, as GitHub renders it.
+        def repro(body):
+            return [s["lines"] for s in gates.capture_sections(
+                FM + "# Defect\n\n## Repro\n\n" + body)
+                if s["title"] == "Repro"][0]
+        self.assertEqual(repro("<details>\n<summary>x</summary>\n"
+                               "text <!-- SECRET\n</details> -->\n"),
+                         ["", "<details>", "<summary>x</summary>", "text ",
+                          ""])
+        self.assertEqual(repro("<span>\na <!-- SECRET\n<div> -->\n"),
+                         ["", "<span>", "a ", ""])
+
+    def test_githubs_tag_list_decides_what_interrupts(self):
+        # GitHub's parser predates CommonMark 0.31: `search` is inline
+        # there and `source` is block-level; raw-text tags such as `pre`
+        # (type 1) interrupt a paragraph too.
+        def repro(tag):
+            return [s["lines"] for s in gates.capture_sections(
+                FM + "# Defect\n\n## Repro\n\na <!-- SECRET\n" + tag
+                + " -->\n") if s["title"] == "Repro"][0]
+        self.assertEqual(repro("<search>"), ["", "a ", ""])
+        for tag in ("<source>", "<pre>"):
+            with self.subTest(tag=tag):
+                self.assertEqual(repro(tag), ["", "a <!-- SECRET",
+                                              tag + " -->"])
+
     def test_an_opener_in_a_code_span_stays_literal_before_a_close(self):
         text = (FM + "# V\n\n## AC1\n\nSee `<!--` here.\n"
                 "- Result: PASS\nthen `-->`.\n")
