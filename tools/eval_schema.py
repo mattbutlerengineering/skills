@@ -12,6 +12,7 @@ replay are thin callers. Deliberately separate from protocol.py: this
 is eval knowledge, not pipeline-protocol knowledge.
 """
 import json
+import os
 import re
 
 from cli import read_file
@@ -111,7 +112,7 @@ def results_path(results_dir, kind, date, slug=None, harness=None):
         raise ValueError(f"unknown results kind {kind!r}")
     path = base / f"{stem}{ext}"
     suffix = 2
-    while path.exists():
+    while os.path.lexists(path):  # a dangling link holds its name too
         path = base / f"{stem}-{suffix}{ext}"
         suffix += 1
     return path
