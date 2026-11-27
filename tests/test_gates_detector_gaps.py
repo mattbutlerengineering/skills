@@ -176,6 +176,45 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
         self.assertEqual(repro("<span>\na <!-- SECRET\n<div> -->\n"),
                          ["", "<span>", "a ", ""])
 
+    def test_a_comment_after_an_html_block_ends_stays_visible(self):
+        # Regressions a review found in #2388, each checked against
+        # GitHub's renderer: the block had already ended, so the next
+        # paragraph's `<!--` is literal and the heading or item after it
+        # is what a reader sees.
+        cases = {
+            "raw-text block ends at its closing tag":
+                "<pre>\nx\n</pre>\ntext <!--\n# SECRET\n-->",
+            "script": "<script>\n</script>\ntext <!--\n# SECRET\n-->",
+            "one-line style": "<style>x</style>\ntext <!--\n# SECRET\n-->",
+            "textarea": "<textarea>\n</textarea>\ntext <!--\n- SECRET\n-->",
+            "one-line pre": "<pre>x</pre>\ntext <!--\n> SECRET\n-->",
+            "quoted pre": "> <pre>\n> </pre>\n> text <!--\n> # SECRET\n> -->",
+            "invalid tag: bare string attribute":
+                'para\n\n<x "y">\ntext <!--\n# SECRET\n-->',
+            "invalid tag: unclosed quote":
+                "para\n\n<a b='c>\ntext <!--\n# SECRET\n-->",
+            "invalid tag: no attribute name":
+                "para\n\n<a =b>\ntext <!--\n# SECRET\n-->",
+            "invalid tag: quote in unquoted value":
+                'para\n\n<a b=c"d>\ntext <!--\n# SECRET\n-->',
+            "quote ends the block": "> <div>\ntext <!--\n# SECRET\n-->",
+            "list item ends the block":
+                "1. a\n\n   <div>\ntext <!--\n# SECRET\n-->",
+            "quoted blank line ends the block":
+                "> <div>\n>\n> text <!--\n> # SECRET\n> -->",
+        }
+        for name, body in cases.items():
+            with self.subTest(name):
+                out = gates._blank_html_comments(body.split("\n"))
+                self.assertTrue(any("SECRET" in line for line in out), out)
+
+    def test_a_raw_text_block_spans_blank_lines(self):
+        # A `<pre>` block (CommonMark type 1) ends at `</pre>`, not at a
+        # blank line, so a comment inside it hides through a heading.
+        out = gates._blank_html_comments(
+            "<pre>\n\ntext <!--\n# SECRET\n-->\n</pre>".split("\n"))
+        self.assertFalse(any("SECRET" in line for line in out), out)
+
     def test_githubs_tag_list_decides_what_interrupts(self):
         # GitHub's parser predates CommonMark 0.31: `search` is inline
         # there and `source` is block-level; raw-text tags such as `pre`
