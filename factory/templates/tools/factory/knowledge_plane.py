@@ -353,13 +353,15 @@ def _clause(text):
 
 
 def _matching_close(text):
-    """The index of the ")" closing a "(" just before `text`, or -1."""
+    """The index of the ")" closing a "(" just before `text`: the one that
+    balances it, or, when the nesting never balances (a typo), the first
+    ")" as before nesting was read; -1 when there is none."""
     depth = 1
     for index, char in enumerate(text):
         depth += {"(": 1, ")": -1}.get(char, 0)
         if depth == 0:
             return index
-    return -1
+    return text.find(")")
 
 
 def row_size(line):

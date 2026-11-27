@@ -692,6 +692,14 @@ class TestGitFacts(unittest.TestCase):
             "- [x] **WO-0170** done", "- [ ]",
             "- [ ] an open box under no row"], []))
 
+    def test_a_blank_line_in_a_loose_list_keeps_the_parent_row(self):
+        path = "docs/features/x/breakdown.md"
+        git = self.git(f"{path}\n", shows={
+            f"conductor/b1-12:{path}":
+                "- [x] **WO-0170** done\n\n  - [ ] write the test\n"})
+        self.assertEqual(flow.unchecked_rows(git, "conductor/b1-12"),
+                         (["- [x] **WO-0170** done"], []))
+
     def test_an_unchecked_row_quoted_in_a_fence_is_not_work(self):
         path = "docs/fixes/x/defect.md"
         git = self.git(f"{path}\n", shows={

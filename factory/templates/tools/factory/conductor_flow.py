@@ -910,6 +910,8 @@ def _pending(lines):
     listed itself, since protocol counts it all the same."""
     rows, parent = [], None
     for line in lines:
+        if not line.strip():
+            continue  # a loose list's blank line stays inside the row
         if not line[:1].isspace():
             parent = line if parse_row(line) else None
             if open_box(line):

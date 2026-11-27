@@ -137,6 +137,15 @@ class TestParseRow(unittest.TestCase):
             "- [ ] **WO-0002** t — blocked by: WO-0001 (a (b, WO-0009")
             ["blockers"], ["WO-0001"])
 
+    def test_an_unbalanced_nested_parenthetical_keeps_the_next_blocker(self):
+        # Regression from #2369: the depth count never closed `(needs (x)`
+        # and ended the clause, dropping WO-0002 silently; the first ")"
+        # still closes it, as it did before.
+        row = parse_row("- [ ] **WO-0003** t — Blocked by: WO-0001"
+                        " (needs (x), WO-0002")
+        self.assertEqual((row["blockers"], row["unreadable"]),
+                         (["WO-0001", "WO-0002"], None))
+
     def test_and_continues_the_list_in_any_case(self):
         # BLOCKED_BY matches `Blocked by:` in any case; the separators
         # read only a lowercase `and`.

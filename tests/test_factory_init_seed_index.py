@@ -106,6 +106,19 @@ class TestStampOverTheRepoOwnADRs(SeedIndexCase):
                                   "are-recorded-here.md").exists())
                 self.assert_gates_clean()
 
+    def test_an_undecodable_own_adr_still_holds_its_number(self):
+        # Regression from #2369: the held numbers came from parse_run's
+        # decoded ADRs, which leave out a non-UTF-8 file, so the seed
+        # 0001 landed beside it (C once the file is re-encoded).
+        self.target.joinpath("docs/adr").mkdir(parents=True)
+        (self.target / "docs/adr/0001-ours.md").write_bytes(b"# caf\xe9\n")
+        out = self.cli("stamp", str(self.target))
+        self.assertIn("factory-init: skipped docs/adr/0001-decisions-are-"
+                      "recorded-here.md (its number is already 0001-ours.md"
+                      " in this repo)", out)
+        self.assertFalse((self.target / "docs/adr/0001-decisions-are-"
+                          "recorded-here.md").exists())
+
     def test_with_no_adr_of_its_own_the_seed_index_lands_verbatim(self):
         self.cli("stamp", str(self.target))
         self.assertEqual((self.target / "docs/adr/README.md").read_bytes(),
