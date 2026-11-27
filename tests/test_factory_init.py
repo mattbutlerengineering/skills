@@ -822,6 +822,22 @@ class TestStamp(unittest.TestCase):
             self.assertEqual(all_files(target), before)
 
 
+class TestStampWriteFailure(unittest.TestCase):
+    @unittest.skipIf(os.name != "posix" or os.geteuid() == 0,
+                     "needs a non-root POSIX user to make a dir unwritable")
+    def test_an_unwritable_target_dir_is_a_problem_not_a_traceback(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tree = make_factory_repo(Path(tmp) / "source")
+            assert factory_init.update_manifest(tree.root) == []
+            target = Path(tmp) / "target"
+            (target / "tools").mkdir(parents=True)
+            (target / "tools").chmod(0o555)
+            problems = factory_init.stamp(tree.root, target)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "factory-init: cannot write tools/factory/"), problems)
+
+
 class TestMain(cli_contract.CliContract, cli_contract.ReportContract,
                unittest.TestCase):
     usage_fragment = "update-manifest"
@@ -896,6 +912,25 @@ class TestUpdate(unittest.TestCase):
         target.mkdir()
         assert factory_init.stamp(tree.root, target) == []
         return tree.root, target
+
+    @unittest.skipIf(os.name != "posix" or os.geteuid() == 0,
+                     "needs a non-root POSIX user to make a file unwritable")
+    def test_an_unwritable_payload_file_is_a_problem_not_a_traceback(self):
+        # update's write_bytes raised PermissionError past main's
+        # problem-string contract.
+        with tempfile.TemporaryDirectory() as tmp:
+            source, target = self.stamped(tmp)
+            locked = target / "tools/factory/gates.py"
+            locked.chmod(0o444)
+            written, kept, problems = factory_init.update(source, target)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith(
+                "factory-init: cannot write tools/factory/gates.py: "),
+                problems)
+            code, out = cli_contract.capture(
+                factory_init.main, ["update", str(target)])
+            self.assertEqual(code, 1)
+            self.assertEqual(out.splitlines()[-1], "factory-init: 1 problem(s)")
 
     def test_the_executable_payload_is_overwritten(self):
         with tempfile.TemporaryDirectory() as tmp:
