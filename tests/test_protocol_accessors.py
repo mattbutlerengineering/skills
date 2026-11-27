@@ -12,10 +12,27 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "tools"))
 
 from protocol import (RUN_ARTIFACTS, MAINTENANCE_STAGE_ARTIFACTS,  # noqa: E402
-                      STAGE_ARTIFACTS, breakdown_path, checkbox_progress,
+                      STAGE_ARTIFACTS, breakdown_path, checkbox_progress, open_box,
                       run_ref)
 
 MAINTENANCE = ROOT / "tests" / "fixtures" / "maintenance-orientation"
+
+
+class TestOpenBox(unittest.TestCase):
+    """open_box is checkbox_progress's grammar one line at a time
+    (#2367): the open boxes it finds are exactly the ones counted."""
+
+    def test_agrees_with_checkbox_progress_line_by_line(self):
+        text = ("- [ ] open\n- [x] done\n  - [ ] nested\n* [X] star\n"
+                "- [ ]\n-[ ] glued\n- [ ]glued\n+ [ ] plus\n")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "breakdown.md"
+            path.write_text(text, encoding="utf-8")
+            checked, total = checkbox_progress(path)
+        opened = [line for line in text.splitlines() if open_box(line)]
+        self.assertEqual(opened, ["- [ ] open", "  - [ ] nested", "- [ ]",
+                                  "+ [ ] plus"])
+        self.assertEqual(total - checked, len(opened))
 
 
 class TestCheckboxProgress(unittest.TestCase):

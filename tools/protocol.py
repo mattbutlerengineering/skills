@@ -330,6 +330,16 @@ def _ship_reached(run_dir):
     return outcome is None or outcome in _SHIP_REACHED
 
 
+def open_box(line):
+    """Whether LINE (one line, its ending stripped) is a box this seam
+    counts and it is unchecked — checkbox_progress's grammar for a
+    caller that reads lines itself (conductor_flow.unchecked_rows,
+    #2367). The ending is put back so a bare `- [ ]` counts here as it
+    does in a file."""
+    match = _CHECKBOX.match(line + "\n")
+    return bool(match) and match.group(1) == " "
+
+
 def checkbox_progress(path):
     """(checked, total) counts of the file's checkboxes under this
     seam's own grammar; a missing file counts (0, 0)."""

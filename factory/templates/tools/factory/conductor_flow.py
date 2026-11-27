@@ -31,7 +31,7 @@ from conductor import (BLOCK, COMPLETED, TERMINAL, answers, append,
                        parsed_at, stamp, view)
 from conductor_spend import LOST
 from knowledge_plane import parse_row, unfenced
-from protocol import read_frontmatter
+from protocol import open_box, read_frontmatter
 
 STEPS = ("spec", "build", "verify", "review", "ship")
 SEQUENCE = ("planned", "spec", "awaiting-gate", "build", "verify",
@@ -877,16 +877,14 @@ def gate_blobs(git, branch):
             if GATE_PATH.fullmatch(path)}, []
 
 
-def _unchecked(row):
-    return row is not None and not row["done"]
-
-
 def unchecked_rows(git, branch):
-    """(unchecked top-level breakdown rows, problems) from the
-    breakdown.md or defect.md the item branch changes. A row is
-    knowledge_plane.parse_row's — any of `-`, `*`, `+` bullets, as
-    protocol counts boxes — so a build the protocol still calls
-    implement is never routed to verify here."""
+    """(rows still needing work, problems) from the breakdown.md or
+    defect.md the item branch changes: each unchecked top-level row, and
+    each checked one with an open box under it (#2367), in order. Boxes
+    are protocol.open_box's — nested and bare ones count, as
+    checkbox_progress counts them — so a build the protocol still calls
+    implement is never routed to verify here. One entry per row prices
+    one build run (_build_usd) and briefs it (conductor_run)."""
     changed, problems = changed_files(git, branch)
     if problems:
         return None, problems
@@ -901,9 +899,26 @@ def unchecked_rows(git, branch):
         # A row quoted in a fence (a defect's evidence) is not work:
         # protocol.checkbox_progress skips it too, so the protocol and
         # this routing agree on implement vs verify.
-        rows += [line for _, line in unfenced(out.splitlines())
-                 if not line[:1].isspace() and _unchecked(parse_row(line))]
+        rows += _pending(line for _, line in unfenced(out.splitlines()))
     return rows, []
+
+
+def _pending(lines):
+    """The rows in LINES that still need work: a top-level open box
+    (a row, or a bare `- [ ]`), or the top-level row an indented open
+    box sits under, listed once; an indented open box under no row is
+    listed itself, since protocol counts it all the same."""
+    rows, parent = [], None
+    for line in lines:
+        if not line[:1].isspace():
+            parent = line if parse_row(line) else None
+            if open_box(line):
+                rows.append(line)
+        elif open_box(line):
+            pending = parent if parent is not None else line.strip()
+            if pending not in rows:
+                rows.append(pending)
+    return rows
 
 
 def branch_facts(git, batch, items):
