@@ -633,14 +633,20 @@ def missing_make_targets(target):
     if not makefile.is_file():
         return ["factory-init: target has no Makefile — the refreshed"
                 " workflows have nothing to call"]
+    text, problem = read_file(makefile, "Makefile", str)
+    if problem:
+        return [f"factory-init: {problem}"]
     defined = {name for head in re.findall(
         r"(?m)^([A-Za-z0-9_.][A-Za-z0-9_. -]*?)[ \t]*"
-        r"(?::(?![=:])|::(?!=))",
-        makefile.read_text(encoding="utf-8")) for name in head.split()}
+        r"(?::(?![=:])|::(?!=))", text) for name in head.split()}
     workflows = target / ".github" / "workflows"
     called = set()
     for path in sorted(workflows.glob("*.yml")) if workflows.is_dir() else []:
-        called |= make_calls(path.read_text(encoding="utf-8"))
+        text, problem = read_file(path, path.relative_to(target).as_posix(),
+                                  str)
+        if problem:
+            return [f"factory-init: {problem}"]
+        called |= make_calls(text or "")
     return [f"factory-init: workflows call `make {name}` but the Makefile"
             f" has no {name} target (add it, or re-stamp the Makefile)"
             for name in sorted(called - defined)]
