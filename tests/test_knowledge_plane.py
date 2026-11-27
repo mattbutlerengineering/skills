@@ -126,6 +126,27 @@ class TestParseRow(unittest.TestCase):
             "- [ ] **WO-0002** t — blocked by: WO-0001 (unclosed, WO-0009")
             ["blockers"], ["WO-0001"])
 
+    def test_a_nested_parenthetical_does_not_hide_the_next_blocker(self):
+        # The clause resumed at the inner ")", so the outer note's tail
+        # read as no separator and WO-0003 was dropped, unflagged.
+        row = parse_row("- [ ] **WO-0002** t — blocked by: WO-0001"
+                        " (the (old) API), WO-0003 (tracker: #4)")
+        self.assertEqual((row["blockers"], row["unreadable"]),
+                         (["WO-0001", "WO-0003"], None))
+        self.assertEqual(parse_row(
+            "- [ ] **WO-0002** t — blocked by: WO-0001 (a (b, WO-0009")
+            ["blockers"], ["WO-0001"])
+
+    def test_and_continues_the_list_in_any_case(self):
+        # BLOCKED_BY matches `Blocked by:` in any case; the separators
+        # read only a lowercase `and`.
+        for line in ("- [ ] **WO-0002** t — Blocked by: WO-0001 (API)"
+                     " And WO-0003",
+                     "- [ ] **WO-0002** t — Blocked by: WO-0001 AND WO-0003"):
+            row = parse_row(line)
+            self.assertEqual((row["blockers"], row["unreadable"]),
+                             (["WO-0001", "WO-0003"], None), line)
+
     def test_unreadable_blockers_are_named_not_dropped(self):
         def row(clause):
             return parse_row(f"- [ ] **WO-0002** t — size:S, blocked by:"

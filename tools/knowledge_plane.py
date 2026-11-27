@@ -331,24 +331,35 @@ BLOCKED_BY = re.compile(r"\bblocked by:[ \t]*([^\n]*)", re.IGNORECASE)
 BLOCKED_BY_BULLET = re.compile(
     r"(?m)^\s*[-*+]\s+blocked by:[ \t]*([^\n]*)", re.IGNORECASE)
 # What, right after a closed parenthetical, continues the blocker list.
-_LIST_CONTINUES = re.compile(r"\s*(?:[,;&]|and\b)")
+_LIST_CONTINUES = re.compile(r"\s*(?:[,;&]|and\b)", re.IGNORECASE)
 
 
 def _clause(text):
     """The blocked-by clause in `text` (everything after `blocked by:`
     on its line): up to the first parenthetical, resuming after it only
     when a list separator follows. A parenthetical names nothing, even a
-    work order, and an unclosed one ends the clause."""
+    work order, and an unclosed one ends the clause; a nested one ends
+    at its own matching ")"."""
     parts = []
     while True:
         head, paren, tail = text.partition("(")
         parts.append(head)
-        close = tail.find(")")
+        close = _matching_close(tail)
         if not paren or close < 0:
             return " ".join(parts)
         text = tail[close + 1:]
         if not _LIST_CONTINUES.match(text):
             return " ".join(parts)
+
+
+def _matching_close(text):
+    """The index of the ")" closing a "(" just before `text`, or -1."""
+    depth = 1
+    for index, char in enumerate(text):
+        depth += {"(": 1, ")": -1}.get(char, 0)
+        if depth == 0:
+            return index
+    return -1
 
 
 def row_size(line):
@@ -410,7 +421,7 @@ def row_blockers(line):
 
 # What a blocked-by clause may hold besides WO tokens: separators, and a
 # lone dash, the written form of "nothing".
-_BLOCKER_SEPARATORS = re.compile(r"[\s,;&]+|\band\b")
+_BLOCKER_SEPARATORS = re.compile(r"[\s,;&]+|\band\b", re.IGNORECASE)
 _NOTHING = ("", "—", "–", "-")
 
 

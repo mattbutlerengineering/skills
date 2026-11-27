@@ -92,7 +92,9 @@ def touched_by(record, owner):
 def names(fix, number):
     """Whether merged PR `fix` names PR `number` as the one it repairs."""
     text = f"{fix.get('title') or ''}\n{fix.get('body') or ''}"
-    if fix["title"].startswith("Revert") and f"#{number}" in text:
+    # `#12` must not match inside `#123`: the reference ends at a non-digit.
+    if fix["title"].startswith("Revert") and re.search(
+            rf"#{number}(?!\d)", text):
         return True
     return str(number) in FIXES_PR.findall(fix.get("body") or "")
 
@@ -148,7 +150,9 @@ def compute(prs, issue_created, owner, now, days):
 
 def sunset_flags(text, now):
     """Process names in the register table whose last real catch is
-    missing or before now - SUNSET_DAYS, in table order."""
+    missing or before now - SUNSET_DAYS, in table order. A table it
+    cannot read (no Process column, a row short of a cell) raises
+    ValueError naming what is missing."""
     cutoff = (now - timedelta(days=SUNSET_DAYS)).strftime("%Y-%m-%d")
     columns, flags = None, []
     for line in text.splitlines():
@@ -157,20 +161,33 @@ def sunset_flags(text, now):
             columns = None
         elif columns is None:
             columns = cells if "Last real catch" in cells else None
+            if columns and "Process" not in columns:
+                raise ValueError("the register table has no Process column")
         elif not set(line.strip()) <= set("|-: "):
-            catch = cells[columns.index("Last real catch")]
+            catch = cell(cells, columns, "Last real catch", line)
             found = DATE.search(catch)
             if (catch.startswith("none found") or not found
                     or found.group() < cutoff):
-                flags.append(cells[columns.index("Process")])
+                flags.append(cell(cells, columns, "Process", line))
     return flags
 
 
+def cell(cells, columns, name, line):
+    index = columns.index(name)
+    if index >= len(cells):
+        raise ValueError(f"row '{line.strip()}' has no {name} cell")
+    return cells[index]
+
+
 def read_flags(path, now):
+    """(flags, problems); an absent register flags nothing."""
     try:
-        return sunset_flags(path.read_text(encoding="utf-8"), now)
+        return sunset_flags(path.read_text(encoding="utf-8"), now), []
     except FileNotFoundError:
-        return []
+        return [], []
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        reason = exc if isinstance(exc, ValueError) else detail(exc)
+        return [], [f"{LABEL}: cannot read {path}: {reason}"]
 
 
 def percent(value):
@@ -271,8 +288,11 @@ def main(argv=None, run=gh_runner, now=None):
                                      now - timedelta(days=args.days))
     if problems:
         return report(LABEL, problems)
+    flags, problems = read_flags(args.register, now)
+    if problems:
+        return report(LABEL, problems)
     metrics = {**compute(prs, created, owner, now, args.days),
-               "sunset_flags": read_flags(args.register, now)}
+               "sunset_flags": flags}
     row = json.dumps(metrics, sort_keys=True)
     print(markdown(metrics) if args.markdown else row)
     if args.append:

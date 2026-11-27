@@ -210,6 +210,24 @@ class TestSelect(Tree):
         self.assertEqual(kb_harvest.select(
             [self.dir], days=None, session=None, now=self.now), [newest])
 
+    def test_without_a_main_dir_the_newest_worktree_session_wins(self):
+        # project_dirs returns only worktree dirs, sorted by name, when a
+        # repo has no main dir: the newest session is not in the first.
+        first = self.projects / (self.slug + "--claude-worktrees-aaa")
+        second = self.projects / (self.slug + "--claude-worktrees-bbb")
+        self.save(Session("old"), age_days=2, where=first)
+        newest = self.save(Session("new"), where=second)
+        self.assertEqual(kb_harvest.select(
+            [first, second], days=None, session=None, now=self.now),
+            [newest])
+
+    def test_a_main_dir_keeps_the_default_to_its_own_sessions(self):
+        wt = self.projects / (self.slug + "--claude-worktrees-feat")
+        mine = self.save(Session("main"), age_days=1)
+        self.save(Session("wt"), where=wt)
+        self.assertEqual(kb_harvest.select(
+            [self.dir, wt], days=None, session=None, now=self.now), [mine])
+
     def test_days_takes_every_transcript_in_the_window(self):
         inside = self.save(Session("a"), age_days=1)
         nested = self.save(Session("b"), name="subagents/agent-b.jsonl",

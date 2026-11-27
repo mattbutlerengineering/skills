@@ -163,7 +163,9 @@ def project_dirs(root, projects):
 
 def select(dirs, days, session, now):
     """The transcripts to scan: one named session, every one modified in
-    the last `days`, or the newest top-level session."""
+    the last `days`, or the newest top-level session — the main
+    directory's (dirs[0]), or, when project_dirs found worktree
+    directories only, the newest across all of them."""
     if session is not None and Path(session).is_file():
         # A path names one file: emitting it once per directory scanned
         # it N times and invented "recurring" errors.
@@ -176,7 +178,9 @@ def select(dirs, days, session, now):
         cutoff = now - days * 86400
         return sorted(path for d in dirs for path in d.rglob("*.jsonl")
                       if path.stat().st_mtime >= cutoff)
-    top = [path for d in dirs[:1] for path in d.glob("*.jsonl")
+    heads = (dirs if all("claude-worktrees-" in d.name for d in dirs)
+             else dirs[:1])
+    top = [path for d in heads for path in d.glob("*.jsonl")
            if not path.name.startswith("agent-")]
     return sorted(top, key=lambda p: p.stat().st_mtime)[-1:]
 
