@@ -215,6 +215,35 @@ class TestEvidenceIgnoresHtmlComments(unittest.TestCase):
             "<pre>\n\ntext <!--\n# SECRET\n-->\n</pre>".split("\n"))
         self.assertFalse(any("SECRET" in line for line in out), out)
 
+    def test_a_comment_left_open_in_an_html_block_hides_the_rest(self):
+        # GitHub passes the block's `<!--` through raw; once the block
+        # ends, a `-->` in markdown is escaped text, so the comment runs
+        # on to a raw `-->` in a later HTML block, or to the end.
+        def visible(body):
+            return "\n".join(gates._blank_html_comments(body.split("\n")))
+        for body in ("<div> <!--\n\n# SECRET\n\nmore",
+                     "<div> <!--\n\n# SECRET\n\n-->\n\n# SECRET",
+                     "<pre>\ntext <!--\n</pre>\n\n# SECRET",
+                     "para\n\n<span>\nt <!--\n\n## SECRET",
+                     "<div> <!--\n\n```\n<div> -->\n```\n\n# SECRET"):
+            with self.subTest(body=body):
+                self.assertNotIn("SECRET", visible(body))
+        for body in ("<div> <!--\n\nSECRET\n\n<div> -->\n\n# VISIBLE",
+                     "<div> <!--\n\nSECRET\n\n<!-- x -->\n\n# VISIBLE"):
+            with self.subTest(body=body):
+                self.assertNotIn("SECRET", visible(body))
+                self.assertIn("# VISIBLE", visible(body))
+
+    def test_a_whole_tag_line_opens_a_block_after_a_closed_block(self):
+        # A type 7 line cannot interrupt a paragraph, but a heading, a
+        # thematic break or a closed fence leaves no paragraph open.
+        for before in ("# H", "---", "```\nx\n```"):
+            with self.subTest(before=before):
+                out = gates._blank_html_comments(
+                    (before + "\n<span>\ntext <!--\n# SECRET\n-->")
+                    .split("\n"))
+                self.assertFalse(any("SECRET" in line for line in out), out)
+
     def test_githubs_tag_list_decides_what_interrupts(self):
         # GitHub's parser predates CommonMark 0.31: `search` is inline
         # there and `source` is block-level; raw-text tags such as `pre`

@@ -174,6 +174,8 @@ RAW_TEXT_CLOSE = re.compile(r"</(?:pre|script|style|textarea)>", re.IGNORECASE)
 # (ended by a blank line); DEPTH quote markers and INDENT spaces of
 # content that each later line must keep, since a block is never lazy.
 HtmlBlock = namedtuple("HtmlBlock", "raw depth indent")
+# A thematic break: three or more of one of `-`, `*` or `_`.
+THEMATIC_BREAK = re.compile(r"^ {0,3}([-*_])(?:[ \t]*\1){2,}[ \t]*$")
 # One block-quote marker with its optional following space or tab.
 QUOTE_MARKER = re.compile(r"^ {0,3}>[ \t]?")
 NO_WO_DECLARATION = re.compile(r"\bno[\s-]+work[\s-]+order\b[ \t]*:[ \t]*\S",
@@ -1354,35 +1356,40 @@ def _blank_html_comments(lines):
     block-level tag, or a whole-tag line after a blank line, ended by a
     blank line; a raw-text tag, ended by its closing tag) the lines are
     raw HTML, so the comment runs through any tag or heading to its
-    `-->`. A block also ends where a line leaves its quote or list item."""
+    `-->`. A block also ends where a line leaves its quote or list item.
+    GitHub passes a comment opened in a block through raw (RAW_COMMENT),
+    so once the block ends a markdown `-->` is escaped text and only a
+    raw `-->` — in a later HTML block or line-start comment, never in a
+    fence — closes it; with none it hides to the end."""
     out = []
     opener = None  # the line that opened the fence we are in
-    in_comment = False
-    html_block, after_blank = None, True
+    in_comment = raw_comment = False
+    html_block, block_may_start = None, True
     for index, line in enumerate(lines):
         blank = not line.strip()
         if opener is not None:
             if _closes_fence(opener, line):
-                opener = None
-            out.append(line)
-            after_blank = blank
+                opener, block_may_start = None, True
+            out.append("" if in_comment else line)
             continue
         if html_block and not _html_block_holds(html_block, line):
             html_block = None
-        if not html_block and not in_comment and not blank:
-            html_block = _opens_html_block(line, after_blank)
+        if not html_block and not blank and (raw_comment or not in_comment):
+            html_block = _opens_html_block(line, block_may_start)
         # The block holds this line; a raw-text block closed on it does
-        # not hold the next one, nor a comment opened here.
+        # not hold the next one.
         scan_block = html_block
         if html_block and html_block.raw and RAW_TEXT_CLOSE.search(line):
-            html_block = scan_block = None
-        after_blank = blank
+            html_block = None
+        block_may_start = _leaves_no_paragraph(line, scan_block)
         if in_comment:
-            end = line.find("-->")
+            end = _comment_end(line, raw_comment, scan_block)
             if end < 0:
+                if raw_comment and _opens_fence(line):
+                    opener = line
                 out.append("")
                 continue
-            in_comment = False
+            in_comment = raw_comment = False
             line = line[end + 3:]
         elif _opens_fence(line):
             opener = line
@@ -1396,10 +1403,32 @@ def _blank_html_comments(lines):
         else:
             start = _mid_line_comment(line, lines[index + 1:], scan_block)
             if start >= 0:
-                in_comment = True
+                in_comment, raw_comment = True, bool(scan_block)
                 line = line[:start]
         out.append(line)
     return out
+
+
+def _leaves_no_paragraph(line, html_block):
+    """May a whole-tag line (HTML_TAG_LINE) open a block after LINE? Yes
+    after a blank line, a heading, a thematic break, or a raw-text block's
+    closing line: none leaves a paragraph open for it to continue."""
+    if not line.strip():
+        return True
+    if html_block:
+        return bool(html_block.raw and RAW_TEXT_CLOSE.search(line))
+    content = _quote_depth(line)[1]
+    return bool(HEADING_LINE.match(content) or THEMATIC_BREAK.match(content))
+
+
+def _comment_end(line, raw_comment, html_block):
+    """Where LINE's `-->` closes the open comment, else -1. A raw comment
+    (RAW_COMMENT) closes only where LINE is itself raw HTML: inside
+    HTML_BLOCK, or a line-start comment."""
+    end = line.find("-->")
+    if end < 0 or not raw_comment or html_block:
+        return end
+    return end if BLOCK_COMMENT_OPEN.match(_quote_depth(line)[1]) else -1
 
 
 def _quote_depth(line, limit=None):
@@ -1450,21 +1479,13 @@ def _mid_line_comment(line, after, html_block=None):
     """Where LINE's mid-line `<!--` opens a comment that a later line of
     its paragraph (AFTER, up to a blank line, a fence or a line starting
     another block) closes, else -1. In an HTML block (HTML_BLOCK, an
-    HtmlBlock) only the block's own end stops the raw HTML before the
-    close."""
+    HtmlBlock) the `<!--` is raw HTML and always opens one, closed or
+    not (RAW_COMMENT in _blank_html_comments)."""
     start = CODE_SPAN.sub(lambda m: " " * len(m.group()), line).find("<!--")
-    if start < 0:
-        return -1
+    if start < 0 or html_block:
+        return start
     depth = _quote_depth(line)[0]
     for later in after:
-        if html_block:
-            if not _html_block_holds(html_block, later):
-                return -1
-            if "-->" in later:
-                return start
-            if html_block.raw and RAW_TEXT_CLOSE.search(later):
-                return -1
-            continue
         # The quoted paragraph goes on behind its own markers: test what
         # follows them (a lazy line with fewer markers is tested as is).
         later = _quote_depth(later, depth)[1]
